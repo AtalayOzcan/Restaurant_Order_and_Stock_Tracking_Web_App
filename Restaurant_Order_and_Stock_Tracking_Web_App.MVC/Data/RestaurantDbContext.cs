@@ -65,7 +65,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
             {
                 entity.ToTable("menu_items");
 
-                entity.HasKey(m => m.CategoryId);
+                entity.HasKey(m => m.MenuItemId);
 
                 entity.Property(m => m.MenuItemName)
                 .HasMaxLength(200)
@@ -98,10 +98,81 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 .WithMany(m => m.MenuItems) //Bir kategoride çok menü ürünüm var 
                 .HasForeignKey(c => c.CategoryId)//bağlı id' ise categoryıd
                 .OnDelete(DeleteBehavior.Restrict);  
+            });
 
+            modelBuilder.Entity<Order>(entity =>
+            {
+                entity.ToTable("orders");
 
+                entity.HasKey(o => o.OrderId);
+
+                entity.Property(o => o.OrderStatus)
+                .HasMaxLength(20)
+                .HasDefaultValue("open")
+                .IsRequired();
+
+                entity.Property(o => o.OrderOpenedBy)
+                .HasMaxLength(100);
+
+                entity.Property(o => o.OrderNote)
+                .HasColumnType("text");
+
+                entity.Property(o => o.OrderTotalAmount)
+                .HasPrecision(12,2)
+                .HasDefaultValue(0)
+                .IsRequired();
+
+                entity.Property(o => o.OrderOpenedAt)
+                .HasDefaultValueSql("NOW()")
+                .IsRequired();
+
+                entity.HasOne(t => t.Table)//Benim bir masam var
+                .WithMany(o => o.Orders)//Bir masanın birden fazla orderı var
+                .HasForeignKey(o => o.TableId)//Buna bağlı id tableId
+                .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<OrderItem>(entity =>
+            {
+                entity.ToTable("order_items");
+
+                entity.HasKey(o => o.OrderItemId);
+
+                entity.Property(o => o.OrderItemQuantity)
+                .IsRequired();
+
+                entity.Property(o => o.OrderItemUnitPrice)
+                .HasPrecision(10, 2)
+                .IsRequired();
+
+                entity.Property(o => o.OrderItemLineTotal)
+                .HasPrecision(12,2)
+                .IsRequired();
+
+                entity.Property(o => o.OrderItemNote)
+                .HasColumnType("text");
+
+                entity.Property(o => o.OrderItemStatus)
+                .HasMaxLength(20)
+                .HasDefaultValue("pending")
+                .IsRequired();
+
+                entity.Property(o => o.OrderItemAddedAt)
+                .HasDefaultValueSql("NOW()")
+                .IsRequired();
+
+                entity.HasOne(o => o.Order)//bir siparişin
+                .WithMany(o => o.OrderItems)//birden fazla sipariş iöçeriği olabilir
+                .HasForeignKey(o =>o.OrderId)//bu bağlantıda orderID ile sağlaıır
+                .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(o => o.MenuItem) // Her sipariş kaleminin (OrderItem) bağlı olduğu tek bir menü ürünü vardır.
+                .WithMany() // Menü ürününden siparişlere listeleme yapılmaz (Performans için tek yönlü ilişki).
+                .HasForeignKey(o => o.MenuItemId) // Veritabanındaki bağlantı MenuItemId kolonu üzerinden sağlanır.
+                .OnDelete(DeleteBehavior.Restrict); // Geçmişte sipariş edilmiş bir ürünün menüden yanlışlıkla silinmesini engeller.
 
             });
+
         }  
 
     }

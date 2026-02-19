@@ -2,11 +2,7 @@
 
 public class Category
 {
-    public Category()
-    {
-        CategoryId = Guid.CreateVersion7();
-    }
-    public  Guid  CategoryId { get; set; }
+    public  int  CategoryId { get; set; }
     public string CategoryName { get; set; }
     public int  CategorySortOrder { get; set; }
     public bool IsActive { get; set; }

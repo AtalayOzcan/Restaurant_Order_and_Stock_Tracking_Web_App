@@ -7,5 +7,8 @@
         public int TableCapacity { get; set; }
         public int TableStatus { get; set; }
         public DateTime TableCreatedAt { get; set; }
+
+        public virtual ICollection<Order> Orders { get; set; }
+
     }
 }

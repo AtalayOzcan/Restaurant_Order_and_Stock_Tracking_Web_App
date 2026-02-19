@@ -12,5 +12,11 @@
         public bool IsAvailable { get; set; }
         public string Description { get; set; }
         public DateTime MenuItemCreatedTime { get; set; }
+
+        /*Bir menü ürününn geçmişteki binlerce saiparişini kendi üzerinde liste olarak tutmaya gertek yok
+         Geçmiş siparişleri ve satış raporları "Order" -> OrderItem üzerinden çekilecektir.
+         */
+        //public virtual ICollection<OrderItem> OrderItems { get; set; }
+
     }
 }
