@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
@@ -11,9 +12,11 @@ using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
 {
     [DbContext(typeof(RestaurantDbContext))]
-    partial class RestaurantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260223175923_ReservationInformationAdded")]
+    partial class ReservationInformationAdded
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -113,7 +116,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("OrderId"));
 
-                    b.Property<DateTime?>("OrderClosedAt")
+                    b.Property<DateTime>("OrderClosedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("OrderNote")

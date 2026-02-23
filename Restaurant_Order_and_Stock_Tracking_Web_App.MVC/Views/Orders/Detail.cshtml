@@ -1,0 +1,1177 @@
+﻿@model Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Order
+@using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models
+@{
+    ViewData["Title"] = ViewData["Title"]?.ToString();
+    var categories = (List<Category>)ViewBag.Categories;
+    var isOpen = Model.OrderStatus == "open";
+    var minutesOpen = (int)(DateTime.UtcNow - Model.OrderOpenedAt).TotalMinutes;
+    var totalPaid = Model.Payments?.Sum(p => p.PaymentsAmount) ?? 0;
+    var remaining = Model.OrderTotalAmount - totalPaid;
+
+    string StatusClass(string s) => s switch
+    {
+        "preparing" => "s-preparing",
+        "served" => "s-served",
+        "cancelled" => "s-cancelled",
+        _ => "s-pending"
+    };
+    string StatusLabel(string s) => s switch
+    {
+        "preparing" => "Hazırlanıyor",
+        "served" => "Servis Edildi",
+        "cancelled" => "İptal",
+        _ => "Bekliyor"
+    };
+    string PayMethodLabel(int m) => m switch
+    {
+        1 => "💳 Kredi Kartı",
+        2 => "🏦 Banka Kartı",
+        3 => "🔄 Diğer",
+        _ => "💵 Nakit"
+    };
+}
+
+@section Styles {
+    <style>
+        .detail-layout {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 20px;
+            align-items: start;
+        }
+
+        /* Sol panel */
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* Info kartı */
+        .info-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill,minmax(160px,1fr));
+            gap: 14px;
+        }
+
+        .info-item-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .07em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .info-item-value {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+            .info-item-value.accent {
+                font-family: 'Syne',sans-serif;
+                font-size: 20px;
+                font-weight: 800;
+                color: var(--accent);
+            }
+
+        /* Panel */
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+        }
+
+        .panel-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .panel-title {
+            font-family: 'Syne',sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        /* Kalemler */
+        .item-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border);
+            transition: background .15s;
+        }
+
+            .item-row:last-child {
+                border-bottom: none;
+            }
+
+            .item-row:hover {
+                background: var(--surface2);
+            }
+
+        .item-name {
+            flex: 1;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .item-qty {
+            font-size: 12px;
+            color: var(--text-muted);
+            min-width: 50px;
+        }
+
+        .item-price {
+            font-family: 'Syne',sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            min-width: 70px;
+            text-align: right;
+        }
+
+        .item-note {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* Durum değiştirme butonları */
+        .status-btns {
+            display: flex;
+            gap: 4px;
+        }
+
+        .sbtn {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            border: 1px solid;
+            cursor: pointer;
+            background: none;
+            font-family: 'DM Sans',sans-serif;
+            transition: all .15s;
+            white-space: nowrap;
+        }
+
+        .sbtn-pending {
+            border-color: var(--border);
+            color: var(--text-muted);
+        }
+
+        .sbtn-preparing {
+            border-color: rgba(234,179,8,.4);
+            color: #eab308;
+        }
+
+        .sbtn-served {
+            border-color: rgba(34,197,94,.4);
+            color: #22c55e;
+        }
+
+        .sbtn-cancel {
+            border-color: rgba(239,68,68,.4);
+            color: #ef4444;
+        }
+
+        .sbtn.current {
+            opacity: .4;
+            cursor: default;
+            pointer-events: none;
+        }
+
+        .sbtn:not(.current):hover {
+            filter: brightness(1.2);
+        }
+
+        /* Badge'ler */
+        .status-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            border-radius: 20px;
+        }
+
+        .s-pending {
+            background: var(--surface2);
+            color: var(--text-muted);
+        }
+
+        .s-preparing {
+            background: rgba(234,179,8,.12);
+            color: #eab308;
+        }
+
+        .s-served {
+            background: rgba(34,197,94,.12);
+            color: #22c55e;
+        }
+
+        .s-cancelled {
+            background: rgba(239,68,68,.12);
+            color: #ef4444;
+        }
+
+        .s-paid {
+            background: rgba(34,197,94,.12);
+            color: #22c55e;
+        }
+
+        .time-badge {
+            font-size: 11px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            padding: 4px 10px;
+            border-radius: 20px;
+            color: var(--text-muted);
+        }
+
+            .time-badge.hot {
+                border-color: rgba(239,68,68,.4);
+                color: #f87171;
+                background: rgba(239,68,68,.08);
+            }
+
+        /* Sağ panel — ödeme */
+        .pay-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            position: sticky;
+            top: 76px;
+        }
+
+        .pay-head {
+            padding: 15px 18px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .pay-title {
+            font-family: 'Syne',sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .pay-summary {
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .pay-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .pay-label {
+            color: var(--text-muted);
+        }
+
+        .pay-value {
+            font-weight: 600;
+        }
+
+        .pay-divider {
+            height: 1px;
+            background: var(--border);
+        }
+
+        .pay-total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pay-total-label {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .pay-total-value {
+            font-family: 'Syne',sans-serif;
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--accent);
+        }
+
+        .pay-remaining {
+            font-family: 'Syne',sans-serif;
+            font-size: 18px;
+            font-weight: 800;
+            color: #22c55e;
+        }
+
+        /* Ödeme kayıtları */
+        .payment-record {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 18px;
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+        }
+
+        .pr-name {
+            flex: 1;
+            font-weight: 600;
+        }
+
+        .pr-method {
+            color: var(--text-muted);
+        }
+
+        .pr-amount {
+            font-family: 'Syne',sans-serif;
+            font-weight: 700;
+            color: #22c55e;
+        }
+
+        .pay-actions {
+            padding: 14px 18px;
+        }
+
+        .btn-pay {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: 'DM Sans',sans-serif;
+            transition: background .15s;
+        }
+
+            .btn-pay:hover {
+                background: #ea6c0a;
+            }
+
+            .btn-pay:disabled {
+                background: var(--surface2);
+                color: var(--text-muted);
+                cursor: not-allowed;
+            }
+
+        /* Ürün ekleme paneli */
+        .add-item-list {
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .add-item-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 10px;
+            border-radius: 9px;
+            border: 1px solid var(--border);
+            background: var(--surface2);
+            cursor: pointer;
+            transition: border-color .15s;
+        }
+
+            .add-item-row:hover {
+                border-color: var(--accent);
+            }
+
+        .ai-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .ai-price {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .ai-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            font-size: 16px;
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .cat-label {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-muted);
+            letter-spacing: .07em;
+            text-transform: uppercase;
+            padding: 8px 10px 4px;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.65);
+            backdrop-filter: blur(5px);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+        }
+
+            .modal-overlay.open {
+                display: flex;
+            }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            padding: 26px;
+            width: 440px;
+            max-width: 96vw;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,.55);
+            animation: modalIn .2s ease;
+        }
+
+        @@keyframes modalIn {
+            from {
+                opacity: 0;
+                transform: scale(.93) translateY(8px)
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0)
+            }
+        }
+
+        .modal-title {
+            font-family: 'Syne',sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .modal-sub {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 13px;
+        }
+
+        .form-label {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+
+        .form-control {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            padding: 10px 13px;
+            color: var(--text);
+            font-family: 'DM Sans',sans-serif;
+            font-size: 14px;
+            outline: none;
+            width: 100%;
+            transition: border-color .15s;
+        }
+
+            .form-control:focus {
+                border-color: var(--accent);
+            }
+
+        .form-error {
+            font-size: 11px;
+            color: #ef4444;
+            margin-top: 3px;
+            display: none;
+        }
+
+        /* Ödeme yöntemi seçimi */
+        .method-grid {
+            display: grid;
+            grid-template-columns: repeat(2,1fr);
+            gap: 8px;
+        }
+
+        .method-btn {
+            padding: 10px;
+            border-radius: 9px;
+            border: 1.5px solid var(--border);
+            background: var(--surface2);
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            transition: all .15s;
+            font-family: 'DM Sans',sans-serif;
+        }
+
+            .method-btn:hover {
+                border-color: var(--accent);
+                color: var(--accent);
+            }
+
+            .method-btn.active {
+                border-color: var(--accent);
+                color: var(--accent);
+                background: var(--accent-glow);
+            }
+
+        /* İndirim satırı */
+        .discount-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+            .discount-row .form-control {
+                flex: 1;
+            }
+
+        .discount-label {
+            font-size: 12px;
+            color: #22c55e;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .btn-primary {
+            flex: 1;
+            padding: 11px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 9px;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: 'DM Sans',sans-serif;
+            transition: background .15s;
+        }
+
+            .btn-primary:hover {
+                background: #ea6c0a;
+            }
+
+        .btn-ghost {
+            flex: 1;
+            padding: 11px;
+            background: var(--surface2);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            border-radius: 9px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'DM Sans',sans-serif;
+        }
+
+        /* Ödeme modal özet */
+        .pay-modal-summary {
+            background: var(--surface2);
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+
+        .pms-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            padding: 3px 0;
+        }
+
+        .pms-divider {
+            height: 1px;
+            background: var(--border);
+            margin: 8px 0;
+        }
+
+        .pms-total {
+            font-family: 'Syne',sans-serif;
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--accent);
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 13px;
+            border: 1px solid;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .alert-success {
+            background: rgba(34,197,94,.1);
+            border-color: rgba(34,197,94,.3);
+            color: #22c55e;
+        }
+
+        .alert-error {
+            background: rgba(239,68,68,.1);
+            border-color: rgba(239,68,68,.3);
+            color: #ef4444;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 7px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+            transition: all .15s;
+        }
+
+            .back-btn:hover {
+                color: var(--text);
+                border-color: var(--text-muted);
+            }
+
+        @@media(max-width:900px) {
+            .detail-layout {
+                grid-template-columns: 1fr
+            }
+
+            .pay-panel {
+                position: static
+            }
+        }
+
+        @@media(max-width:480px) {
+            .info-card {
+                grid-template-columns: 1fr 1fr
+            }
+        }
+    </style>
+}
+
+@* Alerts *@
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">✅ @TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-error">❌ @TempData["Error"]</div>
+}
+
+@* Page Header *@
+<div class="page-header">
+    <div>
+        <h1 class="page-title">@Model.Table?.TableName — Adisyon #@Model.OrderId</h1>
+        <p class="page-sub">
+            @if (isOpen)
+            {
+                <span>Açık adisyon · @minutesOpen dakikadır açık</span>
+            }
+            else
+            {
+                <span>Kapatıldı · @Model.OrderClosedAt?.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span>
+            }
+        </p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+        <a asp-controller="Orders" asp-action="Index" class="back-btn">← Siparişler</a>
+        @if (isOpen)
+        {
+            <button class="btn-pay" style="width:auto;padding:8px 18px"
+                    onclick="openModal('payModal')">
+                💳 Ödeme Al
+            </button>
+        }
+    </div>
+</div>
+
+<div class="detail-layout">
+
+    @* ── SOL PANEL ── *@
+    <div class="left-panel">
+
+        @* Adisyon Bilgileri *@
+        <div class="info-card">
+            <div>
+                <div class="info-item-label">Masa</div>
+                <div class="info-item-value">🪑 @Model.Table?.TableName</div>
+            </div>
+            <div>
+                <div class="info-item-label">Garson</div>
+                <div class="info-item-value">👤 @Model.OrderOpenedBy</div>
+            </div>
+            <div>
+                <div class="info-item-label">Açılış Saati</div>
+                <div class="info-item-value">🕐 @Model.OrderOpenedAt.ToLocalTime().ToString("HH:mm")</div>
+            </div>
+            <div>
+                <div class="info-item-label">Süre</div>
+                <div class="info-item-value @(minutesOpen > 30 ? "text-danger" : "")">
+                    ⏱ @minutesOpen dk
+                </div>
+            </div>
+            <div>
+                <div class="info-item-label">Durum</div>
+                <div class="info-item-value">
+                    <span class="status-badge @(isOpen ? "s-preparing" : "s-paid")">
+                        @(isOpen ? "Açık" : "Ödendi")
+                    </span>
+                </div>
+            </div>
+            <div>
+                <div class="info-item-label">Toplam</div>
+                <div class="info-item-value accent">₺@Model.OrderTotalAmount.ToString("N2")</div>
+            </div>
+        </div>
+
+        @* Not *@
+        @if (!string.IsNullOrWhiteSpace(Model.OrderNote))
+        {
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 18px;font-size:13px;color:var(--text-muted);">
+                📝 <strong style="color:var(--text)">Not:</strong> @Model.OrderNote
+            </div>
+        }
+
+        @* Sipariş Kalemleri *@
+        <div class="panel">
+            <div class="panel-head">
+                <span class="panel-title">Sipariş Kalemleri</span>
+                <span style="font-size:12px;color:var(--text-muted)">
+                    @Model.OrderItems.Count(i => i.OrderItemStatus != "cancelled") kalem
+                </span>
+            </div>
+
+            @foreach (var item in Model.OrderItems)
+            {
+                <div class="item-row">
+                    <div style="flex:1">
+                        <div class="item-name">@item.MenuItem?.MenuItemName</div>
+                        @if (!string.IsNullOrWhiteSpace(item.OrderItemNote))
+                        {
+                            <div class="item-note">📝 @item.OrderItemNote</div>
+                        }
+                    </div>
+                    <div class="item-qty">×@item.OrderItemQuantity</div>
+                    <div class="item-price">₺@item.OrderItemLineTotal.ToString("N0")</div>
+
+                    @* Durum değiştirme — sadece açık adisyonda *@
+                    @if (isOpen && item.OrderItemStatus != "cancelled")
+                    {
+                        <div class="status-btns">
+                            @foreach (var (status, label, cls) in new[]
+                                                {
+                                        ("pending",   "Bekliyor",   "sbtn-pending"),
+                                        ("preparing", "Hazırlıyor", "sbtn-preparing"),
+                                        ("served",    "Servis",     "sbtn-served"),
+                                        })
+                            {
+                                <form asp-controller="Orders" asp-action="UpdateItemStatus" method="post" style="display:inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="orderItemId" value="@item.OrderItemId" />
+                                    <input type="hidden" name="newStatus" value="@status" />
+                                    <input type="hidden" name="orderId" value="@Model.OrderId" />
+                                    <button type="submit"
+                                            class="sbtn @cls @(item.OrderItemStatus == status ? "current" : "")">
+                                        @label
+                                    </button>
+                                </form>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="status-badge @StatusClass(item.OrderItemStatus)">
+                            @StatusLabel(item.OrderItemStatus)
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+
+        @* Yeni Ürün Ekle — sadece açık adisyonda *@
+        @if (isOpen)
+        {
+            <div class="panel">
+                <div class="panel-head">
+                    <span class="panel-title">Ürün Ekle</span>
+                </div>
+                <div class="add-item-list">
+                    @foreach (var cat in categories)
+                    {
+                        <div class="cat-label">@cat.CategoryName</div>
+                        @foreach (var mi in cat.MenuItems)
+                        {
+                            <div class="add-item-row"
+                                 onclick="openAddItemModal(@mi.MenuItemId, '@Html.Raw(mi.MenuItemName.Replace("'", "\\'"))', @mi.MenuItemPrice.ToString("F2", System.Globalization.CultureInfo.InvariantCulture))">
+                                <span class="ai-name">@mi.MenuItemName</span>
+                                <span class="ai-price">₺@mi.MenuItemPrice.ToString("N0")</span>
+                                <button type="button" class="ai-btn">＋</button>
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        }
+
+    </div>
+
+    @* ── SAĞ PANEL — ÖDEME DURUMU ── *@
+    <div class="pay-panel">
+        <div class="pay-head">
+            <div class="pay-title">Ödeme Durumu</div>
+        </div>
+
+        <div class="pay-summary">
+            <div class="pay-row">
+                <span class="pay-label">Adisyon Toplamı</span>
+                <span class="pay-value">₺@Model.OrderTotalAmount.ToString("N2")</span>
+            </div>
+            @if (totalPaid > 0)
+            {
+                <div class="pay-row">
+                    <span class="pay-label">Ödenen</span>
+                    <span class="pay-value" style="color:#22c55e">₺@totalPaid.ToString("N2")</span>
+                </div>
+                <div class="pay-divider"></div>
+                <div class="pay-total-row">
+                    <span class="pay-total-label">Kalan</span>
+                    <span class="pay-remaining">₺@remaining.ToString("N2")</span>
+                </div>
+            }
+            else
+            {
+                <div class="pay-divider"></div>
+                <div class="pay-total-row">
+                    <span class="pay-total-label">Toplam</span>
+                    <span class="pay-total-value">₺@Model.OrderTotalAmount.ToString("N2")</span>
+                </div>
+            }
+        </div>
+
+        @* Mevcut ödemeler *@
+        @if (Model.Payments?.Any() == true)
+        {
+            @foreach (var p in Model.Payments.OrderBy(p => p.PaymentsPaidAt))
+            {
+                <div class="payment-record">
+                    <div class="pr-name">
+                        @(string.IsNullOrWhiteSpace(p.PaymentsNote) ? "Ödeme" : p.PaymentsNote)
+                    </div>
+                    <span class="pr-method">@PayMethodLabel(p.PaymentsMethod)</span>
+                    <span class="pr-amount">₺@p.PaymentsAmount.ToString("N2")</span>
+                </div>
+            }
+        }
+
+        <div class="pay-actions">
+            @if (isOpen)
+            {
+                <button class="btn-pay" onclick="openModal('payModal')">
+                    💳 Ödeme Al
+                </button>
+            }
+            else
+            {
+                <div style="text-align:center;padding:10px;color:#22c55e;font-weight:700;font-size:14px">
+                    ✅ Adisyon Kapatıldı
+                </div>
+            }
+        </div>
+    </div>
+
+</div>
+
+@* ── ÜRÜN EKLE MODAL ── *@
+<div class="modal-overlay" id="addItemModal">
+    <div class="modal" style="width:360px">
+        <div class="modal-title" id="addItemTitle">Ürün Ekle</div>
+        <div class="modal-sub" id="addItemSub">Adet ve not bilgisini girin</div>
+
+        <form asp-controller="Orders" asp-action="AddItem" method="post"
+              onsubmit="return validateAddItem()">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="orderId" value="@Model.OrderId" />
+            <input type="hidden" name="menuItemId" id="addItemId" />
+
+            <div class="form-group">
+                <label class="form-label">Adet *</label>
+                <input class="form-control" id="addItemQty" name="quantity"
+                       type="number" min="1" max="99" value="1" />
+                <span class="form-error" id="err-qty">Adet 1 veya daha fazla olmalı.</span>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Not (opsiyonel)</label>
+                <input class="form-control" name="note"
+                       placeholder="Az pişmiş, acısız..." maxlength="200" />
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-ghost" onclick="closeModal('addItemModal')">İptal</button>
+                <button type="submit" class="btn-primary">Ekle</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@* ── ÖDEME MODAL ── *@
+<div class="modal-overlay" id="payModal">
+    <div class="modal">
+        <div class="modal-title">Ödeme Al</div>
+        <div class="modal-sub">Kısmi ödeme alabilir, farklı yöntemler seçebilirsiniz</div>
+
+        @* Özet *@
+        <div class="pay-modal-summary">
+            <div class="pms-row">
+                <span style="color:var(--text-muted)">Adisyon Toplamı</span>
+                <span>₺@Model.OrderTotalAmount.ToString("N2")</span>
+            </div>
+            <div class="pms-row" id="pms-discount-row" style="display:none">
+                <span style="color:#22c55e">İndirim</span>
+                <span id="pms-discount-val" style="color:#22c55e">-₺0,00</span>
+            </div>
+            <div class="pms-divider"></div>
+            <div class="pms-row">
+                <span style="color:var(--text-muted)">Daha Önce Ödenen</span>
+                <span style="color:#22c55e">₺@totalPaid.ToString("N2")</span>
+            </div>
+            <div class="pms-row">
+                <span style="font-weight:700">Kalan Tutar</span>
+                <span class="pms-total" id="pms-remaining">₺@remaining.ToString("N2")</span>
+            </div>
+        </div>
+
+        <form asp-controller="Orders" asp-action="AddPayment" method="post"
+              onsubmit="return validatePayment()">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="orderId" value="@Model.OrderId" />
+            <input type="hidden" name="paymentMethod" id="selectedMethod" value="cash" />
+
+            <div class="form-group">
+                <label class="form-label">Ödeyen Kişi (opsiyonel)</label>
+                <input class="form-control" name="payerName"
+                       placeholder="Ali Yılmaz veya boş bırakın" maxlength="100" />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Ödeme Yöntemi *</label>
+                <div class="method-grid">
+                    <button type="button" class="method-btn active" data-method="cash"
+                            onclick="selectMethod(this,'cash')">
+                        💵 Nakit
+                    </button>
+                    <button type="button" class="method-btn" data-method="credit_card"
+                            onclick="selectMethod(this,'credit_card')">
+                        💳 Kredi Kartı
+                    </button>
+                    <button type="button" class="method-btn" data-method="debit_card"
+                            onclick="selectMethod(this,'debit_card')">
+                        🏦 Banka Kartı
+                    </button>
+                    <button type="button" class="method-btn" data-method="other"
+                            onclick="selectMethod(this,'other')">
+                        🔄 Diğer
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">İndirim Tutarı</label>
+                <div class="discount-row">
+                    <input class="form-control" id="discountAmount" name="discountAmount"
+                           type="number" min="0" step="0.01" value="0"
+                           oninput="updateRemaining()" />
+                    <span class="discount-label" id="discount-label" style="display:none">
+                        Net: ₺<span id="net-amount">0</span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Ödeme Tutarı *</label>
+                <input class="form-control" id="paymentAmount" name="paymentAmount"
+                       type="number" min="0.01" step="0.01"
+                       placeholder="₺0,00" oninput="updateChange()" />
+                <span class="form-error" id="err-amount">Geçerli bir tutar giriniz.</span>
+
+                @* Tamamını öde kısa yolu *@
+                <button type="button"
+                        style="margin-top:6px;font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;padding:0;font-family:'DM Sans',sans-serif;"
+                        onclick="fillRemaining()">
+                    Kalan tutarı doldur (₺@remaining.ToString("N2"))
+                </button>
+            </div>
+
+            @* Para üstü — nakit seçiliyse *@
+            <div id="changeRow" class="form-group" style="display:none">
+                <label class="form-label">Para Üstü</label>
+                <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:#22c55e;padding:4px 0"
+                     id="changeDisplay">
+                    ₺0,00
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn-ghost" onclick="closeModal('payModal')">İptal</button>
+                <button type="submit" class="btn-primary">Ödemeyi Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        const orderTotal  = @Model.OrderTotalAmount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+        const alreadyPaid = @totalPaid.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+        let   currentMethod = 'cash';
+
+        // Modal
+        function openModal(id)  { document.getElementById(id).classList.add('open'); }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+        document.querySelectorAll('.modal-overlay').forEach(o => {
+            o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+        });
+
+        // Ürün ekleme modalı
+        function openAddItemModal(id, name, price) {
+            document.getElementById('addItemId').value   = id;
+            document.getElementById('addItemTitle').textContent = name + ' Ekle';
+            document.getElementById('addItemSub').textContent   = '₺' + price.toFixed(2).replace('.',',') + ' / adet';
+            document.getElementById('addItemQty').value  = 1;
+            openModal('addItemModal');
+        }
+
+        function validateAddItem() {
+            const qty = parseInt(document.getElementById('addItemQty').value);
+            const err = document.getElementById('err-qty');
+            if (isNaN(qty) || qty < 1) {
+                err.style.display = 'block'; return false;
+            }
+            err.style.display = 'none'; return true;
+        }
+
+        // Ödeme yöntemi seçimi
+        function selectMethod(btn, method) {
+            document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('selectedMethod').value = method;
+            currentMethod = method;
+            document.getElementById('changeRow').style.display =
+                method === 'cash' ? 'block' : 'none';
+            updateChange();
+        }
+
+        // İndirim → kalan güncelle
+        function updateRemaining() {
+            const disc    = parseFloat(document.getElementById('discountAmount').value) || 0;
+            const net     = Math.max(0, orderTotal - disc - alreadyPaid);
+            const netFull = Math.max(0, orderTotal - disc);
+
+            document.getElementById('pms-remaining').textContent =
+                '₺' + net.toFixed(2).replace('.',',');
+
+            const discRow   = document.getElementById('pms-discount-row');
+            const discLabel = document.getElementById('discount-label');
+            const netEl     = document.getElementById('net-amount');
+
+            if (disc > 0) {
+                discRow.style.display   = 'flex';
+                discLabel.style.display = 'inline';
+                document.getElementById('pms-discount-val').textContent =
+                    '-₺' + disc.toFixed(2).replace('.',',');
+                netEl.textContent = netFull.toFixed(2).replace('.',',');
+            } else {
+                discRow.style.display   = 'none';
+                discLabel.style.display = 'none';
+            }
+            updateChange();
+        }
+
+        // Kalan tutarı doldur
+        function fillRemaining() {
+            const disc = parseFloat(document.getElementById('discountAmount').value) || 0;
+            const rem  = Math.max(0, orderTotal - disc - alreadyPaid);
+            document.getElementById('paymentAmount').value = rem.toFixed(2);
+            updateChange();
+        }
+
+        // Para üstü hesapla
+        function updateChange() {
+            if (currentMethod !== 'cash') return;
+            const disc    = parseFloat(document.getElementById('discountAmount').value) || 0;
+            const rem     = Math.max(0, orderTotal - disc - alreadyPaid);
+            const entered = parseFloat(document.getElementById('paymentAmount').value) || 0;
+            const change  = Math.max(0, entered - rem);
+            document.getElementById('changeDisplay').textContent =
+                '₺' + change.toFixed(2).replace('.',',');
+        }
+
+        // Ödeme validasyon
+        function validatePayment() {
+            const amount  = parseFloat(document.getElementById('paymentAmount').value);
+            const err     = document.getElementById('err-amount');
+            if (isNaN(amount) || amount <= 0) {
+                err.style.display = 'block'; return false;
+            }
+            err.style.display = 'none'; return true;
+        }
+
+        // Alert otomatik kaybol
+        setTimeout(() => {
+            document.querySelectorAll('.alert').forEach(a => {
+                a.style.transition = 'opacity .5s';
+                a.style.opacity = '0';
+                setTimeout(() => a.remove(), 500);
+            });
+        }, 3000);
+    </script>
+}

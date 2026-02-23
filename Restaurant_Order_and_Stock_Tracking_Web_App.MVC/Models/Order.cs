@@ -10,7 +10,7 @@ public class Order
     public string OrderNote { get; set; }
     public decimal OrderTotalAmount { get; set; }
     public DateTime OrderOpenedAt { get; set; }
-    public DateTime OrderClosedAt { get; set; }
+    public DateTime? OrderClosedAt { get; set; }
     public virtual ICollection<OrderItem> OrderItems { get; set; }
     public virtual ICollection<Payment> Payments { get; set; }
 

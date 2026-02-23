@@ -1,0 +1,534 @@
+﻿@model IEnumerable<Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Table>
+@{
+    ViewData["Title"] = "Masalar";
+    string StatusClass(int s) => s switch { 1 => "occupied", 2 => "reserved", _ => "available" };
+    string StatusLabel(int s) => s switch { 1 => "Dolu", 2 => "Rezerve", _ => "Boş" };
+    string StatusDot(int s)   => s switch { 1 => "●", 2 => "◈", _ => "○" };
+}
+
+@section Styles {
+<style>
+    .summary-bar { display:flex; gap:12px; margin-bottom:22px; flex-wrap:wrap; }
+    .summary-chip { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 18px; display:flex; align-items:center; gap:12px; flex:1; min-width:130px; }
+    .chip-icon { font-size:22px; }
+    .chip-val  { font-family:'Syne',sans-serif; font-size:22px; font-weight:700; }
+    .chip-lbl  { font-size:11px; color:var(--text-muted); margin-top:1px; }
+
+    .toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+    .filter-btns { display:flex; gap:6px; }
+    .filter-btn { padding:6px 14px; border-radius:20px; border:1px solid var(--border); background:var(--surface2); color:var(--text-muted); font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; }
+    .filter-btn:hover,.filter-btn.active { border-color:var(--accent); color:var(--accent); background:var(--accent-glow); }
+    .btn-add { display:inline-flex; align-items:center; gap:6px; padding:8px 16px; background:var(--accent); color:#fff; border-radius:9px; font-size:13px; font-weight:700; border:none; cursor:pointer; transition:background .15s; }
+    .btn-add:hover { background:#ea6c0a; }
+
+    .section-label { font-family:'Syne',sans-serif; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted); margin:22px 0 10px; display:flex; align-items:center; gap:8px; }
+    .section-label::after { content:''; flex:1; height:1px; background:var(--border); }
+
+    .tables-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(185px,1fr)); gap:12px; }
+
+    /* Kart */
+    .table-card { border-radius:14px; border:1.5px solid; padding:16px; display:flex; flex-direction:column; gap:8px; position:relative; transition:transform .15s,box-shadow .15s; }
+    .table-card:hover { transform:translateY(-3px); box-shadow:0 8px 28px rgba(0,0,0,.3); }
+    .table-card.available { background:#0f2318; border-color:#166534; }
+    .table-card.occupied  { background:#2a1200; border-color:#c2410c; }
+    .table-card.reserved  { background:#0d1a2e; border-color:#1d4ed8; }
+    [data-theme="light"] .table-card.available { background:#f0fdf4; border-color:#86efac; }
+    [data-theme="light"] .table-card.occupied  { background:#fff7ed; border-color:#fdba74; }
+    [data-theme="light"] .table-card.reserved  { background:#eff6ff; border-color:#93c5fd; }
+
+    .table-card.occupied::after { content:''; position:absolute; top:12px; right:12px; width:8px; height:8px; border-radius:50%; background:#fb923c; animation:pulse 2s infinite; }
+    @@keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(251,146,60,.6)} 70%{box-shadow:0 0 0 7px rgba(251,146,60,0)} 100%{box-shadow:0 0 0 0 rgba(251,146,60,0)} }
+
+    /* Rezervasyon uyarı halkası */
+    .table-card.reserved.warning-soon { animation:warningPulse 1.5s infinite; }
+    @@keyframes warningPulse { 0%,100%{box-shadow:0 0 0 0 rgba(234,179,8,.5)} 50%{box-shadow:0 0 12px 4px rgba(234,179,8,.3)} }
+
+    .card-name { font-family:'Syne',sans-serif; font-size:18px; font-weight:800; }
+    .card-status { font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+    .available .card-status { color:#4ade80; }
+    .occupied  .card-status { color:#fb923c; }
+    .reserved  .card-status { color:#60a5fa; }
+    .card-capacity { font-size:11px; color:var(--text-muted); }
+    .card-divider  { height:1px; background:var(--border); }
+
+    /* Rezervasyon özet bilgisi kart içinde */
+    .res-summary { background:rgba(96,165,250,.08); border:1px solid rgba(96,165,250,.2); border-radius:9px; padding:8px 10px; display:flex; flex-direction:column; gap:3px; cursor:pointer; transition:background .15s; }
+    .res-summary:hover { background:rgba(96,165,250,.14); }
+    .res-summary-name { font-size:13px; font-weight:700; color:#60a5fa; }
+    .res-summary-time { font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:4px; }
+    .res-warning-badge { font-size:10px; font-weight:700; background:rgba(234,179,8,.15); color:#eab308; padding:2px 6px; border-radius:20px; margin-left:auto; }
+
+    .card-actions { display:flex; flex-direction:column; gap:6px; }
+    .card-btn { padding:7px 0; border-radius:8px; font-size:12px; font-weight:700; text-align:center; border:1px solid; cursor:pointer; background:none; width:100%; transition:background .15s; display:block; }
+    .available .card-btn.primary   { border-color:#166534; color:#4ade80; }
+    .available .card-btn.primary:hover { background:rgba(74,222,128,.1); }
+    .available .card-btn.secondary { border-color:#1d4ed8; color:#60a5fa; }
+    .available .card-btn.secondary:hover { background:rgba(96,165,250,.1); }
+    .occupied  .card-btn.primary   { border-color:#c2410c; color:#fb923c; }
+    .occupied  .card-btn.primary:hover  { background:rgba(251,146,60,.1); }
+    .reserved  .card-btn.primary   { border-color:#1d4ed8; color:#60a5fa; }
+    .reserved  .card-btn.primary:hover  { background:rgba(96,165,250,.1); }
+    .reserved  .card-btn.secondary { border-color:#166534; color:#4ade80; }
+    .reserved  .card-btn.secondary:hover { background:rgba(74,222,128,.1); }
+    .card-btn.danger { border-color:#7f1d1d !important; color:#f87171 !important; }
+    .card-btn.danger:hover { background:rgba(239,68,68,.1) !important; }
+
+    /* Alert */
+    .alert { padding:12px 16px; border-radius:10px; font-size:13px; border:1px solid; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+    .alert-success { background:rgba(34,197,94,.1);  border-color:rgba(34,197,94,.3);  color:#22c55e; }
+    .alert-error   { background:rgba(239,68,68,.1);  border-color:rgba(239,68,68,.3);  color:#ef4444; }
+
+    /* Toast uyarı */
+    .toast-container { position:fixed; top:70px; right:20px; z-index:500; display:flex; flex-direction:column; gap:10px; }
+    .toast { background:var(--surface); border:1px solid; border-radius:12px; padding:14px 18px; min-width:280px; max-width:340px; box-shadow:0 8px 28px rgba(0,0,0,.35); display:flex; align-items:flex-start; gap:10px; animation:toastIn .3s ease; }
+    @@keyframes toastIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
+    .toast.warning { border-color:rgba(234,179,8,.4); }
+    .toast-icon  { font-size:22px; flex-shrink:0; }
+    .toast-body  { flex:1; }
+    .toast-title { font-family:'Syne',sans-serif; font-size:13px; font-weight:700; color:#eab308; }
+    .toast-msg   { font-size:12px; color:var(--text-muted); margin-top:3px; line-height:1.4; }
+    .toast-close { background:none; border:none; color:var(--text-muted); font-size:18px; cursor:pointer; flex-shrink:0; line-height:1; }
+
+    /* Modals */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); backdrop-filter:blur(4px); z-index:200; align-items:center; justify-content:center; }
+    .modal-overlay.open { display:flex; }
+    .modal { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:26px; width:400px; max-width:95vw; box-shadow:0 20px 60px rgba(0,0,0,.5); animation:modalIn .2s ease; }
+    @@keyframes modalIn { from{opacity:0;transform:scale(.93) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+    .modal-title { font-family:'Syne',sans-serif; font-size:18px; font-weight:700; margin-bottom:6px; }
+    .modal-sub   { font-size:13px; color:var(--text-muted); margin-bottom:20px; }
+    .form-row    { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .form-group  { display:flex; flex-direction:column; gap:4px; margin-bottom:12px; }
+    .form-label  { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; }
+    .form-control { background:var(--surface2); border:1px solid var(--border); border-radius:9px; padding:10px 13px; color:var(--text); font-family:'DM Sans',sans-serif; font-size:14px; outline:none; width:100%; transition:border-color .15s; }
+    .form-control:focus { border-color:var(--accent); }
+    .form-error  { font-size:11px; color:#ef4444; margin-top:3px; display:none; }
+    .modal-footer { display:flex; gap:10px; margin-top:18px; }
+    .btn-primary { flex:1; padding:10px; background:var(--accent); color:#fff; border:none; border-radius:9px; font-size:14px; font-weight:700; cursor:pointer; transition:background .15s; }
+    .btn-primary:hover { background:#ea6c0a; }
+    .btn-ghost   { flex:1; padding:10px; background:var(--surface2); color:var(--text-muted); border:1px solid var(--border); border-radius:9px; font-size:14px; font-weight:600; cursor:pointer; }
+    .btn-ghost:hover { color:var(--text); }
+
+    /* Rezervasyon detay modal */
+    .res-detail-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); }
+    .res-detail-row:last-child { border-bottom:none; }
+    .res-detail-icon  { font-size:18px; width:24px; text-align:center; flex-shrink:0; }
+    .res-detail-label { font-size:11px; color:var(--text-muted); font-weight:600; }
+    .res-detail-value { font-size:14px; font-weight:600; margin-top:1px; }
+
+    .empty-state { text-align:center; padding:60px 20px; color:var(--text-muted); }
+    .empty-state .empty-icon { font-size:48px; margin-bottom:12px; }
+
+    @@media(max-width:480px) { .tables-grid{grid-template-columns:repeat(2,1fr)} .form-row{grid-template-columns:1fr} }
+</style>
+}
+
+@* Toast container *@
+<div class="toast-container" id="toastContainer"></div>
+
+@* Alerts *@
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success">✅ @TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-error">❌ @TempData["Error"]</div>
+}
+
+@* Page Header *@
+<div class="page-header">
+    <div>
+        <h1 class="page-title">Masa Yönetimi</h1>
+        <p class="page-sub">Masaya tıklayarak adisyon aç veya rezerve et</p>
+    </div>
+    <div class="toolbar">
+        <div class="filter-btns">
+            <button class="filter-btn active" data-filter="all">Tümü</button>
+            <button class="filter-btn" data-filter="available">Boş</button>
+            <button class="filter-btn" data-filter="occupied">Dolu</button>
+            <button class="filter-btn" data-filter="reserved">Rezerve</button>
+        </div>
+        <button class="btn-add" onclick="openModal('addModal')">＋ Masa Ekle</button>
+    </div>
+</div>
+
+@* Özet Bar *@
+<div class="summary-bar">
+    <div class="summary-chip">
+        <div class="chip-icon">🪑</div>
+        <div><div class="chip-val">@Model.Count()</div><div class="chip-lbl">Toplam Masa</div></div>
+    </div>
+    <div class="summary-chip">
+        <div class="chip-icon">🔴</div>
+        <div><div class="chip-val" style="color:#fb923c">@Model.Count(t => t.TableStatus == 1)</div><div class="chip-lbl">Dolu</div></div>
+    </div>
+    <div class="summary-chip">
+        <div class="chip-icon">🟢</div>
+        <div><div class="chip-val" style="color:#4ade80">@Model.Count(t => t.TableStatus == 0)</div><div class="chip-lbl">Boş</div></div>
+    </div>
+    <div class="summary-chip">
+        <div class="chip-icon">🔵</div>
+        <div><div class="chip-val" style="color:#60a5fa">@Model.Count(t => t.TableStatus == 2)</div><div class="chip-lbl">Rezerve</div></div>
+    </div>
+</div>
+
+@* Masa Listesi *@
+@if (!Model.Any())
+{
+    <div class="empty-state">
+        <div class="empty-icon">🪑</div>
+        <p>Henüz masa eklenmemiş.</p>
+    </div>
+}
+else
+{
+    <div class="tables-grid" id="tablesGrid">
+        @foreach (var table in Model)
+        {
+            var sc = StatusClass(table.TableStatus);
+            @* Rezervasyon 30 dk içinde mi? *@
+            var warningSoon = table.TableStatus == 2
+                && table.ReservationTime.HasValue
+                && table.ReservationTime.Value <= DateTime.Now.AddMinutes(30)
+                && table.ReservationTime.Value >= DateTime.Now;
+
+            <div class="table-card @sc @(warningSoon ? "warning-soon" : "")"
+                 data-status="@sc"
+                 data-res-time="@(table.ReservationTime?.ToString("HH:mm") ?? "")">
+
+                <div class="card-name">@table.TableName</div>
+                <div class="card-status">@StatusDot(table.TableStatus) @StatusLabel(table.TableStatus)</div>
+                <div class="card-capacity">👥 @table.TableCapacity kişilik</div>
+                <div class="card-divider"></div>
+
+                @* Rezervasyon özet *@
+                @if (table.TableStatus == 2 && table.ReservationName != null)
+                {
+                    <div class="res-summary" onclick="showResDetail('@table.TableId')">
+                        <div class="res-summary-name">👤 @table.ReservationName</div>
+                        <div class="res-summary-time">
+                            🕐 @table.ReservationTime?.ToString("HH:mm") — @table.ReservationGuestCount kişi
+                            @if (warningSoon)
+                            {
+                                <span class="res-warning-badge">⚠ Yaklaşıyor</span>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="card-actions">
+                    @if (table.TableStatus == 0)
+                    {
+                        <a asp-controller="Orders" asp-action="Create"
+                           asp-route-tableId="@table.TableId"
+                           class="card-btn primary">Adisyon Aç</a>
+                        <button class="card-btn secondary"
+                                onclick="openReserveModal(@table.TableId, '@table.TableName', @table.TableCapacity)">
+                            Rezerve Et
+                        </button>
+                    }
+                    else if (table.TableStatus == 1)
+                    {
+                        <a asp-controller="Orders" asp-action="Create"
+                           asp-route-tableId="@table.TableId"
+                           class="card-btn primary">Adisyona Git →</a>
+                    }
+                    else if (table.TableStatus == 2)
+                    {
+                        <a asp-controller="Orders" asp-action="Create"
+                           asp-route-tableId="@table.TableId"
+                           class="card-btn primary">Adisyon Aç</a>
+                        <form asp-controller="Tables" asp-action="CancelReserve" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="tableId" value="@table.TableId" />
+                            <button type="submit" class="card-btn secondary">Rezervasyonu İptal Et</button>
+                        </form>
+                    }
+
+                    @if (table.TableStatus != 1)
+                    {
+                        <form asp-controller="Tables" asp-action="Delete" method="post"
+                              onsubmit="return confirm('@table.TableName silinsin mi?')">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="tableId" value="@table.TableId" />
+                            <button type="submit" class="card-btn danger">Sil</button>
+                        </form>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* ── MASA EKLE MODAL ── *@
+<div class="modal-overlay" id="addModal">
+    <div class="modal">
+        <div class="modal-title">Yeni Masa Ekle</div>
+        <form asp-controller="Tables" asp-action="Create" method="post"
+              onsubmit="return validateForm('addTableForm')">
+            @Html.AntiForgeryToken()
+            <div class="form-group">
+                <label class="form-label">Masa Adı *</label>
+                <input class="form-control" id="add-name" name="tableName"
+                       placeholder="Masa 1, Teras-2 ..." maxlength="20" />
+                <span class="form-error" id="err-add-name">Masa adı boş olamaz.</span>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Kapasite *</label>
+                <input class="form-control" id="add-cap" name="tableCapacity"
+                       type="number" min="1" max="20" value="4" />
+                <span class="form-error" id="err-add-cap">1 ile 20 arasında olmalıdır.</span>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-ghost" onclick="closeModal('addModal')">İptal</button>
+                <button type="submit" class="btn-primary">Ekle</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@* ── REZERVE ET MODAL ── *@
+<div class="modal-overlay" id="reserveModal">
+    <div class="modal">
+        <div class="modal-title" id="res-modal-title">Rezervasyon</div>
+        <div class="modal-sub"  id="res-modal-sub">Müşteri bilgilerini giriniz</div>
+        <form asp-controller="Tables" asp-action="Reserve" method="post"
+              onsubmit="return validateReserveForm()">
+            @Html.AntiForgeryToken()
+            <input type="hidden" id="res-tableId" name="tableId" />
+            <input type="hidden" id="res-maxCap"  value="" />
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">İsim Soyisim *</label>
+                    <input class="form-control" id="res-name" name="reservationName"
+                           placeholder="Ahmet Yılmaz" maxlength="100" />
+                    <span class="form-error" id="err-res-name">Ad soyad boş olamaz.</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Telefon *</label>
+                    <input class="form-control" id="res-phone" name="reservationPhone"
+                           placeholder="05xx xxx xx xx" maxlength="20" />
+                    <span class="form-error" id="err-res-phone">Telefon numarası boş olamaz.</span>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Kişi Sayısı *</label>
+                    <input class="form-control" id="res-guests" name="reservationGuestCount"
+                           type="number" min="1" value="2" />
+                    <span class="form-error" id="err-res-guests">Geçerli bir kişi sayısı girin.</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Rezervasyon Saati *</label>
+                    <input class="form-control" id="res-time" name="reservationTime"
+                           type="time" />
+                    <span class="form-error" id="err-res-time">Geçerli bir saat seçiniz.</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-ghost" onclick="closeModal('reserveModal')">İptal</button>
+                <button type="submit" class="btn-primary">Rezerve Et</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@* ── REZERVASYON DETAY MODAL ── *@
+<div class="modal-overlay" id="resDetailModal">
+    <div class="modal" style="width:360px">
+        <div class="modal-title">Rezervasyon Detayı</div>
+        <div id="resDetailContent" style="margin:16px 0"></div>
+        <div class="modal-footer">
+            <button class="btn-ghost" onclick="closeModal('resDetailModal')">Kapat</button>
+        </div>
+    </div>
+</div>
+
+@* Rezervasyon verilerini JS'e aktar *@
+<script id="reservationData" type="application/json">
+@Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+    Model.Where(t => t.TableStatus == 2 && t.ReservationTime.HasValue)
+         .Select(t => new {
+             id       = t.TableId,
+             name     = t.TableName,
+             resName  = t.ReservationName,
+             resPhone = t.ReservationPhone,
+             resGuests= t.ReservationGuestCount,
+             resTime  = t.ReservationTime!.Value.ToString("HH:mm"),
+             resTimeIso = t.ReservationTime!.Value.ToString("yyyy-MM-ddTHH:mm:ss")
+         })
+))
+</script>
+
+@section Scripts {
+<script>
+    // ── Rezervasyon verisi ──
+    const reservations = JSON.parse(document.getElementById('reservationData').textContent);
+
+    // ── Modal yönetimi ──
+    function openModal(id)  { document.getElementById(id).classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+    document.querySelectorAll('.modal-overlay').forEach(o => {
+        o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+    });
+
+    // ── Rezerve modal aç ──
+    function openReserveModal(tableId, tableName, maxCap) {
+        document.getElementById('res-tableId').value    = tableId;
+        document.getElementById('res-maxCap').value     = maxCap;
+        document.getElementById('res-modal-title').textContent = tableName + ' — Rezervasyon';
+        document.getElementById('res-modal-sub').textContent   = 'Müşteri bilgilerini giriniz';
+        document.getElementById('res-guests').max = maxCap;
+
+        // Saati şimdiden 1 saat sonraya set et
+        const d = new Date(); d.setHours(d.getHours() + 1, 0, 0);
+        document.getElementById('res-time').value =
+            String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+
+        // Hataları sıfırla
+        ['res-name','res-phone','res-guests','res-time'].forEach(id => {
+            document.getElementById('err-' + id).style.display = 'none';
+            document.getElementById(id).style.borderColor = '';
+        });
+
+        openModal('reserveModal');
+    }
+
+    // ── Rezervasyon detay göster ──
+    function showResDetail(tableId) {
+        const r = reservations.find(x => x.id == tableId);
+        if (!r) return;
+
+        document.getElementById('resDetailContent').innerHTML = `
+            <div class="res-detail-row">
+                <div class="res-detail-icon">👤</div>
+                <div><div class="res-detail-label">İsim Soyisim</div><div class="res-detail-value">${r.resName}</div></div>
+            </div>
+            <div class="res-detail-row">
+                <div class="res-detail-icon">📞</div>
+                <div><div class="res-detail-label">Telefon</div><div class="res-detail-value">${r.resPhone}</div></div>
+            </div>
+            <div class="res-detail-row">
+                <div class="res-detail-icon">👥</div>
+                <div><div class="res-detail-label">Kişi Sayısı</div><div class="res-detail-value">${r.resGuests} kişi</div></div>
+            </div>
+            <div class="res-detail-row">
+                <div class="res-detail-icon">🕐</div>
+                <div><div class="res-detail-label">Rezervasyon Saati</div><div class="res-detail-value">${r.resTime}</div></div>
+            </div>
+        `;
+        openModal('resDetailModal');
+    }
+
+    // ── Validasyon: Masa ekle ──
+    function validateForm() {
+        let ok = true;
+        const name = document.getElementById('add-name');
+        const cap  = document.getElementById('add-cap');
+        const errN = document.getElementById('err-add-name');
+        const errC = document.getElementById('err-add-cap');
+
+        if (!name.value.trim()) {
+            errN.style.display = 'block'; name.style.borderColor = '#ef4444'; ok = false;
+        } else { errN.style.display = 'none'; name.style.borderColor = ''; }
+
+        const v = parseInt(cap.value);
+        if (isNaN(v) || v < 1 || v > 20) {
+            errC.style.display = 'block'; cap.style.borderColor = '#ef4444'; ok = false;
+        } else { errC.style.display = 'none'; cap.style.borderColor = ''; }
+
+        return ok;
+    }
+
+    // ── Validasyon: Rezervasyon ──
+    function validateReserveForm() {
+        let ok = true;
+        const maxCap = parseInt(document.getElementById('res-maxCap').value);
+
+        const fields = [
+            { id:'res-name',   err:'err-res-name',   check: v => v.trim().length > 0,          msg:'Ad soyad boş olamaz.' },
+            { id:'res-phone',  err:'err-res-phone',  check: v => v.trim().length >= 10,         msg:'Geçerli telefon giriniz.' },
+            { id:'res-guests', err:'err-res-guests', check: v => v >= 1 && v <= maxCap,         msg:`1 ile ${maxCap} arasında olmalı.` },
+            { id:'res-time',   err:'err-res-time',   check: v => v.length > 0,                  msg:'Saat seçiniz.' },
+        ];
+
+        fields.forEach(f => {
+            const el  = document.getElementById(f.id);
+            const err = document.getElementById(f.err);
+            const val = f.id === 'res-guests' ? parseInt(el.value) : el.value;
+            if (!f.check(val)) {
+                err.textContent = f.msg; err.style.display = 'block';
+                el.style.borderColor = '#ef4444'; ok = false;
+            } else {
+                err.style.display = 'none'; el.style.borderColor = '';
+            }
+        });
+
+        return ok;
+    }
+
+    // ── Filtre ──
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const f = btn.dataset.filter;
+            document.querySelectorAll('.table-card').forEach(c => {
+                c.style.display = f === 'all' || c.dataset.status === f ? '' : 'none';
+            });
+        });
+    });
+
+    // ── Alert otomatik kaybol ──
+    setTimeout(() => {
+        document.querySelectorAll('.alert').forEach(a => {
+            a.style.transition = 'opacity .5s';
+            a.style.opacity = '0';
+            setTimeout(() => a.remove(), 500);
+        });
+    }, 3000);
+
+    // ── 30 dk uyarı sistemi ──
+    function checkReservationWarnings() {
+        const now = new Date();
+        const container = document.getElementById('toastContainer');
+
+        reservations.forEach(r => {
+            const resTime = new Date(r.resTimeIso);
+            const diffMs  = resTime - now;
+            const diffMin = Math.floor(diffMs / 60000);
+
+            // 0-30 dk arası → uyar (daha önce gösterilmediyse)
+            if (diffMin >= 0 && diffMin <= 30) {
+                const toastId = 'toast-' + r.id;
+                if (!document.getElementById(toastId)) {
+                    const toast = document.createElement('div');
+                    toast.className = 'toast warning';
+                    toast.id = toastId;
+                    toast.innerHTML = `
+                        <div class="toast-icon">⚠️</div>
+                        <div class="toast-body">
+                            <div class="toast-title">${r.name} — Rezervasyon Yaklaşıyor</div>
+                            <div class="toast-msg">
+                                <strong>${r.resName}</strong> (${r.resGuests} kişi) 
+                                saat <strong>${r.resTime}</strong>'de bekleniyor.
+                                Kalan süre: ~${diffMin} dakika
+                            </div>
+                        </div>
+                        <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+                    `;
+                    container.appendChild(toast);
+
+                    // 60 sn sonra otomatik kapat
+                    setTimeout(() => toast.remove(), 60000);
+                }
+            }
+        });
+    }
+
+    // Sayfa açılınca ve her dakika kontrol et
+    checkReservationWarnings();
+    setInterval(checkReservationWarnings, 60000);
+</script>
+}

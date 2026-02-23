@@ -8,6 +8,11 @@
         public int TableStatus { get; set; }
         public DateTime TableCreatedAt { get; set; }
 
+        public string? ReservationName { get; set; }
+        public string? ReservationPhone { get; set; }
+        public int? ReservationGuestCount { get; set; }
+        public DateTime? ReservationTime { get; set; }
+
         public virtual ICollection<Order> Orders { get; set; }
 
     }
