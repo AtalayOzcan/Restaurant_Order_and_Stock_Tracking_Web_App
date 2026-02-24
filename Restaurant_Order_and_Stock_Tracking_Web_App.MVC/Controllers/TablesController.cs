@@ -17,6 +17,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         // GET /Tables
         public async Task<IActionResult> Index()
         {
+            // Sayfa her açılışında süresi dolan rezervasyonları temizle
+            await CleanupExpiredReservationsAsync();
+
             ViewData["Title"] = "Masalar";
             ViewData["OccupiedCount"] = await _db.Tables
                                             .CountAsync(t => t.TableStatus == 1);
@@ -28,12 +31,36 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             return View(tables);
         }
 
+        // Süresi dolan rezervasyonları temizle
+        private async Task CleanupExpiredReservationsAsync()
+        {
+            var cutoff = DateTime.UtcNow.Subtract(TimeSpan.FromMinutes(30));
+
+            var expired = await _db.Tables
+                .Where(t => t.TableStatus == 2
+                         && t.ReservationTime.HasValue
+                         && t.ReservationTime.Value <= cutoff)
+                .ToListAsync();
+
+            if (!expired.Any()) return;
+
+            foreach (var table in expired)
+            {
+                table.TableStatus = 0;
+                table.ReservationName = null;
+                table.ReservationPhone = null;
+                table.ReservationGuestCount = null;
+                table.ReservationTime = null;
+            }
+
+            await _db.SaveChangesAsync();
+        }
+
         // POST /Tables/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(string tableName, int tableCapacity)
         {
-            // Validasyon
             if (string.IsNullOrWhiteSpace(tableName))
             {
                 TempData["Error"] = "Masa adı boş olamaz.";
@@ -46,9 +73,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            // Aynı isimde masa var mı?
-            var exists = await _db.Tables
-                                  .AnyAsync(t => t.TableName == tableName.Trim());
+            var exists = await _db.Tables.AnyAsync(t => t.TableName == tableName.Trim());
             if (exists)
             {
                 TempData["Error"] = $"'{tableName}' adında bir masa zaten var.";
@@ -114,20 +139,27 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            // ✅ UTC olarak oluştur
-            var reservationDateTime = DateTime.UtcNow.Date.Add(parsedTime);
+            // ✅ FIX: Local time ile çalış (UTC+3 Türkiye saati)
+            // DateTime.UtcNow.Date.Add() yerine DateTime.Now.Date.Add() kullan
+            var localNow = DateTime.Now;
+            var reservationLocal = localNow.Date.Add(parsedTime);
 
-            if (reservationDateTime < DateTime.UtcNow)
+            // 5 dakika toleranslı geçmiş saat kontrolü
+            if (reservationLocal < localNow.AddMinutes(-5))
             {
                 TempData["Error"] = "Rezervasyon saati geçmiş bir saat olamaz.";
                 return RedirectToAction(nameof(Index));
             }
 
+            // DB'ye UTC olarak kaydet (PostgreSQL timestamptz uyumlu)
+            var reservationUtc = DateTime.SpecifyKind(reservationLocal, DateTimeKind.Local)
+                                         .ToUniversalTime();
+
             table.TableStatus = 2;
             table.ReservationName = reservationName.Trim();
             table.ReservationPhone = reservationPhone.Trim();
             table.ReservationGuestCount = reservationGuestCount;
-            table.ReservationTime = reservationDateTime; // ✅ UTC
+            table.ReservationTime = reservationUtc;
 
             await _db.SaveChangesAsync();
 
@@ -179,7 +211,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            // Dolu masayı silme
             if (table.TableStatus == 1)
             {
                 TempData["Error"] = "Açık adisyonu olan masa silinemez.";

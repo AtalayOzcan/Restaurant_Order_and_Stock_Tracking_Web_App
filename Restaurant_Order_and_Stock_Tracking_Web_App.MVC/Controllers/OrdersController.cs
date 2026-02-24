@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models;
+using System.Globalization;
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 {
@@ -13,7 +14,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         {
             _db = db;
         }
+
+        // ─────────────────────────────────────────────────────────────
         // GET /Orders
+        // ─────────────────────────────────────────────────────────────
         public async Task<IActionResult> Index(string tab = "active")
         {
             ViewData["Title"] = "Siparişler";
@@ -35,7 +39,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                     .ThenInclude(oi => oi.MenuItem)
                 .Include(o => o.Payments)
                 .OrderByDescending(o => o.OrderClosedAt)
-                .Take(50) // son 50 sipariş
+                .Take(50)
                 .ToListAsync();
 
             ViewBag.ActiveOrders = activeOrders;
@@ -44,7 +48,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             return View();
         }
 
-        // GET /Orders/Create/5  → adisyon açma sayfası
+        // ─────────────────────────────────────────────────────────────
+        // GET /Orders/Create?tableId=5
+        // ─────────────────────────────────────────────────────────────
         public async Task<IActionResult> Create(int tableId)
         {
             var table = await _db.Tables.FindAsync(tableId);
@@ -57,19 +63,18 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             if (table.TableStatus == 1)
             {
-                // Zaten açık adisyon var, direkt o adisyona git
                 var existingOrder = await _db.Orders
-                    .FirstOrDefaultAsync(o => o.TableId == tableId
-                                           && o.OrderStatus == "open");
+                    .FirstOrDefaultAsync(o => o.TableId == tableId && o.OrderStatus == "open");
+
                 if (existingOrder != null)
                     return RedirectToAction(nameof(Detail), new { id = existingOrder.OrderId });
             }
 
-            // Menü kategorileriyle birlikte ürünleri çek
             var categories = await _db.Categories
                 .Where(c => c.IsActive)
                 .OrderBy(c => c.CategorySortOrder)
-                .Include(c => c.MenuItems.Where(m => m.IsAvailable))
+                // ✅ FIX #5: Soft-delete edilmiş ürünleri gösterme
+                .Include(c => c.MenuItems.Where(m => m.IsAvailable && !m.IsDeleted))
                 .ToListAsync();
 
             ViewData["Title"] = $"{table.TableName} — Adisyon Aç";
@@ -79,14 +84,15 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             return View();
         }
 
+        // ─────────────────────────────────────────────────────────────
         // POST /Orders/Create
+        // ─────────────────────────────────────────────────────────────
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(int tableId, string openedBy, string? orderNote,
                                                 List<int> menuItemIds, List<int> quantities,
                                                 List<string?> itemNotes)
         {
-            // Validasyon
             if (string.IsNullOrWhiteSpace(openedBy))
             {
                 TempData["Error"] = "Garson adı boş olamaz.";
@@ -106,25 +112,23 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 return RedirectToAction("Index", "Tables");
             }
 
-            // Transaction — tutarsız veri kalmasın
             using var transaction = await _db.Database.BeginTransactionAsync();
             try
             {
-                // 1) Adisyon oluştur
                 var order = new Order
                 {
                     TableId = tableId,
                     OrderStatus = "open",
                     OrderOpenedBy = openedBy.Trim(),
-                    OrderNote = orderNote?.Trim(),
+                    // ✅ FIX #3: Boşsa null kaydet, DB constraint hatası vermez
+                    OrderNote = string.IsNullOrWhiteSpace(orderNote) ? null : orderNote.Trim(),
                     OrderTotalAmount = 0,
                     OrderOpenedAt = DateTime.UtcNow
                 };
 
                 _db.Orders.Add(order);
-                await _db.SaveChangesAsync(); // OrderId üretilsin
+                await _db.SaveChangesAsync();
 
-                // 2) Sipariş kalemlerini ekle
                 decimal total = 0;
 
                 for (int i = 0; i < menuItemIds.Count; i++)
@@ -142,7 +146,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                         OrderItemQuantity = qty,
                         OrderItemUnitPrice = menuItem.MenuItemPrice,
                         OrderItemLineTotal = lineTotal,
-                        OrderItemNote = itemNotes.ElementAtOrDefault(i)?.Trim(),
+                        // ✅ FIX #3: Boşsa null kaydet
+                        OrderItemNote = string.IsNullOrWhiteSpace(itemNotes.ElementAtOrDefault(i))
+                                                ? null
+                                                : itemNotes[i]!.Trim(),
                         OrderItemStatus = "pending",
                         OrderItemAddedAt = DateTime.UtcNow
                     };
@@ -150,7 +157,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                     _db.OrderItems.Add(item);
                     total += lineTotal;
 
-                    // 3) Stok takibi açıksa stok düş
                     if (menuItem.TrackStock)
                     {
                         menuItem.StockQuantity -= qty;
@@ -162,10 +168,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                     }
                 }
 
-                // 4) Toplam güncelle
                 order.OrderTotalAmount = total;
-
-                // 5) Masayı dolu yap
                 table.TableStatus = 1;
 
                 await _db.SaveChangesAsync();
@@ -182,7 +185,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             }
         }
 
+        // ─────────────────────────────────────────────────────────────
         // GET /Orders/Detail/42
+        // ─────────────────────────────────────────────────────────────
         public async Task<IActionResult> Detail(int id)
         {
             var order = await _db.Orders
@@ -198,11 +203,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            // Ödeme için menü kategorileri (yeni ürün eklemek için)
             var categories = await _db.Categories
                 .Where(c => c.IsActive)
                 .OrderBy(c => c.CategorySortOrder)
-                .Include(c => c.MenuItems.Where(m => m.IsAvailable))
+                // ✅ FIX #5: Soft-delete edilmiş ürünleri gösterme
+                .Include(c => c.MenuItems.Where(m => m.IsAvailable && !m.IsDeleted))
                 .ToListAsync();
 
             ViewData["Title"] = $"{order.Table?.TableName} — Adisyon #{order.OrderId}";
@@ -211,7 +216,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             return View(order);
         }
 
+        // ─────────────────────────────────────────────────────────────
         // POST /Orders/UpdateItemStatus
+        // ─────────────────────────────────────────────────────────────
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateItemStatus(int orderItemId, string newStatus, int orderId)
@@ -236,7 +243,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             return RedirectToAction(nameof(Detail), new { id = orderId });
         }
 
+        // ─────────────────────────────────────────────────────────────
         // POST /Orders/AddItem
+        // ─────────────────────────────────────────────────────────────
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddItem(int orderId, int menuItemId, int quantity, string? note)
@@ -268,17 +277,15 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                     OrderItemQuantity = quantity,
                     OrderItemUnitPrice = menuItem.MenuItemPrice,
                     OrderItemLineTotal = menuItem.MenuItemPrice * quantity,
-                    OrderItemNote = note?.Trim(),
+                    // ✅ FIX #3: nullable note
+                    OrderItemNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
                     OrderItemStatus = "pending",
                     OrderItemAddedAt = DateTime.UtcNow
                 };
 
                 _db.OrderItems.Add(item);
-
-                // Toplam güncelle
                 order.OrderTotalAmount += item.OrderItemLineTotal;
 
-                // Stok düş
                 if (menuItem.TrackStock)
                 {
                     menuItem.StockQuantity -= quantity;
@@ -303,12 +310,42 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             return RedirectToAction(nameof(Detail), new { id = orderId });
         }
 
-        // POST /Orders/AddPayment  — kısmi ödeme ekle
+        // ─────────────────────────────────────────────────────────────
+        // POST /Orders/AddPayment
+        // ✅ FIX #1 & #2: decimal, string olarak alınıp InvariantCulture
+        //    ile parse ediliyor → "250,04" ve "250.04" her ikisi de çalışır
+        // ─────────────────────────────────────────────────────────────
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AddPayment(int orderId, string payerName,
-            string paymentMethod, decimal paymentAmount, decimal discountAmount)
+            string paymentMethod, string paymentAmountStr, string discountAmountStr)
         {
+            var culture = CultureInfo.InvariantCulture;
+
+            // Virgülü noktaya çevir, sonra parse et
+            if (!decimal.TryParse(
+                    paymentAmountStr?.Replace(',', '.'),
+                    NumberStyles.Any,
+                    culture,
+                    out decimal paymentAmount) || paymentAmount <= 0)
+            {
+                TempData["Error"] = "Geçerli bir ödeme tutarı giriniz.";
+                return RedirectToAction(nameof(Detail), new { id = orderId });
+            }
+
+            // İndirim parse — hata olursa 0 kabul et
+            decimal.TryParse(
+                discountAmountStr?.Replace(',', '.'),
+                NumberStyles.Any,
+                culture,
+                out decimal discountAmount);
+
+            if (discountAmount < 0)
+            {
+                TempData["Error"] = "İndirim tutarı negatif olamaz.";
+                return RedirectToAction(nameof(Detail), new { id = orderId });
+            }
+
             var order = await _db.Orders
                 .Include(o => o.Payments)
                 .Include(o => o.Table)
@@ -326,25 +363,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 return RedirectToAction(nameof(Detail), new { id = orderId });
             }
 
-            // Validasyon
-            if (paymentAmount <= 0)
-            {
-                TempData["Error"] = "Ödeme tutarı 0'dan büyük olmalıdır.";
-                return RedirectToAction(nameof(Detail), new { id = orderId });
-            }
-
-            if (discountAmount < 0)
-            {
-                TempData["Error"] = "İndirim tutarı negatif olamaz.";
-                return RedirectToAction(nameof(Detail), new { id = orderId });
-            }
-
-            // İndirim sonrası net tutar
             var netTotal = order.OrderTotalAmount - discountAmount;
             var alreadyPaid = order.Payments.Sum(p => p.PaymentsAmount);
             var remaining = netTotal - alreadyPaid;
 
-            if (paymentAmount > remaining + 0.01m) // küçük float toleransı
+            if (paymentAmount > remaining + 0.01m)
             {
                 TempData["Error"] = $"Ödeme tutarı kalan tutarı (₺{remaining:N2}) aşamaz.";
                 return RedirectToAction(nameof(Detail), new { id = orderId });
@@ -355,7 +378,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 "credit_card" => 1,
                 "debit_card" => 2,
                 "other" => 3,
-                _ => 0   // nakit
+                _ => 0
             };
 
             using var transaction = await _db.Database.BeginTransactionAsync();
@@ -368,13 +391,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                     PaymentsAmount = paymentAmount,
                     PaymentsChangeGiven = 0,
                     PaymentsPaidAt = DateTime.UtcNow,
-                    PaymentsNote = string.IsNullOrWhiteSpace(payerName)
-                                            ? "" : payerName.Trim()
+                    PaymentsNote = string.IsNullOrWhiteSpace(payerName) ? "" : payerName.Trim()
                 };
 
                 _db.Payments.Add(payment);
 
-                // Tüm tutar ödendi mi? → adisyonu kapat
                 var newTotalPaid = alreadyPaid + paymentAmount;
                 if (newTotalPaid >= netTotal - 0.01m)
                 {
@@ -382,7 +403,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                     order.OrderClosedAt = DateTime.UtcNow;
 
                     if (order.Table != null)
-                        order.Table.TableStatus = 0; // masayı boşalt
+                        order.Table.TableStatus = 0;
                 }
 
                 await _db.SaveChangesAsync();
@@ -405,11 +426,26 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             return RedirectToAction(nameof(Detail), new { id = orderId });
         }
 
-        // POST /Orders/Close
+        // ─────────────────────────────────────────────────────────────
+        // POST /Orders/Close  (tek seferlik tam ödeme)
+        // ✅ FIX #1 & #2: decimal string olarak alınıp parse ediliyor
+        // ─────────────────────────────────────────────────────────────
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Close(int orderId, string paymentMethod, decimal paymentAmount)
+        public async Task<IActionResult> Close(int orderId, string paymentMethod, string paymentAmountStr)
         {
+            var culture = CultureInfo.InvariantCulture;
+
+            if (!decimal.TryParse(
+                    paymentAmountStr?.Replace(',', '.'),
+                    NumberStyles.Any,
+                    culture,
+                    out decimal paymentAmount))
+            {
+                TempData["Error"] = "Geçerli bir tutar giriniz.";
+                return RedirectToAction(nameof(Detail), new { id = orderId });
+            }
+
             var order = await _db.Orders
                 .Include(o => o.Table)
                 .FirstOrDefaultAsync(o => o.OrderId == orderId);
@@ -435,7 +471,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             using var transaction = await _db.Database.BeginTransactionAsync();
             try
             {
-                // 1) Ödeme kaydı
                 var payment = new Payment
                 {
                     OrderId = orderId,
@@ -448,11 +483,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
                 _db.Payments.Add(payment);
 
-                // 2) Adisyonu kapat
                 order.OrderStatus = "paid";
                 order.OrderClosedAt = DateTime.UtcNow;
-
-                // 3) Masayı boşalt
                 order.Table.TableStatus = 0;
 
                 await _db.SaveChangesAsync();

@@ -10,6 +10,7 @@
         public int StockQuantity { get; set; }
         public bool TrackStock { get; set; }
         public bool IsAvailable { get; set; }
+        public bool IsDeleted { get; set; } = false;  
         public string Description { get; set; }
         public DateTime MenuItemCreatedTime { get; set; }
 

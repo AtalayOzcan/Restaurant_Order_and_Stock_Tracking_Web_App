@@ -7,7 +7,7 @@ public class Order
     public virtual Table Table { get; set; }
     public string OrderStatus { get; set; }
     public string OrderOpenedBy { get; set; }
-    public string OrderNote { get; set; }
+    public string? OrderNote { get; set; }
     public decimal OrderTotalAmount { get; set; }
     public DateTime OrderOpenedAt { get; set; }
     public DateTime? OrderClosedAt { get; set; }

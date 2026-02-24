@@ -265,17 +265,15 @@
                 display: flex;
                 animation: fadeIn .2s ease;
             }
+
         @@keyframes fadeIn {
-            from
+            from {
+                opacity: 0
+            }
 
-        {
-            opacity: 0
-        }
-
-        to {
-            opacity: 1
-        }
-
+            to {
+                opacity: 1
+            }
         }
 
         .modal {
@@ -296,19 +294,17 @@
             border-color: #e5e7eb;
             box-shadow: 0 24px 60px rgba(0,0,0,.15);
         }
+
         @@keyframes slideUp {
-            from
+            from {
+                transform: translateY(20px);
+                opacity: 0
+            }
 
-        {
-            transform: translateY(20px);
-            opacity: 0
-        }
-
-        to {
-            transform: translateY(0);
-            opacity: 1
-        }
-
+            to {
+                transform: translateY(0);
+                opacity: 1
+            }
         }
 
         .modal-header {
@@ -477,19 +473,17 @@
             animation: toastIn .25s ease;
             box-shadow: 0 8px 24px rgba(0,0,0,.3);
         }
+
         @@keyframes toastIn {
-            from
+            from {
+                transform: translateX(40px);
+                opacity: 0
+            }
 
-        {
-            transform: translateX(40px);
-            opacity: 0
-        }
-
-        to {
-            transform: translateX(0);
-            opacity: 1
-        }
-
+            to {
+                transform: translateX(0);
+                opacity: 1
+            }
         }
 
         .toast-success {
@@ -689,7 +683,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Fiyat (₺) *</label>
-                    <input type="number" id="c_price" class="form-control" min="0" step="0.01" placeholder="0.00" required />
+                    <input type="text" inputmode="decimal" id="c_price" name="menuItemPriceStr" class="form-control" placeholder="0.00" required />
                 </div>
             </div>
 
@@ -760,7 +754,7 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Fiyat (₺) *</label>
-                    <input type="number" id="e_price" class="form-control" min="0" step="0.01" required />
+                    <input type="text" inputmode="decimal" id="e_price" name="menuItemPriceStr" class="form-control" required />
                 </div>
             </div>
 
@@ -878,7 +872,7 @@
             const body = new URLSearchParams({
                 menuItemName:  document.getElementById('c_name').value,
                 categoryId:    document.getElementById('c_categoryId').value,
-                menuItemPrice: document.getElementById('c_price').value,
+                menuItemPriceStr: document.getElementById('c_price').value,
                 description:   document.getElementById('c_description').value,
                 stockQuantity: document.getElementById('c_stock').value,
                 trackStock:    document.getElementById('c_trackStock').checked,
@@ -924,7 +918,7 @@
                 id:            document.getElementById('e_id').value,
                 menuItemName:  document.getElementById('e_name').value,
                 categoryId:    document.getElementById('e_categoryId').value,
-                menuItemPrice: document.getElementById('e_price').value,
+                menuItemPriceStr: document.getElementById('e_price').value,
                 description:   document.getElementById('e_description').value,
                 stockQuantity: document.getElementById('e_stock').value,
                 trackStock:    document.getElementById('e_trackStock').checked,

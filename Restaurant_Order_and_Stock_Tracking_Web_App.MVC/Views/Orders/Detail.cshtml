@@ -40,14 +40,12 @@
             align-items: start;
         }
 
-        /* Sol panel */
         .left-panel {
             display: flex;
             flex-direction: column;
             gap: 16px;
         }
 
-        /* Info kartı */
         .info-card {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -79,7 +77,6 @@
                 color: var(--accent);
             }
 
-        /* Panel */
         .panel {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -101,7 +98,6 @@
             font-weight: 700;
         }
 
-        /* Kalemler */
         .item-row {
             display: flex;
             align-items: center;
@@ -145,7 +141,6 @@
             margin-top: 2px;
         }
 
-        /* Durum değiştirme butonları */
         .status-btns {
             display: flex;
             gap: 4px;
@@ -194,7 +189,6 @@
             filter: brightness(1.2);
         }
 
-        /* Badge'ler */
         .status-badge {
             display: inline-block;
             font-size: 10px;
@@ -245,7 +239,6 @@
                 background: rgba(239,68,68,.08);
             }
 
-        /* Sağ panel — ödeme */
         .pay-panel {
             background: var(--surface);
             border: 1px solid var(--border);
@@ -319,7 +312,6 @@
             color: #22c55e;
         }
 
-        /* Ödeme kayıtları */
         .payment-record {
             display: flex;
             align-items: center;
@@ -372,7 +364,6 @@
                 cursor: not-allowed;
             }
 
-        /* Ürün ekleme paneli */
         .add-item-list {
             padding: 10px;
             display: flex;
@@ -433,7 +424,6 @@
             padding: 8px 10px 4px;
         }
 
-        /* Modal */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -526,7 +516,6 @@
             display: none;
         }
 
-        /* Ödeme yöntemi seçimi */
         .method-grid {
             display: grid;
             grid-template-columns: repeat(2,1fr);
@@ -558,7 +547,6 @@
                 background: var(--accent-glow);
             }
 
-        /* İndirim satırı */
         .discount-row {
             display: flex;
             align-items: center;
@@ -613,7 +601,6 @@
             font-family: 'DM Sans',sans-serif;
         }
 
-        /* Ödeme modal özet */
         .pay-modal-summary {
             background: var(--surface2);
             border-radius: 10px;
@@ -805,7 +792,6 @@
                     <div class="item-qty">×@item.OrderItemQuantity</div>
                     <div class="item-price">₺@item.OrderItemLineTotal.ToString("N0")</div>
 
-                    @* Durum değiştirme — sadece açık adisyonda *@
                     @if (isOpen && item.OrderItemStatus != "cancelled")
                     {
                         <div class="status-btns">
@@ -991,10 +977,14 @@
         </div>
 
         <form asp-controller="Orders" asp-action="AddPayment" method="post"
-              onsubmit="return validatePayment()">
+              onsubmit="return syncAndValidatePayment()">
             @Html.AntiForgeryToken()
             <input type="hidden" name="orderId" value="@Model.OrderId" />
             <input type="hidden" name="paymentMethod" id="selectedMethod" value="cash" />
+
+            @* ✅ FIX #1 & #2: Controller string olarak alacak — virgül/nokta sorunu yok *@
+            <input type="hidden" name="paymentAmountStr" id="paymentAmountStr" />
+            <input type="hidden" name="discountAmountStr" id="discountAmountStr" />
 
             <div class="form-group">
                 <label class="form-label">Ödeyen Kişi (opsiyonel)</label>
@@ -1027,8 +1017,9 @@
             <div class="form-group">
                 <label class="form-label">İndirim Tutarı</label>
                 <div class="discount-row">
-                    <input class="form-control" id="discountAmount" name="discountAmount"
-                           type="number" min="0" step="0.01" value="0"
+                    @* ✅ Kullanıcıya gösterilen input — text, virgül de yazılabilir *@
+                    <input class="form-control" id="discountAmountDisplay"
+                           type="text" inputmode="decimal" placeholder="0"
                            oninput="updateRemaining()" />
                     <span class="discount-label" id="discount-label" style="display:none">
                         Net: ₺<span id="net-amount">0</span>
@@ -1038,12 +1029,12 @@
 
             <div class="form-group">
                 <label class="form-label">Ödeme Tutarı *</label>
-                <input class="form-control" id="paymentAmount" name="paymentAmount"
-                       type="number" min="0.01" step="0.01"
-                       placeholder="₺0,00" oninput="updateChange()" />
+                @* ✅ Kullanıcıya gösterilen input — text, virgül de yazılabilir *@
+                <input class="form-control" id="paymentAmountDisplay"
+                       type="text" inputmode="decimal"
+                       placeholder="0,00" oninput="updateChange()" />
                 <span class="form-error" id="err-amount">Geçerli bir tutar giriniz.</span>
 
-                @* Tamamını öde kısa yolu *@
                 <button type="button"
                         style="margin-top:6px;font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer;padding:0;font-family:'DM Sans',sans-serif;"
                         onclick="fillRemaining()">
@@ -1070,9 +1061,42 @@
 
 @section Scripts {
     <script>
+        // Razor'dan gelen değerler — InvariantCulture ile noktalı format
         const orderTotal  = @Model.OrderTotalAmount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
         const alreadyPaid = @totalPaid.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
-        let   currentMethod = 'cash';
+        let currentMethod = 'cash';
+
+        // ✅ Kullanıcının girdiği virgüllü/noktalı değeri JS float'a çevir
+        function parseLocalDecimal(str) {
+            if (!str) return 0;
+            // "1.250,04" → "1250.04" | "250,04" → "250.04" | "250.04" → "250.04"
+            const cleaned = str.trim()
+                .replace(/\./g, '')   // binlik ayraç noktaları sil
+                .replace(',', '.');   // ondalık virgülü noktaya çevir
+            const val = parseFloat(cleaned);
+            return isNaN(val) ? 0 : val;
+        }
+
+        // ✅ Form submit öncesi hidden input'lara noktalı değer yaz
+        function syncAndValidatePayment() {
+            const payDisplay  = document.getElementById('paymentAmountDisplay').value;
+            const discDisplay = document.getElementById('discountAmountDisplay').value;
+
+            const payVal  = parseLocalDecimal(payDisplay);
+            const discVal = parseLocalDecimal(discDisplay);
+
+            const err = document.getElementById('err-amount');
+            if (payVal <= 0) {
+                err.style.display = 'block'; return false;
+            }
+            err.style.display = 'none';
+
+            // ✅ Controller'a noktalı (InvariantCulture) string gönder
+            document.getElementById('paymentAmountStr').value  = payVal.toFixed(2);
+            document.getElementById('discountAmountStr').value = discVal.toFixed(2);
+
+            return true;
+        }
 
         // Modal
         function openModal(id)  { document.getElementById(id).classList.add('open'); }
@@ -1083,19 +1107,17 @@
 
         // Ürün ekleme modalı
         function openAddItemModal(id, name, price) {
-            document.getElementById('addItemId').value   = id;
-            document.getElementById('addItemTitle').textContent = name + ' Ekle';
-            document.getElementById('addItemSub').textContent   = '₺' + price.toFixed(2).replace('.',',') + ' / adet';
-            document.getElementById('addItemQty').value  = 1;
+            document.getElementById('addItemId').value              = id;
+            document.getElementById('addItemTitle').textContent     = name + ' Ekle';
+            document.getElementById('addItemSub').textContent       = '₺' + price.toFixed(2).replace('.', ',') + ' / adet';
+            document.getElementById('addItemQty').value             = 1;
             openModal('addItemModal');
         }
 
         function validateAddItem() {
             const qty = parseInt(document.getElementById('addItemQty').value);
             const err = document.getElementById('err-qty');
-            if (isNaN(qty) || qty < 1) {
-                err.style.display = 'block'; return false;
-            }
+            if (isNaN(qty) || qty < 1) { err.style.display = 'block'; return false; }
             err.style.display = 'none'; return true;
         }
 
@@ -1105,30 +1127,26 @@
             btn.classList.add('active');
             document.getElementById('selectedMethod').value = method;
             currentMethod = method;
-            document.getElementById('changeRow').style.display =
-                method === 'cash' ? 'block' : 'none';
+            document.getElementById('changeRow').style.display = method === 'cash' ? 'block' : 'none';
             updateChange();
         }
 
         // İndirim → kalan güncelle
         function updateRemaining() {
-            const disc    = parseFloat(document.getElementById('discountAmount').value) || 0;
+            const disc    = parseLocalDecimal(document.getElementById('discountAmountDisplay').value);
             const net     = Math.max(0, orderTotal - disc - alreadyPaid);
             const netFull = Math.max(0, orderTotal - disc);
 
-            document.getElementById('pms-remaining').textContent =
-                '₺' + net.toFixed(2).replace('.',',');
+            document.getElementById('pms-remaining').textContent = '₺' + net.toFixed(2).replace('.', ',');
 
             const discRow   = document.getElementById('pms-discount-row');
             const discLabel = document.getElementById('discount-label');
-            const netEl     = document.getElementById('net-amount');
 
             if (disc > 0) {
                 discRow.style.display   = 'flex';
                 discLabel.style.display = 'inline';
-                document.getElementById('pms-discount-val').textContent =
-                    '-₺' + disc.toFixed(2).replace('.',',');
-                netEl.textContent = netFull.toFixed(2).replace('.',',');
+                document.getElementById('pms-discount-val').textContent = '-₺' + disc.toFixed(2).replace('.', ',');
+                document.getElementById('net-amount').textContent = netFull.toFixed(2).replace('.', ',');
             } else {
                 discRow.style.display   = 'none';
                 discLabel.style.display = 'none';
@@ -1138,38 +1156,27 @@
 
         // Kalan tutarı doldur
         function fillRemaining() {
-            const disc = parseFloat(document.getElementById('discountAmount').value) || 0;
+            const disc = parseLocalDecimal(document.getElementById('discountAmountDisplay').value);
             const rem  = Math.max(0, orderTotal - disc - alreadyPaid);
-            document.getElementById('paymentAmount').value = rem.toFixed(2);
+            document.getElementById('paymentAmountDisplay').value = rem.toFixed(2).replace('.', ',');
             updateChange();
         }
 
         // Para üstü hesapla
         function updateChange() {
             if (currentMethod !== 'cash') return;
-            const disc    = parseFloat(document.getElementById('discountAmount').value) || 0;
+            const disc    = parseLocalDecimal(document.getElementById('discountAmountDisplay').value);
             const rem     = Math.max(0, orderTotal - disc - alreadyPaid);
-            const entered = parseFloat(document.getElementById('paymentAmount').value) || 0;
+            const entered = parseLocalDecimal(document.getElementById('paymentAmountDisplay').value);
             const change  = Math.max(0, entered - rem);
-            document.getElementById('changeDisplay').textContent =
-                '₺' + change.toFixed(2).replace('.',',');
-        }
-
-        // Ödeme validasyon
-        function validatePayment() {
-            const amount  = parseFloat(document.getElementById('paymentAmount').value);
-            const err     = document.getElementById('err-amount');
-            if (isNaN(amount) || amount <= 0) {
-                err.style.display = 'block'; return false;
-            }
-            err.style.display = 'none'; return true;
+            document.getElementById('changeDisplay').textContent = '₺' + change.toFixed(2).replace('.', ',');
         }
 
         // Alert otomatik kaybol
         setTimeout(() => {
             document.querySelectorAll('.alert').forEach(a => {
                 a.style.transition = 'opacity .5s';
-                a.style.opacity = '0';
+                a.style.opacity    = '0';
                 setTimeout(() => a.remove(), 500);
             });
         }, 3000);

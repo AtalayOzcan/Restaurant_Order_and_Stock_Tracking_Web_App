@@ -10,7 +10,7 @@ public class OrderItem
     public int OrderItemQuantity { get; set; }
     public decimal OrderItemUnitPrice { get; set; }
     public decimal OrderItemLineTotal { get; set; }
-    public string OrderItemNote { get; set; }
+    public string? OrderItemNote { get; set; }
     public string OrderItemStatus { get; set; }
     public DateTime OrderItemAddedAt { get; set; }
 }
