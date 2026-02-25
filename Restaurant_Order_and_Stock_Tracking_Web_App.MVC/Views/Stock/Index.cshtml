@@ -1,0 +1,1326 @@
+﻿@model IEnumerable<Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.MenuItem>
+@using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models
+@{
+    ViewData["Title"] = "Stok Yönetimi";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+
+    var categories = ViewData["Categories"] as List<Category> ?? new List<Category>();
+    var sparklineMap = ViewData["SparklineMap"] as Dictionary<int, List<int>> ?? new Dictionary<int, List<int>>();
+    var lastUpdatedMap = ViewData["LastUpdatedMap"] as Dictionary<int, DateTime> ?? new Dictionary<int, DateTime>();
+
+    int totalProducts = (int)(ViewData["TotalProducts"] ?? 0);
+    int trackedProducts = (int)(ViewData["TrackedProducts"] ?? 0);
+    int lowStockCount = (int)(ViewData["LowStockCount"] ?? 0);
+    int criticalCount = (int)(ViewData["CriticalCount"] ?? 0);
+    bool hasAlert = (bool)(ViewData["HasAlert"] ?? false);
+
+    Func<MenuItem, string> getStatus = m =>
+    {
+        if (!m.TrackStock) return "NotTracked";
+        if (m.AlertThreshold > 0 && m.StockQuantity <= (int)(m.AlertThreshold * 0.5)) return "Critical";
+        if (m.AlertThreshold > 0 && m.StockQuantity <= m.AlertThreshold) return "Low";
+        return "OK";
+    };
+    Func<string, string> getPillClass = s => s switch
+    {
+        "Critical" => "pill-red",
+        "Low" => "pill-amber",
+        "NotTracked" => "pill-gray",
+        _ => "pill-green"
+    };
+    Func<string, string> getStatusLabel = s => s switch
+    {
+        "Critical" => "🚨 Kritik",
+        "Low" => "⚡ Düşük",
+        "NotTracked" => "— Takip Dışı",
+        _ => "✓ Yeterli"
+    };
+
+    var grouped = Model
+        .GroupBy(m => m.Category)
+        .OrderBy(g => g.Key?.CategorySortOrder)
+        .ThenBy(g => g.Key?.CategoryName);
+}
+
+@section Styles {
+    <style>
+        /* ── Temel Değişkenler (Eğer Layout'ta yoksa diye eklendi) ── */
+        :root {
+            --surface: #1e2130;
+            --surface-hover: #262a3d;
+            --border: rgba(255, 255, 255, 0.08);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #6366f1;
+            --shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+
+        /* ── Genel Tipografi ve Renkler ────────────────────────────── */
+        .page-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 0.25rem;
+        }
+
+        .page-subtitle {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+        }
+
+        /* ── Stat cards ────────────────────────────────────────────── */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.25rem;
+            margin-bottom: 2rem;
+        }
+        @@media (max-width: 900px) {
+            .stat-grid
+
+        {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        }
+        @@media (max-width: 520px) {
+            .stat-grid
+
+        {
+            grid-template-columns: 1fr;
+        }
+
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            transition: transform .2s, box-shadow .2s;
+        }
+
+            .stat-card:hover {
+                transform: translateY(-3px);
+                box-shadow: var(--shadow);
+                border-color: rgba(255,255,255,0.15);
+            }
+
+        .stat-icon {
+            font-size: 2.2rem;
+            width: 3.5rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.2rem;
+            font-weight: 800;
+            line-height: 1;
+            color: var(--text-main);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 0.3rem;
+            font-weight: 500;
+        }
+
+        .stat-accent .stat-icon {
+            text-shadow: 0 0 15px rgba(99,102,241,0.4);
+        }
+
+        .stat-green .stat-icon {
+            text-shadow: 0 0 15px rgba(16,185,129,0.4);
+        }
+
+        .stat-amber .stat-icon {
+            text-shadow: 0 0 15px rgba(245,158,11,0.4);
+        }
+
+        .stat-red .stat-icon {
+            text-shadow: 0 0 15px rgba(239,68,68,0.4);
+        }
+
+        /* ── Alert banner ──────────────────────────────────────────── */
+        .alert-banner {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-left: 4px solid #ef4444;
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .alert-banner-text strong {
+            display: block;
+            font-size: 1rem;
+            color: #fecaca;
+            font-weight: 700;
+        }
+
+        .alert-banner-text span {
+            font-size: 0.85rem;
+            color: #fca5a5;
+        }
+
+        /* ── Filter bar ────────────────────────────────────────────── */
+        .filter-bar {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.5rem;
+            align-items: center;
+        }
+
+        .filter-input {
+            padding: 0.6rem 1rem;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(0,0,0,0.2);
+            color: var(--text-main);
+            font-size: 0.9rem;
+            outline: none;
+            transition: all .2s;
+        }
+
+            .filter-input:focus {
+                border-color: var(--accent);
+                box-shadow: 0 0 0 2px rgba(99,102,241,0.2);
+            }
+
+            .filter-input.wide {
+                min-width: 250px;
+                flex: 1;
+            }
+
+        .filter-spacer {
+            flex: 1;
+        }
+
+        /* ── Buttons ───────────────────────────────────────────────── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            padding: 0.6rem 1.2rem;
+            border-radius: 10px;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all .2s;
+        }
+
+        .btn-sm {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+            border-radius: 8px;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+            .btn-primary:hover {
+                background: #4f46e5;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+            }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid transparent;
+        }
+
+            .btn-ghost:hover {
+                background: rgba(255,255,255,0.05);
+                color: var(--text-main);
+                border-color: var(--border);
+            }
+
+        .btn-edit {
+            background: rgba(99,102,241,0.1);
+            color: #818cf8;
+            border: 1px solid rgba(99,102,241,0.2);
+        }
+
+            .btn-edit:hover {
+                background: rgba(99,102,241,0.2);
+                color: #fff;
+            }
+
+        .btn-detail {
+            background: rgba(107,114,128,0.1);
+            color: #9ca3af;
+            border: 1px solid rgba(107,114,128,0.2);
+        }
+
+            .btn-detail:hover {
+                background: rgba(107,114,128,0.2);
+                color: #fff;
+            }
+
+        .btn-csv {
+            background: rgba(16,185,129,0.1);
+            color: #10b981;
+            border: 1px solid rgba(16,185,129,0.2);
+        }
+
+            .btn-csv:hover {
+                background: rgba(16,185,129,0.2);
+                color: #34d399;
+            }
+
+        /* ── Accordion & Table ─────────────────────────────────────── */
+        .acc-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .acc-block {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .acc-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            user-select: none;
+            transition: background .2s;
+            background: rgba(0,0,0,0.1);
+        }
+
+            .acc-header:hover {
+                background: var(--surface-hover);
+            }
+
+        .acc-title {
+            font-weight: 700;
+            font-size: 1rem;
+            color: var(--text-main);
+        }
+
+        .acc-meta {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .acc-chevron {
+            margin-left: auto;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            transition: transform .3s;
+        }
+
+        .acc-block.open .acc-chevron {
+            transform: rotate(180deg);
+        }
+
+        .acc-body {
+            display: none;
+            padding: 0;
+        }
+
+        .acc-block.open .acc-body {
+            display: block;
+        }
+
+        .ros-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+
+            .ros-table th {
+                padding: 1rem 1.5rem;
+                color: var(--text-muted);
+                font-size: 0.75rem;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                font-weight: 600;
+                border-bottom: 1px solid var(--border);
+                background: rgba(0,0,0,0.2);
+            }
+
+            .ros-table td {
+                padding: 1rem 1.5rem;
+                border-bottom: 1px solid var(--border);
+                color: var(--text-main);
+                vertical-align: middle;
+            }
+
+            .ros-table tr:hover td {
+                background: rgba(255,255,255,0.02);
+            }
+
+            .ros-table tr:last-child td {
+                border-bottom: none;
+            }
+
+        /* ── Pills ─────────────────────────────────────────────────── */
+        .pill {
+            padding: 0.25rem 0.6rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+
+        .pill-green {
+            background: rgba(16,185,129,0.15);
+            color: #34d399;
+        }
+
+        .pill-amber {
+            background: rgba(245,158,11,0.15);
+            color: #fbbf24;
+        }
+
+        .pill-red {
+            background: rgba(239,68,68,0.15);
+            color: #f87171;
+        }
+
+        .pill-indigo {
+            background: rgba(99,102,241,0.15);
+            color: #818cf8;
+        }
+
+        .pill-gray {
+            background: rgba(107,114,128,0.15);
+            color: #9ca3af;
+        }
+
+        /* ── Toggle Switch ─────────────────────────────────────────── */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+        }
+
+            .toggle-switch input {
+                opacity: 0;
+                width: 0;
+                height: 0;
+            }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255,255,255,0.1);
+            transition: .3s;
+            border-radius: 22px;
+        }
+
+            .toggle-slider:before {
+                position: absolute;
+                content: "";
+                height: 16px;
+                width: 16px;
+                left: 3px;
+                bottom: 3px;
+                background-color: #9ca3af;
+                transition: .3s;
+                border-radius: 50%;
+            }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: rgba(16,185,129,0.2);
+        }
+
+            .toggle-switch input:checked + .toggle-slider:before {
+                transform: translateX(18px);
+                background-color: #34d399;
+            }
+
+        /* ── Modals & Forms (EKSİK OLAN KISIM) ─────────────────────── */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+            .modal-overlay.open {
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+        .modal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 450px;
+            padding: 1.5rem;
+            transform: translateY(20px);
+            transition: transform 0.3s ease;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+        }
+
+        .modal-wide {
+            max-width: 720px;
+        }
+
+        .modal-overlay.open .modal {
+            transform: translateY(0);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1rem;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin: 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+            .modal-close:hover {
+                color: #f87171;
+            }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            padding-top: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+
+            .form-control:focus {
+                outline: none;
+                border-color: var(--accent);
+            }
+
+        .tab-row {
+            display: flex;
+            gap: 0.5rem;
+            background: rgba(0,0,0,0.2);
+            padding: 0.35rem;
+            border-radius: 10px;
+            margin-bottom: 1.25rem;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 0.6rem;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+            .tab-btn.active {
+                background: var(--accent);
+                color: #fff;
+                box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+            }
+
+        .tab-panel {
+            display: none;
+        }
+
+            .tab-panel.active {
+                display: block;
+                animation: fadeIn 0.3s ease;
+            }
+
+        @@keyframes fadeIn {
+            from
+
+        {
+            opacity: 0;
+            transform: translateY(5px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        }
+
+        .direction-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .dir-btn {
+            flex: 1;
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: transparent;
+            color: var(--text-muted);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+            .dir-btn.active-in {
+                background: rgba(16,185,129,0.1);
+                border-color: rgba(16,185,129,0.3);
+                color: #34d399;
+            }
+
+            .dir-btn.active-out {
+                background: rgba(239,68,68,0.1);
+                border-color: rgba(239,68,68,0.3);
+                color: #f87171;
+            }
+
+        .row-hidden {
+            display: none !important;
+        }
+
+        canvas.sparkline {
+            display: inline-block;
+            vertical-align: middle;
+        }
+    </style>
+}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">📦 Stok Yönetimi</h1>
+        <div class="page-subtitle">@Model.Count() ürün · @trackedProducts takipte</div>
+    </div>
+</div>
+
+@if (hasAlert)
+{
+    <div class="alert-banner">
+        <span class="alert-banner-icon" style="font-size: 1.5rem;">⚠️</span>
+        <div class="alert-banner-text">
+            <strong>Stok Uyarısı Dikkatinizi Bekliyor!</strong>
+            <span>
+                @if (criticalCount > 0)
+                {
+                    <text>@criticalCount kritik seviyede,&nbsp;</text>
+                }
+                @if (lowStockCount > 0)
+                {
+                    <text>@lowStockCount düşük seviyede ürün bulunuyor.</text>
+                }
+            </span>
+        </div>
+    </div>
+}
+
+<div class="stat-grid">
+    <div class="stat-card stat-accent">
+        <div class="stat-icon">📦</div>
+        <div>
+            <div class="stat-value">@totalProducts</div>
+            <div class="stat-label">Toplam Ürün</div>
+        </div>
+    </div>
+    <div class="stat-card stat-green">
+        <div class="stat-icon">📊</div>
+        <div>
+            <div class="stat-value">@trackedProducts</div>
+            <div class="stat-label">Takipte Olan</div>
+        </div>
+    </div>
+    <div class="stat-card stat-amber">
+        <div class="stat-icon">⚡</div>
+        <div>
+            <div class="stat-value">@lowStockCount</div>
+            <div class="stat-label">Düşük Stok</div>
+        </div>
+    </div>
+    <div class="stat-card stat-red">
+        <div class="stat-icon">🚨</div>
+        <div>
+            <div class="stat-value">@criticalCount</div>
+            <div class="stat-label">Kritik Stok</div>
+        </div>
+    </div>
+</div>
+
+<div class="filter-bar">
+    <input type="text"
+           id="searchInput"
+           class="filter-input wide"
+           placeholder="🔍 Ürün adı veya SKU ara…"
+           oninput="StockFilter.apply()" />
+
+    <select id="catFilter" class="filter-input" onchange="StockFilter.apply()">
+        <option value="">Tüm Kategoriler</option>
+        @foreach (var cat in categories)
+        {
+            <option value="@cat.CategoryName">@cat.CategoryName</option>
+        }
+    </select>
+
+    <select id="statusFilter" class="filter-input" onchange="StockFilter.apply()">
+        <option value="">Tüm Durumlar</option>
+        <option value="OK">✓ Yeterli</option>
+        <option value="Low">⚡ Düşük</option>
+        <option value="Critical">🚨 Kritik</option>
+        <option value="NotTracked">— Takip Dışı</option>
+    </select>
+
+    <div class="filter-spacer"></div>
+
+    <button class="btn btn-csv" onclick="StockCsv.export()">
+        <svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" /></svg>
+        CSV İndir
+    </button>
+</div>
+
+<div class="acc-wrapper" id="accWrapper">
+    @if (!Model.Any())
+    {
+        <div class="acc-block">
+            <div style="text-align:center; padding: 3rem; color: var(--text-muted);">
+                <div style="font-size: 3rem; margin-bottom: 1rem; opacity: 0.5;">📭</div>
+                <div>Henüz ürün eklenmemiş.</div>
+            </div>
+        </div>
+    }
+
+    @foreach (var grp in grouped)
+    {
+        var grpItems = grp.ToList();
+        var grpLow = grpItems.Count(m => getStatus(m) == "Low");
+        var grpCritical = grpItems.Count(m => getStatus(m) == "Critical");
+        var catName = grp.Key?.CategoryName ?? "Kategorisiz";
+
+        <div class="acc-block open" data-cat-name="@catName">
+            <div class="acc-header" onclick="StockAccordion.toggle(this)">
+                <span class="acc-title">@catName</span>
+                <div class="acc-meta">
+                    <span class="pill pill-indigo">@grpItems.Count ürün</span>
+                    @if (grpLow > 0)
+                    {
+                        <span class="pill pill-amber">@grpLow düşük</span>
+                    }
+                    @if (grpCritical > 0)
+                    {
+                        <span class="pill pill-red">@grpCritical kritik</span>
+                    }
+                </div>
+                <span class="acc-chevron">▼</span>
+            </div>
+
+            <div class="acc-body">
+                <table class="ros-table">
+                    <thead>
+                        <tr>
+                            <th>Ürün / SKU</th>
+                            <th>Güncel Stok</th>
+                            <th>Uyarı Eşiği</th>
+                            <th>Durum</th>
+                            <th>Trend</th>
+                            <th>Son Güncelleme</th>
+                            <th style="text-align:center;">Takip</th>
+                            <th style="text-align:right;">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in grpItems)
+                        {
+                            var st = getStatus(item);
+                            var pill = getPillClass(st);
+                            var stLabel = getStatusLabel(st);
+                            var sku = $"SKU-{item.MenuItemId:D4}";
+                            var spark = sparklineMap.TryGetValue(item.MenuItemId, out var sv) ? sv : new List<int> { item.StockQuantity };
+                            var lastUpd = lastUpdatedMap.TryGetValue(item.MenuItemId, out var lu) ? lu : item.MenuItemCreatedTime;
+                            var sparkJson = System.Text.Json.JsonSerializer.Serialize(spark);
+
+                            <tr class="stock-row"
+                                data-id="@item.MenuItemId"
+                                data-name="@item.MenuItemName.ToLower()"
+                                data-sku="@sku.ToLower()"
+                                data-cat="@catName"
+                                data-status="@st">
+
+                                <td>
+                                    <div style="font-weight:600; font-size: 0.95rem;">@item.MenuItemName</div>
+                                    <div style="font-size:0.75rem; color: var(--text-muted); margin-top:0.2rem;">@sku</div>
+                                </td>
+                                <td><strong id="qty-@item.MenuItemId" style="font-size: 1.1rem;">@item.StockQuantity</strong></td>
+                                <td style="color: var(--text-muted);"><span id="thresh-@item.MenuItemId">@item.AlertThreshold</span></td>
+                                <td><span id="status-@item.MenuItemId" class="pill @pill">@stLabel</span></td>
+                                <td>
+                                    <canvas class="sparkline" width="80" height="30" data-vals="@sparkJson" title="Son 5 hareket trendi"></canvas>
+                                </td>
+                                <td style="font-size:0.8rem; color: var(--text-muted);">@lastUpd.ToString("dd.MM.yy HH:mm")</td>
+                                <td style="text-align:center;">
+                                    <label class="toggle-switch" title="@(item.TrackStock ? "Takip açık" : "Takip kapalı")">
+                                        <input type="checkbox" class="track-toggle" data-id="@item.MenuItemId" @(item.TrackStock ? "checked" : "") />
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </td>
+                                <td style="text-align:right;">
+                                    <div style="display:flex; gap:0.5rem; justify-content:flex-end;">
+                                        <button class="btn btn-edit btn-sm" onclick="StockUpdateModal.open(@item.MenuItemId, '@item.MenuItemName', '@sku', @item.StockQuantity, @item.AlertThreshold)">
+                                            ✏️ Güncelle
+                                        </button>
+                                        <button class="btn btn-detail btn-sm" onclick="StockHistoryModal.open(@item.MenuItemId)">
+                                            📋 Geçmiş
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="modal-overlay" id="updateModal">
+    <div class="modal">
+        <div class="modal-header">
+            <div>
+                <h2 class="modal-title" id="upd_title">Stok Güncelle</h2>
+                <div style="font-size:0.85rem; color: var(--text-muted); margin-top:0.3rem;" id="upd_sku">—</div>
+            </div>
+            <button type="button" class="modal-close" onclick="closeModal('updateModal')">✕</button>
+        </div>
+
+        <form id="updateForm">
+            @Html.AntiForgeryToken()
+            <input type="hidden" id="upd_id" />
+
+            <div class="tab-row">
+                <button type="button" class="tab-btn active" onclick="StockUpdateModal.switchTab('direct', this)">🔢 Direkt Giriş</button>
+                <button type="button" class="tab-btn" onclick="StockUpdateModal.switchTab('movement', this)">↕️ Hareket Bazlı</button>
+            </div>
+
+            <div class="tab-panel active" id="tab-direct">
+                <div class="form-group">
+                    <label class="form-label">Yeni Stok Miktarı (Sayım Düzeltmesi)</label>
+                    <input type="number" id="upd_direct" class="form-control" min="0" placeholder="0" />
+                    <div style="font-size:0.8rem; color: var(--text-muted); margin-top:0.4rem;">
+                        Mevcut stok doğrudan bu değere ayarlanır.
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-panel" id="tab-movement">
+                <div class="form-group">
+                    <label class="form-label">Hareket Yönü</label>
+                    <div class="direction-row">
+                        <button type="button" id="dir-in" class="dir-btn active-in" onclick="StockUpdateModal.setDirection('in')">+ Giriş</button>
+                        <button type="button" id="dir-out" class="dir-btn" onclick="StockUpdateModal.setDirection('out')">− Çıkış</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Miktar</label>
+                    <input type="number" id="upd_qty" class="form-control" min="1" placeholder="1" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Açıklama / Not <span style="color:#ef4444;">*</span></label>
+                    <input type="text" id="upd_note" class="form-control" placeholder="Örn: Toptancıdan geldi" maxlength="300" />
+                </div>
+            </div>
+
+            <div style="border-top: 1px solid var(--border); padding-top: 1.25rem; margin-top: 1rem;">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">⚙️ Uyarı Eşiği <span style="font-weight: normal; color: var(--text-muted);">(boş bırakılırsa değişmez)</span></label>
+                    <input type="number" id="upd_threshold" class="form-control" min="0" placeholder="Örn: 10" />
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-ghost" onclick="closeModal('updateModal')">İptal</button>
+                <button type="submit" class="btn btn-primary">💾 Kaydet</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal-overlay" id="historyModal">
+    <div class="modal modal-wide">
+        <div class="modal-header">
+            <div>
+                <h2 class="modal-title" id="hist_title">Stok Geçmişi</h2>
+                <div style="font-size:0.85rem; color: var(--text-muted); margin-top:0.3rem;" id="hist_sku">—</div>
+            </div>
+            <button type="button" class="modal-close" onclick="closeModal('historyModal')">✕</button>
+        </div>
+        <div id="hist_body">
+            <div style="text-align:center; padding: 2rem; color: var(--text-muted);">Yükleniyor…</div>
+        </div>
+    </div>
+</div>
+
+<div class="toast-container" id="toastContainer" style="position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:10px;"></div>
+@section Scripts {
+<script>
+// ╔══════════════════════════════════════════════════════════════╗
+//   RestaurantOS — Stock/Index.cshtml JavaScript
+//   Modüler yapı: her işlev kendi namespace'i altında
+// ╚══════════════════════════════════════════════════════════════╝
+
+// ── Global yardımcılar (Menu/Index.cshtml ile aynı pattern) ──
+
+function openModal(id)  { document.getElementById(id).classList.add('open');    }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Backdrop tıklamasında kapat
+document.querySelectorAll('.modal-overlay').forEach(overlay =>
+    overlay.addEventListener('click', e => {
+        if (e.target === overlay) overlay.classList.remove('open');
+    })
+);
+
+function showToast(msg, type = 'success') {
+    const container = document.getElementById('toastContainer');
+    const toast     = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `<span>${type === 'success' ? '✅' : '❌'}</span><span>${msg}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3500);
+}
+
+function getToken() {
+    return document.querySelector('input[name="__RequestVerificationToken"]').value;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  StockAccordion — Açılır/kapanır kategori grupları
+// ══════════════════════════════════════════════════════════════
+const StockAccordion = {
+    toggle(headerEl) {
+        headerEl.closest('.acc-block').classList.toggle('open');
+    }
+};
+
+// ══════════════════════════════════════════════════════════════
+//  StockSparkline — Canvas mini trend grafikleri
+// ══════════════════════════════════════════════════════════════
+const StockSparkline = {
+    drawAll() {
+        document.querySelectorAll('canvas.sparkline').forEach(c => {
+            let vals;
+            try { vals = JSON.parse(c.dataset.vals || '[]'); } catch { vals = []; }
+            this.draw(c, vals);
+        });
+    },
+
+    draw(canvas, values) {
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width, h = canvas.height, pad = 3;
+        ctx.clearRect(0, 0, w, h);
+
+        if (!values || values.length < 2) {
+            // Tek nokta → yatay düz çizgi
+            ctx.strokeStyle = 'rgba(148,163,184,.4)';
+            ctx.lineWidth   = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(pad, h / 2);
+            ctx.lineTo(w - pad, h / 2);
+            ctx.stroke();
+            return;
+        }
+
+        const mn  = Math.min(...values);
+        const mx  = Math.max(...values);
+        const rng = mx - mn || 1;
+        const pts = values.map((v, i) => ({
+            x: pad + (i / (values.length - 1)) * (w - pad * 2),
+            y: h - pad - ((v - mn) / rng) * (h - pad * 2)
+        }));
+
+        // Renkli gradient fill
+        const grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0, 'rgba(99,102,241,.35)');
+        grad.addColorStop(1, 'rgba(99,102,241,.02)');
+
+        ctx.beginPath();
+        pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+        ctx.lineTo(pts.at(-1).x, h);
+        ctx.lineTo(pts[0].x, h);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Çizgi
+        ctx.beginPath();
+        pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth   = 1.8;
+        ctx.lineJoin    = 'round';
+        ctx.stroke();
+    }
+};
+
+// ══════════════════════════════════════════════════════════════
+//  StockFilter — Anlık arama + kategori + durum filtresi
+// ══════════════════════════════════════════════════════════════
+const StockFilter = {
+    apply() {
+        const q   = document.getElementById('searchInput').value.trim().toLowerCase();
+        const cat = document.getElementById('catFilter').value;
+        const st  = document.getElementById('statusFilter').value;
+
+        document.querySelectorAll('.stock-row').forEach(row => {
+            const matchQ   = !q  || row.dataset.name.includes(q) || row.dataset.sku.includes(q);
+            const matchCat = !cat || row.dataset.cat === cat;
+            const matchSt  = !st  || row.dataset.status === st;
+            row.classList.toggle('row-hidden', !(matchQ && matchCat && matchSt));
+        });
+
+        // Tüm satırları gizli olan accordion'ları gizle
+        document.querySelectorAll('.acc-block').forEach(block => {
+            const visible = block.querySelectorAll('.stock-row:not(.row-hidden)').length;
+            block.style.display = visible === 0 ? 'none' : '';
+        });
+    }
+};
+
+// ══════════════════════════════════════════════════════════════
+//  StockCsv — Görünür satırları CSV olarak indir
+// ══════════════════════════════════════════════════════════════
+const StockCsv = {
+    export() {
+        const headers = ['Ürün Adı', 'SKU', 'Kategori', 'Güncel Stok', 'Uyarı Eşiği', 'Durum', 'Son Güncelleme'];
+        const rows    = [headers];
+
+        document.querySelectorAll('.stock-row:not(.row-hidden)').forEach(row => {
+            const id  = row.dataset.id;
+            const nm  = row.querySelector('td:first-child div:first-child')?.textContent.trim() ?? '';
+            const sku = row.querySelector('td:first-child div:last-child')?.textContent.trim()  ?? '';
+            const cat = row.dataset.cat;
+            const qty = document.getElementById(`qty-${id}`)?.textContent.trim()    ?? '';
+            const thr = document.getElementById(`thresh-${id}`)?.textContent.trim() ?? '';
+            const st  = row.dataset.status;
+            const upd = row.querySelectorAll('td')[5]?.textContent.trim() ?? '';
+            rows.push([nm, sku, cat, qty, thr, st, upd]);
+        });
+
+        const csv  = rows.map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(',')).join('\r\n');
+        const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+        const url  = URL.createObjectURL(blob);
+        const a    = Object.assign(document.createElement('a'), {
+            href:     url,
+            download: `stok_raporu_${new Date().toISOString().slice(0, 10)}.csv`
+        });
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+};
+
+// ══════════════════════════════════════════════════════════════
+//  StockUpdateModal — Stok güncelleme modalı
+// ══════════════════════════════════════════════════════════════
+const StockUpdateModal = {
+    currentId:  null,
+    direction: 'in',    // "in" | "out"
+
+    open(id, name, sku, stock, threshold) {
+        this.currentId = id;
+        this.direction = 'in';
+
+        document.getElementById('upd_id').value        = id;
+        document.getElementById('upd_title').textContent = name;
+        document.getElementById('upd_sku').textContent   = sku;
+        document.getElementById('upd_direct').value      = stock;
+        document.getElementById('upd_threshold').value   = threshold > 0 ? threshold : '';
+        document.getElementById('upd_qty').value  = '';
+        document.getElementById('upd_note').value = '';
+
+        // Sekmeyi sıfırla
+        this.switchTab('direct', document.querySelector('.tab-btn'));
+        // Yön butonlarını sıfırla
+        this.setDirection('in');
+
+        openModal('updateModal');
+    },
+
+    switchTab(tab, btnEl) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        if (btnEl) btnEl.classList.add('active');
+        document.getElementById(`tab-${tab}`)?.classList.add('active');
+    },
+
+    setDirection(dir) {
+        this.direction = dir;
+        const btnIn  = document.getElementById('dir-in');
+        const btnOut = document.getElementById('dir-out');
+        btnIn.className  = dir === 'in'  ? 'dir-btn active-in'  : 'dir-btn';
+        btnOut.className = dir === 'out' ? 'dir-btn active-out' : 'dir-btn';
+    }
+};
+
+// Stok güncelle form submit
+document.getElementById('updateForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = e.submitter; btn.disabled = true;
+
+    const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab
+        ?? (document.getElementById('tab-direct').classList.contains('active') ? 'direct' : 'movement');
+
+    const threshold = document.getElementById('upd_threshold').value;
+
+    const body = new URLSearchParams({
+        menuItemId:        StockUpdateModal.currentId,
+        updateMode:        activeTab,
+        alertThreshold:    threshold,
+        __RequestVerificationToken: getToken()
+    });
+
+    if (activeTab === 'direct') {
+        const v = document.getElementById('upd_direct').value;
+        if (v === '' || parseInt(v) < 0) {
+            showToast('Geçerli bir stok değeri giriniz.', 'error');
+            btn.disabled = false;
+            return;
+        }
+        body.set('newStockValue', v);
+    } else {
+        const qty  = document.getElementById('upd_qty').value;
+        const note = document.getElementById('upd_note').value.trim();
+        if (!qty || parseInt(qty) <= 0) {
+            showToast('Geçerli bir miktar giriniz.', 'error');
+            btn.disabled = false;
+            return;
+        }
+        if (!note) {
+            showToast('Hareket bazlı işlemde açıklama zorunludur.', 'error');
+            btn.disabled = false;
+            return;
+        }
+        body.set('movementDirection', StockUpdateModal.direction);
+        body.set('movementQuantity',  qty);
+        body.set('note',              note);
+    }
+
+    try {
+        const res  = await fetch('/Stock/UpdateStock', { method: 'POST', body });
+        const data = await res.json();
+        btn.disabled = false;
+
+        if (data.success) {
+            // DOM'u yenile — sayfa reload olmadan
+            const id = StockUpdateModal.currentId;
+            const qtyEl    = document.getElementById(`qty-${id}`);
+            const statusEl = document.getElementById(`status-${id}`);
+            const threshEl = document.getElementById(`thresh-${id}`);
+            const row      = document.querySelector(`.stock-row[data-id="${id}"]`);
+
+            if (qtyEl) qtyEl.textContent = data.newStock;
+            if (threshold) {
+                if (threshEl) threshEl.textContent = parseInt(threshold);
+            }
+            if (statusEl) {
+                statusEl.className   = `pill ${data.statusPill}`;
+                statusEl.textContent = data.statusLabel;
+            }
+            if (row) row.dataset.status = data.status;
+
+            // Güncelle butonunun data niteliklerini de güncelle
+            const updBtn = document.querySelector(`.btn-edit.btn-sm[onclick*="StockUpdateModal.open(${id},"]`) ;
+            // inline onclick'teki veriyi güncellemenin en temiz yolu reload; büyük projelerde
+            // data attribute kullanılır; burada sayfa reload yerine DOM update yaptık.
+
+            closeModal('updateModal');
+            showToast(data.message, 'success');
+        } else {
+            showToast(data.message, 'error');
+        }
+    } catch (err) {
+        btn.disabled = false;
+        showToast('Sunucu bağlantı hatası.', 'error');
+    }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  StockHistoryModal — Stok geçmişi modalı
+// ══════════════════════════════════════════════════════════════
+const StockHistoryModal = {
+    async open(id) {
+        document.getElementById('hist_title').textContent = 'Stok Geçmişi';
+        document.getElementById('hist_sku').textContent   = '…';
+        document.getElementById('hist_body').innerHTML    = '<div class="hist-empty">Yükleniyor…</div>';
+        openModal('historyModal');
+
+        try {
+            const res  = await fetch(`/Stock/GetHistory/${id}`);
+            const data = await res.json();
+
+            if (!data.success) {
+                document.getElementById('hist_body').innerHTML = '<div class="hist-empty">Veri alınamadı.</div>';
+                return;
+            }
+
+            document.getElementById('hist_title').textContent = data.itemName;
+            document.getElementById('hist_sku').textContent   = data.sku;
+
+            if (!data.logs || data.logs.length === 0) {
+                document.getElementById('hist_body').innerHTML =
+                    '<div class="hist-empty">📭 Bu ürün için henüz stok hareketi kaydı bulunmuyor.</div>';
+                return;
+            }
+
+            const typeClass = t =>
+                t === 'Giriş' ? 'type-in' : t === 'Çıkış' ? 'type-out' : 'type-fix';
+            const changeHtml = q =>
+                q > 0 ? `<span class="change-pos">+${q}</span>`
+                       : `<span class="change-neg">${q}</span>`;
+
+            document.getElementById('hist_body').innerHTML = `
+                <div style="overflow-x:auto; padding: 0 .25rem .5rem;">
+                    <table class="hist-table">
+                        <thead>
+                            <tr>
+                                <th>Tarih</th>
+                                <th>İşlem Türü</th>
+                                <th>Değişim</th>
+                                <th>Önceki → Sonraki</th>
+                                <th>Not</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.logs.map(l => `
+                            <tr>
+                                <td style="white-space:nowrap; opacity:.7;">${l.createdAt}</td>
+                                <td><span class="${typeClass(l.movementType)}" style="font-weight:600;">${l.movementType}</span></td>
+                                <td>${changeHtml(l.quantityChange)}</td>
+                                <td>
+                                    <span style="opacity:.5;">${l.previousStock}</span>
+                                    <span style="opacity:.35; margin:0 .3rem;">→</span>
+                                    <strong>${l.newStock}</strong>
+                                </td>
+                                <td style="opacity:.65; font-size:.82rem;">${l.note}</td>
+                            </tr>`).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+        } catch (err) {
+            document.getElementById('hist_body').innerHTML =
+                '<div class="hist-empty">⚠️ Bağlantı hatası oluştu.</div>';
+        }
+    }
+};
+
+// ══════════════════════════════════════════════════════════════
+//  Track Toggle — Satır içi takip açma/kapama switch'i
+// ══════════════════════════════════════════════════════════════
+document.querySelectorAll('.track-toggle').forEach(chk => {
+    chk.addEventListener('change', async function () {
+        const id      = this.dataset.id;
+        const checked = this.checked;
+
+        const body = new URLSearchParams({
+            menuItemId: id,
+            trackStock: checked,
+            __RequestVerificationToken: getToken()
+        });
+
+        try {
+            const res  = await fetch('/Stock/ToggleTrack', { method: 'POST', body });
+            const data = await res.json();
+
+            if (data.success) {
+                const statusEl = document.getElementById(`status-${id}`);
+                const row      = document.querySelector(`.stock-row[data-id="${id}"]`);
+                if (statusEl) {
+                    statusEl.className   = `pill ${data.statusPill}`;
+                    statusEl.textContent = data.statusLabel;
+                }
+                if (row) row.dataset.status = data.status;
+                showToast(data.message, 'success');
+            } else {
+                this.checked = !checked; // Geri al
+                showToast(data.message, 'error');
+            }
+        } catch {
+            this.checked = !checked;
+            showToast('Sunucu bağlantı hatası.', 'error');
+        }
+    });
+});
+
+// ══════════════════════════════════════════════════════════════
+//  Sayfa yüklenince çalış
+// ══════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+    StockSparkline.drawAll();
+});
+</script>
+}

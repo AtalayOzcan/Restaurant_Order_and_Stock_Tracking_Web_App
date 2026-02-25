@@ -7,6 +7,7 @@
         public virtual Category Category { get; set; } // virtual olma nedeni nedir = arkada halihazırda performans amaçlı query tutar(lazy loading)
         public string MenuItemName { get; set; }
         public decimal MenuItemPrice { get; set; }
+        public int AlertThreshold { get; set; } = 0;
         public int StockQuantity { get; set; }
         public bool TrackStock { get; set; }
         public bool IsAvailable { get; set; }
