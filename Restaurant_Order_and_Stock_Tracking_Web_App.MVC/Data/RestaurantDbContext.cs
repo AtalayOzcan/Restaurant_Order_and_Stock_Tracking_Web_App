@@ -12,6 +12,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
         public DbSet<OrderItem> OrderItems { get; set; }
         public DbSet<Payment> Payments { get; set; }
 
+        // ── YENİ ────────────────────────────────────────────────────
+        public DbSet<StockLog> StockLogs { get; set; }
+
         public RestaurantDbContext(DbContextOptions options) : base(options) { }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -43,6 +46,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.Property(m => m.MenuItemName).HasMaxLength(200).IsRequired();
                 entity.Property(m => m.MenuItemPrice).HasPrecision(10, 2).IsRequired();
                 entity.Property(m => m.StockQuantity).HasDefaultValue(0).IsRequired();
+
+                // ── YENİ ────────────────────────────────────────────
+                entity.Property(m => m.AlertThreshold).HasDefaultValue(0).IsRequired();
+
                 entity.Property(m => m.TrackStock).HasDefaultValue(false).IsRequired();
                 entity.Property(m => m.IsAvailable).HasDefaultValue(true).IsRequired();
                 entity.Property(m => m.Description).HasColumnType("text");
@@ -73,42 +80,24 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.ToTable("order_items");
                 entity.HasKey(o => o.OrderItemId);
                 entity.Property(o => o.OrderItemQuantity).IsRequired();
-
-                // ── YENİ ALAN ──────────────────────────────────────
-                entity.Property(o => o.PaidQuantity)
-                    .IsRequired()
-                    .HasDefaultValue(0);
-
+                entity.Property(o => o.PaidQuantity).IsRequired().HasDefaultValue(0);
                 entity.Property(o => o.OrderItemUnitPrice).HasPrecision(10, 2).IsRequired();
                 entity.Property(o => o.OrderItemLineTotal).HasPrecision(12, 2).IsRequired();
                 entity.Property(o => o.OrderItemNote).HasColumnType("text");
-                entity.Property(o => o.OrderItemStatus)
-                    .HasMaxLength(20).HasDefaultValue("pending").IsRequired();
+                entity.Property(o => o.OrderItemStatus).HasMaxLength(20).HasDefaultValue("pending").IsRequired();
                 entity.Property(o => o.OrderItemAddedAt).HasDefaultValueSql("NOW()").IsRequired();
-
-                // ── YENİ: İptal alanları ──────────────────────────────
-                entity.Property(o => o.CancelledQuantity)
-                    .IsRequired()
-                    .HasDefaultValue(0);
-
-                entity.Property(o => o.CancelReason)
-                    .HasColumnType("text");
-
-                entity.Property(o => o.IsWasted)
-                    .IsRequired(false);
-
-                // Hesaplanan property'ler DB'ye eşlenmez
+                entity.Property(o => o.CancelledQuantity).IsRequired().HasDefaultValue(0);
+                entity.Property(o => o.CancelReason).HasColumnType("text");
+                entity.Property(o => o.IsWasted).IsRequired(false);
                 entity.Ignore(o => o.ActiveQuantity);
                 entity.Ignore(o => o.RemainingQuantity);
                 entity.Ignore(o => o.UnpaidLineTotal);
                 entity.Ignore(o => o.PaidLineTotal);
                 entity.Ignore(o => o.CancelledLineTotal);
-
                 entity.HasOne(o => o.Order)
                     .WithMany(o => o.OrderItems)
                     .HasForeignKey(o => o.OrderId)
                     .OnDelete(DeleteBehavior.Restrict);
-
                 entity.HasOne(o => o.MenuItem)
                     .WithMany()
                     .HasForeignKey(o => o.MenuItemId)
@@ -128,6 +117,23 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                     .WithMany(p => p.Payments)
                     .HasForeignKey(o => o.OrderId)
                     .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // ── YENİ: StockLog ───────────────────────────────────────
+            modelBuilder.Entity<StockLog>(entity =>
+            {
+                entity.ToTable("stock_logs");
+                entity.HasKey(s => s.StockLogId);
+                entity.Property(s => s.MovementType).HasMaxLength(20).IsRequired();
+                entity.Property(s => s.QuantityChange).IsRequired();
+                entity.Property(s => s.PreviousStock).IsRequired();
+                entity.Property(s => s.NewStock).IsRequired();
+                entity.Property(s => s.Note).HasColumnType("text");
+                entity.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()").IsRequired();
+                entity.HasOne(s => s.MenuItem)
+                    .WithMany()
+                    .HasForeignKey(s => s.MenuItemId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

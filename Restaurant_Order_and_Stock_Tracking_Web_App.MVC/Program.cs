@@ -15,9 +15,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
             {
                 options.UseNpgsql(
                 builder.Configuration.GetConnectionString("DefaultConnection"));
-
-
-
+               
             });
 
             // Background Service — rezervasyon otomatik temizleme
