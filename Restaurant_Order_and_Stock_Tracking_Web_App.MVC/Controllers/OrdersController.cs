@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
+using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Dtos;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models;
 using System.Globalization;
 
@@ -281,7 +282,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         // Varolan kalem (aynı ürün + aynı not) varsa merge eder.
         // ─────────────────────────────────────────────────────────────
         [HttpPost]
-        public async Task<IActionResult> AddItemBulk([FromBody] BulkAddRequest req)
+        public async Task<IActionResult> AddItemBulk([FromBody] BulkAddDto req)
         {
             if (req == null || req.Items == null || !req.Items.Any())
                 return BadRequest(new { error = "Eklenecek ürün bulunamadı." });
@@ -733,16 +734,4 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
     }
 }
 
-// ── Bulk Add ViewModel ────────────────────────────────────────────────────────
-public class BulkAddRequest
-{
-    public int OrderId { get; set; }
-    public List<BulkAddItem> Items { get; set; } = new();
-}
 
-public class BulkAddItem
-{
-    public int MenuItemId { get; set; }
-    public int Quantity { get; set; }
-    public string? Note { get; set; }
-}
