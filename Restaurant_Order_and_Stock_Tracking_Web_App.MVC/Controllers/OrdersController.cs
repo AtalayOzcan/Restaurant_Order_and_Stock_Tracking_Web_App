@@ -274,6 +274,94 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         }
 
         // ─────────────────────────────────────────────────────────────
+        // POST /Orders/AddItemBulk
+        //
+        // Modal içi mini-sepetten gelen JSON dizi toplu ekleme.
+        // Body: { orderId, items: [{menuItemId, quantity, note}, ...] }
+        // Varolan kalem (aynı ürün + aynı not) varsa merge eder.
+        // ─────────────────────────────────────────────────────────────
+        [HttpPost]
+        public async Task<IActionResult> AddItemBulk([FromBody] BulkAddRequest req)
+        {
+            if (req == null || req.Items == null || !req.Items.Any())
+                return BadRequest(new { error = "Eklenecek ürün bulunamadı." });
+
+            var order = await _db.Orders
+                .Include(o => o.OrderItems)
+                .FirstOrDefaultAsync(o => o.OrderId == req.OrderId);
+
+            if (order == null)
+                return NotFound(new { error = "Adisyon bulunamadı." });
+            if (order.OrderStatus != "open")
+                return BadRequest(new { error = "Kapalı adisyona ürün eklenemez." });
+
+            using var tx = await _db.Database.BeginTransactionAsync();
+            try
+            {
+                decimal totalAdded = 0;
+
+                foreach (var line in req.Items)
+                {
+                    if (line.Quantity < 1) line.Quantity = 1;
+
+                    var mi = await _db.MenuItems.FindAsync(line.MenuItemId);
+                    if (mi == null) continue;
+
+                    var noteNorm = string.IsNullOrWhiteSpace(line.Note) ? null : line.Note.Trim();
+
+                    // Aynı ürün + aynı not + iptal edilmemiş + henüz tam ödenmemiş → merge
+                    var existing = order.OrderItems.FirstOrDefault(oi =>
+                        oi.MenuItemId == line.MenuItemId &&
+                        oi.OrderItemStatus != "cancelled" &&
+                        oi.CancelledQuantity == 0 &&
+                        oi.PaidQuantity < oi.OrderItemQuantity &&
+                        oi.OrderItemNote == noteNorm);
+
+                    if (existing != null)
+                    {
+                        existing.OrderItemQuantity += line.Quantity;
+                        existing.OrderItemLineTotal = existing.OrderItemUnitPrice * existing.OrderItemQuantity;
+                    }
+                    else
+                    {
+                        _db.OrderItems.Add(new OrderItem
+                        {
+                            OrderId = req.OrderId,
+                            MenuItemId = line.MenuItemId,
+                            OrderItemQuantity = line.Quantity,
+                            PaidQuantity = 0,
+                            CancelledQuantity = 0,
+                            OrderItemUnitPrice = mi.MenuItemPrice,
+                            OrderItemLineTotal = mi.MenuItemPrice * line.Quantity,
+                            OrderItemNote = noteNorm,
+                            OrderItemStatus = "pending",
+                            OrderItemAddedAt = DateTime.UtcNow
+                        });
+                    }
+
+                    totalAdded += mi.MenuItemPrice * line.Quantity;
+
+                    if (mi.TrackStock)
+                    {
+                        mi.StockQuantity -= line.Quantity;
+                        if (mi.StockQuantity <= 0) { mi.StockQuantity = 0; mi.IsAvailable = false; }
+                    }
+                }
+
+                order.OrderTotalAmount += totalAdded;
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                return Ok(new { success = true, message = $"{req.Items.Count} ürün eklendi." });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return StatusCode(500, new { error = "Ürünler eklenirken hata oluştu.", detail = ex.Message });
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
         // POST /Orders/AddPayment
         //
         // Kısmi ödeme akışı:
@@ -566,4 +654,18 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         }
 
     }
+}
+
+// ── Bulk Add ViewModel ────────────────────────────────────────────────────────
+public class BulkAddRequest
+{
+    public int OrderId { get; set; }
+    public List<BulkAddItem> Items { get; set; } = new();
+}
+
+public class BulkAddItem
+{
+    public int MenuItemId { get; set; }
+    public int Quantity { get; set; }
+    public string? Note { get; set; }
 }

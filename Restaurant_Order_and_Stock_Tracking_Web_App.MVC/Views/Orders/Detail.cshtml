@@ -318,8 +318,8 @@
 
 
         /* ═══════════════════════════════════════════════════════════
-                   İPTAL / İADE — CSS
-                ═══════════════════════════════════════════════════════════ */
+                           İPTAL / İADE — CSS
+                        ═══════════════════════════════════════════════════════════ */
 
         /* İptal butonu (status-flow içinde) */
         .sflow-btn-cancel {
@@ -1118,12 +1118,12 @@
             }
 
         /* ═══════════════════════════════════════════════
-                            ✅ #2 — Yeni Ürün Ekle Modalı (AIM)
-                        ═══════════════════════════════════════════════ */
+                                    ✅ #2 — Yeni Ürün Ekle Modalı (AIM)
+                                ═══════════════════════════════════════════════ */
         .aim-overlay-inner {
             display: flex;
-            width: min(820px, 96vw);
-            height: min(560px, 90vh);
+            width: min(960px, 96vw);
+            height: min(600px, 92vh);
             background: var(--surface);
             border-radius: 18px;
             overflow: hidden;
@@ -1340,10 +1340,10 @@
 
         /* Sağ: form */
         .aim-right {
-            flex: 1;
+            flex: 0 0 420px;
             display: flex;
             flex-direction: column;
-            padding: 20px 20px 18px;
+            padding: 20px 20px 14px;
             position: relative;
             overflow-y: auto;
         }
@@ -1574,6 +1574,235 @@
             .aim-close:hover {
                 background: rgba(239,68,68,.15);
                 color: #ef4444;
+            }
+
+
+        /* ═══════════════════════════════════════════════════════════
+                   AIM — MİNİ SEPET (BASKET) CSS
+                ═══════════════════════════════════════════════════════════ */
+        .aim-basket-wrap {
+            border-top: 1.5px solid var(--border);
+            margin-top: 10px;
+            padding-top: 10px;
+            flex-shrink: 0;
+        }
+
+        .aim-basket-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+
+        .aim-basket-title {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: .07em;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .aim-basket-count {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 18px;
+            height: 18px;
+            background: var(--accent);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 800;
+            border-radius: 9px;
+            padding: 0 5px;
+        }
+
+        .aim-basket-clear {
+            font-size: 11px;
+            color: var(--text-muted);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 6px;
+            transition: all .12s;
+        }
+
+            .aim-basket-clear:hover {
+                color: #ef4444;
+                background: rgba(239,68,68,.1);
+            }
+
+        .aim-basket-list {
+            max-height: 160px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+            .aim-basket-list::-webkit-scrollbar {
+                width: 4px;
+            }
+
+            .aim-basket-list::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            .aim-basket-list::-webkit-scrollbar-thumb {
+                background: var(--border);
+                border-radius: 2px;
+            }
+
+        .aim-basket-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--surface2);
+            border-radius: 8px;
+            padding: 7px 9px;
+            font-size: 12px;
+        }
+
+        .aim-bi-name {
+            flex: 1;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .aim-bi-qty {
+            font-family: 'Syne', sans-serif;
+            font-size: 13px;
+            font-weight: 800;
+            color: var(--accent);
+            white-space: nowrap;
+        }
+
+        .aim-bi-price {
+            font-size: 11px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .aim-bi-del {
+            width: 20px;
+            height: 20px;
+            border: none;
+            background: none;
+            color: var(--text-muted);
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 5px;
+            display: grid;
+            place-items: center;
+            line-height: 1;
+            transition: all .12s;
+            flex-shrink: 0;
+        }
+
+            .aim-bi-del:hover {
+                color: #ef4444;
+                background: rgba(239,68,68,.15);
+            }
+
+        .aim-bi-note {
+            font-size: 10px;
+            color: var(--text-muted);
+            width: 100%;
+            font-style: italic;
+        }
+
+        .aim-basket-empty {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+            padding: 14px 0;
+            opacity: .6;
+        }
+
+        /* Toplam + gönder butonu */
+        .aim-basket-footer {
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .aim-basket-total {
+            flex: 1;
+        }
+
+        .aim-basket-total-lbl {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+        }
+
+        .aim-basket-total-val {
+            font-family: 'Syne', sans-serif;
+            font-size: 18px;
+            font-weight: 900;
+            color: var(--accent);
+        }
+
+        .aim-btn-send {
+            flex: 2;
+            padding: 12px 14px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 11px;
+            font-size: 14px;
+            font-weight: 800;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            transition: background .15s, transform .12s, box-shadow .15s;
+            white-space: nowrap;
+        }
+
+            .aim-btn-send:hover:not(:disabled) {
+                background: #ea6c0a;
+                transform: translateY(-1px);
+                box-shadow: 0 6px 20px rgba(249,115,22,.4);
+            }
+
+            .aim-btn-send:disabled {
+                background: var(--surface2);
+                color: var(--text-muted);
+                cursor: not-allowed;
+                transform: none;
+                box-shadow: none;
+            }
+
+        /* "Sepete Ekle" butonu (eski Ekle butonu yerini alır) */
+        .aim-btn-add-to-basket {
+            flex: 2;
+            padding: 11px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 800;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            transition: background .15s, transform .12s, box-shadow .15s;
+        }
+
+            .aim-btn-add-to-basket:hover {
+                background: #ea6c0a;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 14px rgba(249,115,22,.35);
+            }
+
+            .aim-btn-add-to-basket:active {
+                transform: translateY(0) scale(.97);
             }
 
         @@media (max-width:620px) {
@@ -2106,12 +2335,12 @@
                             {
                                 <button type="button" class="sflow-btn sflow-btn-cancel"
                                         onclick="openCancelModal(
-                                                        @item.OrderItemId,
-                                                        '@Html.Raw(item.MenuItem?.MenuItemName?.Replace("'", "&#39;") ?? "")',
-                                                        @item.OrderItemUnitPrice.ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
-                                                        @cancelable,
-                                                        @(item.MenuItem?.TrackStock == true ? "true" : "false")
-                                                    )">
+                                                                    @item.OrderItemId,
+                                                                    '@Html.Raw(item.MenuItem?.MenuItemName?.Replace("'", "&#39;") ?? "")',
+                                                                    @item.OrderItemUnitPrice.ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+                                                                    @cancelable,
+                                                                    @(item.MenuItem?.TrackStock == true ? "true" : "false")
+                                                                )">
                                     ✕ İptal
                                 </button>
                             }
@@ -2319,7 +2548,7 @@
             </div>
         </div>
 
-        @* ── Sağ: Form ── *@
+        @* ── Sağ: Form + Mini Sepet ── *@
         <div class="aim-right">
             <button type="button" class="aim-close" onclick="closeModal('addItemModal')">×</button>
 
@@ -2329,41 +2558,65 @@
                 <div class="aim-ph-txt">Soldan bir ürün seçin</div>
             </div>
 
-            @* Form (gizli başlar) *@
+            @* Ürün detay formu (gizli başlar) *@
             <div class="aim-form" id="aimForm" style="display:none">
                 <div class="aim-sel-name" id="aimSelName">—</div>
                 <div class="aim-sel-unit" id="aimSelUnit"></div>
 
-                <form asp-controller="Orders" asp-action="AddItem" method="post">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="orderId" value="@Model.OrderId" />
-                    <input type="hidden" name="menuItemId" id="aimMiId" />
-                    <input type="hidden" name="quantity" id="aimQtyH" value="1" />
-
-                    <div class="aim-qty-box">
-                        <div class="aim-qty-lbl">Adet</div>
-                        <div class="aim-qty-row">
-                            <button type="button" class="aim-qbtn minus" onclick="aimDelta(-1)">−</button>
-                            <span class="aim-qty-num" id="aimQtyNum">1</span>
-                            <button type="button" class="aim-qbtn plus" onclick="aimDelta(+1)">+</button>
-                        </div>
-                        <div class="aim-qty-total" id="aimTotal">₺0,00</div>
+                <div class="aim-qty-box">
+                    <div class="aim-qty-lbl">Adet</div>
+                    <div class="aim-qty-row">
+                        <button type="button" class="aim-qbtn minus" onclick="aimDelta(-1)">−</button>
+                        <span class="aim-qty-num" id="aimQtyNum">1</span>
+                        <button type="button" class="aim-qbtn plus" onclick="aimDelta(+1)">+</button>
                     </div>
+                    <div class="aim-qty-total" id="aimTotal">₺0,00</div>
+                </div>
 
-                    <label class="aim-note-lbl">Not (opsiyonel)</label>
-                    <input class="aim-note-inp" type="text" name="note" id="aimNoteInp"
-                           placeholder="Az pişmiş, acısız, soğuk..." maxlength="200" />
+                <label class="aim-note-lbl">Not (opsiyonel)</label>
+                <input class="aim-note-inp" type="text" id="aimNoteInp"
+                       placeholder="Az pişmiş, acısız, soğuk..." maxlength="200" />
 
-                    <div class="aim-btns">
-                        <button type="button" class="aim-btn-cancel"
-                                onclick="closeModal('addItemModal')">
-                            İptal
-                        </button>
-                        <button type="submit" class="aim-btn-add" id="aimAddBtn">
-                            ✓ Ekle
-                        </button>
+                <div class="aim-btns">
+                    <button type="button" class="aim-btn-cancel"
+                            onclick="closeModal('addItemModal')">
+                        İptal
+                    </button>
+                    <button type="button" class="aim-btn-add-to-basket" id="aimAddBtn"
+                            onclick="aimAddToBasket()">
+                        + Sepete Ekle
+                    </button>
+                </div>
+            </div>
+
+            @* ── Mini Sepet ── *@
+            <div class="aim-basket-wrap" id="aimBasketWrap">
+                <div class="aim-basket-head">
+                    <div class="aim-basket-title">
+                        🛒 Eklenecekler
+                        <span class="aim-basket-count" id="aimBasketCount">0</span>
                     </div>
-                </form>
+                    <button type="button" class="aim-basket-clear" onclick="aimClearBasket()">
+                        Temizle
+                    </button>
+                </div>
+
+                <div class="aim-basket-list" id="aimBasketList">
+                    <div class="aim-basket-empty" id="aimBasketEmpty">
+                        Henüz ürün eklenmedi
+                    </div>
+                </div>
+
+                <div class="aim-basket-footer">
+                    <div class="aim-basket-total">
+                        <div class="aim-basket-total-lbl">Toplam</div>
+                        <div class="aim-basket-total-val" id="aimBasketTotalVal">₺0,00</div>
+                    </div>
+                    <button type="button" class="aim-btn-send" id="aimSendBtn"
+                            disabled onclick="aimSendAll()">
+                        ✓ Tümünü Adisyona Gönder
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -2587,13 +2840,18 @@
         });
 
         // ═══════════════════════════════════════════════════════════
-        // ✅ #2 — Yeni Ürün Ekle Modalı JS (AIM)
+        // AIM — Çoklu Ürün Ekleme (Mini Sepet Mantığı)
         // ═══════════════════════════════════════════════════════════
-        let aimPrice = 0;
-        let aimQty   = 1;
-        let aimCatActive = 'all';
+        let aimPrice      = 0;
+        let aimQty        = 1;
+        let aimCurId      = null;   // seçili ürün id
+        let aimCurName    = '';
+        let aimCatActive  = 'all';
 
-        // Ürün seç
+        // Sepet: [{id, name, price, qty, note}]
+        let aimBasket = [];
+
+        // ── Ürün seç ──────────────────────────────────────────────
         function aimPick(id) {
             const row = document.getElementById('arow-' + id);
             if (!row) return;
@@ -2601,13 +2859,14 @@
             document.querySelectorAll('.aim-row.picked').forEach(r => r.classList.remove('picked'));
             row.classList.add('picked');
 
-            aimPrice = parseFloat(row.dataset.price);
-            aimQty   = 1;
+            aimCurId   = parseInt(id);
+            aimCurName = row.dataset.name;
+            aimPrice   = parseFloat(row.dataset.price);
+            aimQty     = 1;
 
-            document.getElementById('aimMiId').value       = id;
-            document.getElementById('aimSelName').textContent = row.dataset.name;
+            document.getElementById('aimSelName').textContent = aimCurName;
             document.getElementById('aimSelUnit').textContent = fmt(aimPrice) + ' / adet';
-            document.getElementById('aimNoteInp').value    = '';
+            document.getElementById('aimNoteInp').value       = '';
             aimRefresh();
 
             document.getElementById('aimPh').style.display   = 'none';
@@ -2621,14 +2880,149 @@
         }
 
         function aimRefresh() {
-            document.getElementById('aimQtyNum').textContent  = aimQty;
-            document.getElementById('aimQtyH').value            = aimQty;
-            document.getElementById('aimTotal').textContent   = fmt(aimPrice * aimQty);
-            document.getElementById('aimAddBtn').textContent  =
-                '✓ Ekle (' + aimQty + ' adet — ' + fmt(aimPrice * aimQty) + ')';
+            document.getElementById('aimQtyNum').textContent = aimQty;
+            document.getElementById('aimTotal').textContent  = fmt(aimPrice * aimQty);
+            document.getElementById('aimAddBtn').textContent =
+                '+ Sepete Ekle (' + aimQty + ' adet — ' + fmt(aimPrice * aimQty) + ')';
         }
 
-        // Kategori tab
+        // ── Sepete ekle ───────────────────────────────────────────
+        function aimAddToBasket() {
+            if (!aimCurId) return;
+            const note = (document.getElementById('aimNoteInp').value || '').trim();
+
+            // Aynı id + aynı not varsa miktarı birleştir
+            const existing = aimBasket.find(i => i.id === aimCurId && i.note === note);
+            if (existing) {
+                existing.qty = Math.min(99, existing.qty + aimQty);
+            } else {
+                aimBasket.push({ id: aimCurId, name: aimCurName, price: aimPrice, qty: aimQty, note });
+            }
+
+            // Seçimi sıfırla, sol tarafta picked kalsın (kullanıcı görsün)
+            aimQty = 1;
+            document.getElementById('aimNoteInp').value = '';
+            aimRefresh();
+
+            // Form'u gizle, placeholder'a dön — sıradaki ürünü seçmeye hazır
+            document.getElementById('aimPh').style.display   = '';
+            document.getElementById('aimForm').style.display = 'none';
+            document.querySelectorAll('.aim-row.picked').forEach(r => r.classList.remove('picked'));
+            aimCurId = null;
+
+            aimRenderBasket();
+
+            // Kısa animasyonla sepet bölümüne scroll
+            document.getElementById('aimBasketWrap').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // ── Sepet render ──────────────────────────────────────────
+        function aimRenderBasket() {
+            const list    = document.getElementById('aimBasketList');
+            const empty   = document.getElementById('aimBasketEmpty');
+            const countEl = document.getElementById('aimBasketCount');
+            const totalEl = document.getElementById('aimBasketTotalVal');
+            const sendBtn = document.getElementById('aimSendBtn');
+
+            // Sadece ürün satırlarını temizle — empty elementi DOM'da sabit kalır
+            Array.from(list.children).forEach(child => {
+                if (child !== empty) child.remove();
+            });
+
+            if (!aimBasket.length) {
+                empty.style.display = '';
+                countEl.textContent = '0';
+                totalEl.textContent = '₺0,00';
+                sendBtn.disabled    = true;
+                sendBtn.textContent = '✓ Tümünü Adisyona Gönder';
+                return;
+            }
+
+            empty.style.display = 'none';
+
+            let total = 0;
+            aimBasket.forEach((item, idx) => {
+                total += item.price * item.qty;
+                const div = document.createElement('div');
+                div.className = 'aim-basket-item';
+                div.innerHTML =
+                    `<span class="aim-bi-name" title="${item.name}">${item.name}</span>` +
+                    `<span class="aim-bi-qty">×${item.qty}</span>` +
+                    `<span class="aim-bi-price">${fmt(item.price * item.qty)}</span>` +
+                    `<button type="button" class="aim-bi-del" onclick="aimRemoveFromBasket(${idx})" title="Kaldır">×</button>`;
+                if (item.note) {
+                    const noteEl = document.createElement('span');
+                    noteEl.className = 'aim-bi-note';
+                    noteEl.textContent = '📝 ' + item.note;
+                    div.appendChild(noteEl);
+                }
+                list.appendChild(div);
+            });
+
+            const totalItems = aimBasket.reduce((s, i) => s + i.qty, 0);
+            countEl.textContent = totalItems;
+            totalEl.textContent = fmt(total);
+            sendBtn.disabled    = false;
+            sendBtn.textContent = '✓ ' + totalItems + ' Ürünü Adisyona Gönder';
+        }
+
+        function aimRemoveFromBasket(idx) {
+            aimBasket.splice(idx, 1);
+            aimRenderBasket();
+        }
+
+        function aimClearBasket() {
+            aimBasket = [];
+            aimRenderBasket();
+        }
+
+        // ── Tümünü gönder (Bulk) ──────────────────────────────────
+        async function aimSendAll() {
+            if (!aimBasket.length) return;
+
+            const btn = document.getElementById('aimSendBtn');
+            btn.disabled    = true;
+            btn.textContent = '⏳ Gönderiliyor...';
+
+            const payload = {
+                orderId: @Model.OrderId,
+                items: aimBasket.map(i => ({
+                    menuItemId: i.id,
+                    quantity:   i.qty,
+                    note:       i.note || null
+                }))
+            };
+
+            // CSRF token
+            const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
+
+            try {
+                const res = await fetch('/Orders/AddItemBulk', {
+                    method:  'POST',
+                    headers: {
+                        'Content-Type':              'application/json',
+                        'RequestVerificationToken':  token
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    closeModal('addItemModal');
+                    location.reload();          // sayfayı yenile
+                } else {
+                    const data = await res.json().catch(() => ({}));
+                    btn.disabled    = false;
+                    btn.textContent = '✓ Tümünü Adisyona Gönder';
+                    alert('Hata: ' + (data.error || 'Bilinmeyen hata'));
+                }
+            } catch (e) {
+                btn.disabled    = false;
+                btn.textContent = '✓ Tümünü Adisyona Gönder';
+                alert('Bağlantı hatası: ' + e.message);
+            }
+        }
+
+        // ── Kategori tab ──────────────────────────────────────────
         function aimCat(catKey, btn) {
             aimCatActive = catKey;
             document.querySelectorAll('.aim-ctab').forEach(b => b.classList.remove('on'));
@@ -2642,7 +3036,7 @@
             document.getElementById('aimNoRes').classList.remove('on');
         }
 
-        // Arama
+        // ── Arama ─────────────────────────────────────────────────
         function aimSearch(q) {
             q = (q || '').toLowerCase().trim();
             const lbl = document.getElementById('aimLbl');
@@ -2667,18 +3061,21 @@
             document.getElementById('aimNoRes').classList.toggle('on', n === 0);
         }
 
-        // Modal açıldığında reset
+        // ── Modal açıldığında reset ────────────────────────────────
         const _origOpenModal = window.openModal;
         window.openModal = function(id) {
             _origOpenModal(id);
             if (id === 'addItemModal') {
+                aimBasket = [];
+                aimCurId  = null;
+                aimQty    = 1;
                 document.querySelectorAll('.aim-row.picked').forEach(r => r.classList.remove('picked'));
                 document.getElementById('aimPh').style.display   = '';
                 document.getElementById('aimForm').style.display = 'none';
                 document.getElementById('aimQ').value            = '';
                 aimSearch('');
                 aimCat('all', document.querySelector('.aim-ctab[data-c="all"]'));
-                aimQty = 1;
+                aimRenderBasket();
             }
         };
 

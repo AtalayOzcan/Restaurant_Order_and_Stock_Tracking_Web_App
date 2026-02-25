@@ -284,6 +284,21 @@
             white-space: nowrap;
         }
 
+
+        .item-more-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--accent);
+            background: var(--accent-glow, rgba(249,115,22,.1));
+            border: 1px solid rgba(249,115,22,.25);
+            border-radius: 8px;
+            padding: 3px 9px;
+            margin-top: 2px;
+        }
+
         .item-price {
             font-weight: 600;
             color: var(--text);
@@ -654,12 +669,21 @@
                         </div>
 
                         <div class="items-box">
-                            @foreach (var item in order.OrderItems.Where(i => i.OrderItemStatus != "cancelled"))
+                            @{
+                                var visItems = order.OrderItems.Where(i => i.OrderItemStatus != "cancelled").ToList();
+                                var showItems = visItems.Take(5).ToList();
+                                var moreCount = visItems.Count - showItems.Count;
+                            }
+                            @foreach (var item in showItems)
                             {
                                 <div class="item-row">
                                     <span class="item-name">@item.MenuItem?.MenuItemName ×@item.OrderItemQuantity</span>
                                     <span class="item-price">₺@item.OrderItemLineTotal.ToString("N2")</span>
                                 </div>
+                            }
+                            @if (moreCount > 0)
+                            {
+                                <span class="item-more-badge">+ @moreCount kalem daha</span>
                             }
                         </div>
 
@@ -751,12 +775,21 @@
                             </div>
 
                             <div class="items-box">
-                                @foreach (var item in order.OrderItems.Where(i => i.OrderItemStatus != "cancelled"))
+                                @{
+                                    var pastVisItems = order.OrderItems.Where(i => i.OrderItemStatus != "cancelled").ToList();
+                                    var pastShowItems = pastVisItems.Take(5).ToList();
+                                    var pastMoreCount = pastVisItems.Count - pastShowItems.Count;
+                                }
+                                @foreach (var item in pastShowItems)
                                 {
                                     <div class="item-row">
                                         <span class="item-name">@item.MenuItem?.MenuItemName ×@item.OrderItemQuantity</span>
                                         <span class="item-price">₺@item.OrderItemLineTotal.ToString("N2")</span>
                                     </div>
+                                }
+                                @if (pastMoreCount > 0)
+                                {
+                                    <span class="item-more-badge">+ @pastMoreCount kalem daha</span>
                                 }
                             </div>
 
