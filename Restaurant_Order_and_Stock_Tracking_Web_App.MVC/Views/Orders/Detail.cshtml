@@ -75,6 +75,29 @@
             overflow: hidden;
         }
 
+        /* ✅ #2 — Sipariş Kalemleri başlık butonu */
+        .btn-add-inline {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 14px 6px 10px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            transition: background .15s, transform .12s;
+            white-space: nowrap;
+        }
+
+            .btn-add-inline:hover {
+                background: #ea6c0a;
+                transform: translateY(-1px);
+            }
+
         .panel-head {
             display: flex;
             align-items: center;
@@ -636,83 +659,481 @@
                 background: var(--accent-glow);
             }
 
-        /* ── ÜRÜN EKLE MODAL — +/- ── */
-        .add-modal {
+        /* ═══════════════════════════════════════════════
+                    ✅ #2 — Yeni Ürün Ekle Modalı (AIM)
+                ═══════════════════════════════════════════════ */
+        .aim-overlay-inner {
+            display: flex;
+            width: min(820px, 96vw);
+            height: min(560px, 90vh);
             background: var(--surface);
-            border: 1px solid var(--border);
             border-radius: 18px;
-            padding: 26px;
-            width: 380px;
-            max-width: 96vw;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 20px 60px rgba(0,0,0,.55);
+            overflow: hidden;
+            box-shadow: 0 24px 64px rgba(0,0,0,.6);
             animation: modalIn .2s ease;
         }
 
-        .add-modal-title {
-            font-family: 'Syne',sans-serif;
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 4px;
+        /* Sol: menü listesi */
+        .aim-left {
+            width: 55%;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+            overflow: hidden;
         }
 
-        .add-modal-sub {
+        .aim-left-top {
+            flex-shrink: 0;
+            padding: 16px 14px 0;
+            background: var(--surface2);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .aim-heading {
+            font-family: 'Syne', sans-serif;
+            font-size: 15px;
+            font-weight: 800;
+            margin-bottom: 10px;
+        }
+
+        /* Arama */
+        .aim-search {
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+            .aim-search input {
+                width: 100%;
+                padding: 8px 12px 8px 32px;
+                background: var(--surface);
+                border: 1.5px solid var(--border);
+                border-radius: 9px;
+                color: var(--text);
+                font-family: 'DM Sans', sans-serif;
+                font-size: 13px;
+                outline: none;
+                transition: border-color .15s;
+            }
+
+                .aim-search input:focus {
+                    border-color: var(--accent);
+                }
+
+                .aim-search input::placeholder {
+                    color: var(--text-muted);
+                }
+
+        .aim-search-ico {
+            position: absolute;
+            left: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: .4;
             font-size: 13px;
-            color: var(--text-muted);
-            margin-bottom: 22px;
+            pointer-events: none;
         }
 
-        .qty-control {
+        /* Kategori tabs */
+        .aim-cats {
+            display: flex;
+            gap: 4px;
+            padding: 8px 14px;
+            overflow-x: auto;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            scrollbar-width: none;
+        }
+
+            .aim-cats::-webkit-scrollbar {
+                display: none;
+            }
+
+        .aim-ctab {
+            flex-shrink: 0;
+            padding: 5px 12px;
+            border-radius: 18px;
+            border: 1.5px solid var(--border);
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 700;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            transition: all .15s;
+            white-space: nowrap;
+        }
+
+            .aim-ctab:hover {
+                border-color: var(--accent);
+                color: var(--accent);
+            }
+
+            .aim-ctab.on {
+                background: var(--accent);
+                border-color: var(--accent);
+                color: #fff;
+            }
+
+        /* Ürün listesi */
+        .aim-list {
+            flex: 1;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) transparent;
+        }
+
+        .aim-search-lbl {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-weight: 700;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            padding: 10px 14px 4px;
+            display: none;
+        }
+
+            .aim-search-lbl.on {
+                display: block;
+            }
+
+        .aim-cat-blk {
+            padding-bottom: 2px;
+        }
+
+        .aim-cat-lbl {
+            font-size: 9px;
+            font-weight: 800;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: .09em;
+            padding: 10px 14px 5px;
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 7px;
         }
 
-        .qty-btn {
-            width: 42px;
-            height: 42px;
-            border-radius: 10px;
-            border: 1.5px solid var(--border);
+            .aim-cat-lbl::after {
+                content: '';
+                flex: 1;
+                height: 1px;
+                background: var(--border);
+            }
+
+        .aim-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            cursor: pointer;
+            transition: background .1s;
+            border-left: 3px solid transparent;
+        }
+
+            .aim-row:hover {
+                background: var(--surface2);
+            }
+
+            .aim-row.picked {
+                background: rgba(249,115,22,.1);
+                border-left-color: var(--accent);
+            }
+
+        .aim-row-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .aim-row-price {
+            font-family: 'Syne', sans-serif;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        .aim-row-arr {
+            font-size: 12px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+            transition: transform .15s, color .15s;
+        }
+
+        .aim-row:hover .aim-row-arr, .aim-row.picked .aim-row-arr {
+            color: var(--accent);
+            transform: translateX(3px);
+        }
+
+        .aim-no-result {
+            display: none;
+            text-align: center;
+            padding: 36px 20px;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+            .aim-no-result.on {
+                display: block;
+            }
+
+        /* Sağ: form */
+        .aim-right {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px 20px 18px;
+            position: relative;
+            overflow-y: auto;
+        }
+
+        .aim-ph {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: var(--text-muted);
+        }
+
+        .aim-ph-arrow {
+            font-size: 28px;
+            opacity: .3;
+            animation: aimArrow 1.6s ease-in-out infinite;
+        }
+
+        @@keyframes aimArrow {
+            0%, 100% {
+                transform: translateX(0)
+            }
+
+            50% {
+                transform: translateX(-8px)
+            }
+        }
+
+        .aim-ph-txt {
+            font-size: 13px;
+            font-weight: 600;
+            opacity: .5;
+        }
+
+        .aim-form {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .aim-sel-name {
+            font-family: 'Syne', sans-serif;
+            font-size: 18px;
+            font-weight: 800;
+            line-height: 1.25;
+            margin-bottom: 3px;
+            word-break: break-word;
+        }
+
+        .aim-sel-unit {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+
+        .aim-qty-box {
             background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+        }
+
+        .aim-qty-lbl {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            margin-bottom: 10px;
+        }
+
+        .aim-qty-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .aim-qbtn {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            border: 1.5px solid var(--border);
+            background: var(--surface);
             color: var(--text);
-            font-size: 22px;
+            font-size: 20px;
             display: grid;
             place-items: center;
             cursor: pointer;
             transition: all .15s;
-            flex-shrink: 0;
             font-family: monospace;
+            line-height: 1;
         }
 
-            .qty-btn.minus:hover {
+            .aim-qbtn.minus:hover {
+                background: rgba(239,68,68,.15);
                 border-color: #ef4444;
                 color: #ef4444;
-                background: rgba(239,68,68,.1);
             }
 
-            .qty-btn.plus:hover {
+            .aim-qbtn.plus:hover {
+                background: var(--accent-glow);
                 border-color: var(--accent);
                 color: var(--accent);
-                background: var(--accent-glow);
             }
 
-        .qty-display {
-            font-family: 'Syne',sans-serif;
-            font-size: 32px;
-            font-weight: 800;
-            min-width: 52px;
+        .aim-qty-num {
+            font-family: 'Syne', sans-serif;
+            font-size: 26px;
+            font-weight: 900;
+            min-width: 44px;
             text-align: center;
-            color: var(--accent);
         }
 
-        .qty-line-total {
-            font-family: 'Syne',sans-serif;
-            font-size: 15px;
-            font-weight: 700;
-            color: #22c55e;
+        .aim-qty-total {
+            font-family: 'Syne', sans-serif;
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--accent);
             text-align: right;
-            margin-top: 8px;
+        }
+
+        .aim-note-lbl {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .aim-note-inp {
+            width: 100%;
+            background: var(--surface2);
+            border: 1.5px solid var(--border);
+            border-radius: 9px;
+            padding: 9px 12px;
+            color: var(--text);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 13px;
+            outline: none;
+            transition: border-color .15s;
+            margin-bottom: 18px;
+        }
+
+            .aim-note-inp:focus {
+                border-color: var(--accent);
+            }
+
+            .aim-note-inp::placeholder {
+                color: var(--text-muted);
+                font-size: 12px;
+            }
+
+        .aim-btns {
+            display: flex;
+            gap: 10px;
+            margin-top: auto;
+        }
+
+        .aim-btn-cancel {
+            flex: 1;
+            padding: 11px;
+            border: 1.5px solid var(--border);
+            border-radius: 10px;
+            background: var(--surface2);
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 600;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            transition: all .15s;
+        }
+
+            .aim-btn-cancel:hover {
+                color: var(--text);
+                border-color: var(--text-muted);
+            }
+
+        .aim-btn-add {
+            flex: 2;
+            padding: 11px;
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 800;
+            font-family: 'DM Sans', sans-serif;
+            cursor: pointer;
+            transition: background .15s, transform .12s, box-shadow .15s;
+        }
+
+            .aim-btn-add:hover:not(:disabled) {
+                background: #ea6c0a;
+                transform: translateY(-1px);
+                box-shadow: 0 6px 20px rgba(249,115,22,.4);
+            }
+
+            .aim-btn-add:disabled {
+                background: var(--surface2);
+                color: var(--text-muted);
+                cursor: not-allowed;
+            }
+
+        .aim-close {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            width: 26px;
+            height: 26px;
+            border: none;
+            background: var(--surface2);
+            color: var(--text-muted);
+            font-size: 17px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: grid;
+            place-items: center;
+            transition: all .12s;
+            line-height: 1;
+        }
+
+            .aim-close:hover {
+                background: rgba(239,68,68,.15);
+                color: #ef4444;
+            }
+
+        @@media (max-width:620px) {
+            .aim-overlay-inner {
+                flex-direction: column;
+                height: 94vh;
+            }
+
+            .aim-left {
+                width: 100%;
+                height: 52%;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .aim-right {
+                height: 48%;
+            }
         }
 
         /* ── ÖDEME MODAL — YATAY ── */
@@ -1096,52 +1517,31 @@
     </style>
 }
 
-@if (TempData["Success"] != null)
-{
-    <div class="alert alert-success">✅ @TempData["Success"]</div>
-}
-@if (TempData["Error"] != null)
-{
-    <div class="alert alert-error">❌ @TempData["Error"]</div>
-}
-
-<div class="page-header">
-    <div>
-        <h1 class="page-title">@Model.Table?.TableName — Adisyon #@Model.OrderId</h1>
-        <p class="page-sub">
-            @if (isOpen)
-            {
-                <span>Açık adisyon · @minutesOpen dakikadır açık</span>
-            }
-            else
-            {
-
-                <span>Kapatıldı · @Model.OrderClosedAt?.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</span>
-            }
-        </p>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center">
-        <a asp-controller="Orders" asp-action="Index" class="back-btn">← Siparişler</a>
-        @if (isOpen)
-        {
-            <button class="btn-pay" style="width:auto;padding:8px 18px" onclick="openModal('payModal')">💳 Ödeme Al</button>
-        }
-    </div>
-</div>
-
+@* ── SAYFA İSKELETİ (Geri Yüklenen Kısım) ── *@
 <div class="detail-layout">
 
-    @* ── SOL PANEL ── *@
+    @* ── SOL PANEL (Bilgiler ve Kalemler) ── *@
     <div class="left-panel">
 
-        @* Adisyon Bilgileri *@
         <div class="info-card">
-            <div><div class="info-item-label">Masa</div>     <div class="info-item-value">🪑 @Model.Table?.TableName</div></div>
-            <div><div class="info-item-label">Garson</div>   <div class="info-item-value">👤 @Model.OrderOpenedBy</div></div>
-            <div><div class="info-item-label">Açılış</div>   <div class="info-item-value">🕐 @Model.OrderOpenedAt.ToLocalTime().ToString("HH:mm")</div></div>
-            <div><div class="info-item-label">Süre</div>     <div class="info-item-value">⏱ @minutesOpen dk</div></div>
-            <div><div class="info-item-label">Durum</div>    <div class="info-item-value"><span class="status-badge @(isOpen ? "s-preparing" : "s-paid")">@(isOpen ? "Açık" : "Ödendi")</span></div></div>
-            <div><div class="info-item-label">Toplam</div>   <div class="info-item-value accent">₺@Model.OrderTotalAmount.ToString("N2")</div></div>
+            <div>
+                <div class="info-item-label">Adisyon No</div>
+                <div class="info-item-value">#@Model.OrderId</div>
+            </div>
+            <div>
+                <div class="info-item-label">Süre</div>
+                <div class="info-item-value">@minutesOpen dk.</div>
+            </div>
+            <div>
+                <div class="info-item-label">Durum</div>
+                <div class="info-item-value">
+                    <span class="status-badge @(isOpen ? "s-preparing" : "s-paid")">@(isOpen ? "Açık" : "Ödendi")</span>
+                </div>
+            </div>
+            <div>
+                <div class="info-item-label">Toplam</div>
+                <div class="info-item-value accent">₺@Model.OrderTotalAmount.ToString("N2")</div>
+            </div>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(Model.OrderNote))
@@ -1155,13 +1555,21 @@
         <div class="panel">
             <div class="panel-head">
                 <span class="panel-title">Sipariş Kalemleri</span>
-                <span style="font-size:12px;color:var(--text-muted)">
-                    @unpaidItems.Count ödenecek
-                    @if (paidItems.Any())
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:12px;color:var(--text-muted)">
+                        @unpaidItems.Count ödenecek
+                        @if (paidItems.Any())
+                        {
+                            <span style="color:#22c55e;margin-left:6px">· @paidItems.Count ödendi</span>
+                        }
+                    </span>
+                    @if (isOpen)
                     {
-                        <span style="color:#22c55e;margin-left:6px">· @paidItems.Count ödendi</span>
+                        <button type="button" class="btn-add-inline" onclick="openModal('addItemModal')">
+                            ＋ Ürün Ekle
+                        </button>
                     }
-                </span>
+                </div>
             </div>
 
             @* ── Ödenecek kalemler ── *@
@@ -1269,39 +1677,7 @@
                 </div>
             }
         </div>
-
-        @* ── Ürün Ekle ── *@
-        @if (isOpen)
-        {
-            <div class="panel">
-                <div class="panel-head">
-                    <span class="panel-title">➕ Ürün Ekle</span>
-                    <span style="font-size:11px;color:var(--text-muted)">Ürüne tıklayın</span>
-                </div>
-                <div class="add-panel-body">
-                    @foreach (var cat in categories)
-                    {
-                        <div class="add-cat-header">
-                            <div class="add-cat-stripe"></div>
-                            <span class="add-cat-name">@cat.CategoryName</span>
-                        </div>
-                        <div class="add-items-wrap">
-                            @foreach (var mi in cat.MenuItems)
-                            {
-                                <div class="add-item-row"
-                                     onclick="openAddItemModal(@mi.MenuItemId, '@Html.Raw(mi.MenuItemName.Replace("'", "\\'"))', @mi.MenuItemPrice.ToString("F2", System.Globalization.CultureInfo.InvariantCulture))">
-                                    <span class="ai-name">@mi.MenuItemName</span>
-                                    <span class="ai-price">₺@mi.MenuItemPrice.ToString("N2")</span>
-                                    <button type="button" class="ai-btn">＋</button>
-                                </div>
-                            }
-                        </div>
-                    }
-                </div>
-            </div>
-        }
-
-    </div>
+    </div> @* *@
 
     @* ── SAĞ PANEL ── *@
     <div class="pay-panel">
@@ -1343,40 +1719,118 @@
             }
         </div>
     </div>
+</div> @* *@
 
-</div>
 
-@* ── ÜRÜN EKLE MODAL ── *@
+@* ═══════════════════════════════════════════════
+    MODALLAR (YENİ AIM MODALI VE ÖDEME MODALI)
+═══════════════════════════════════════════════ *@
+
+@* ── ÜRÜN EKLE MODAL (Yeni Gelişmiş Tasarım) ── *@
 <div class="modal-overlay" id="addItemModal">
-    <div class="add-modal">
-        <div class="add-modal-title" id="addItemTitle">Ürün Ekle</div>
-        <div class="add-modal-sub" id="addItemSub">Adet seçin</div>
-        <form asp-controller="Orders" asp-action="AddItem" method="post" onsubmit="return validateAddItem()">
-            @Html.AntiForgeryToken()
-            <input type="hidden" name="orderId" value="@Model.OrderId" />
-            <input type="hidden" name="menuItemId" id="addItemId" />
-            <input type="hidden" name="quantity" id="addItemQtyHidden" value="1" />
+    <div class="aim-overlay-inner">
 
-            <div class="form-group">
-                <label class="form-label">Adet</label>
-                <div class="qty-control">
-                    <button type="button" class="qty-btn minus" onclick="changeAddQty(-1)">−</button>
-                    <div class="qty-display" id="addItemQtyDisplay">1</div>
-                    <button type="button" class="qty-btn plus" onclick="changeAddQty(1)">+</button>
+        @* ── Sol: Menü Seçici ── *@
+        <div class="aim-left">
+            <div class="aim-left-top">
+                <div class="aim-heading">Ürün Seç</div>
+                <div class="aim-search">
+                    <span class="aim-search-ico">🔍</span>
+                    <input type="text" id="aimQ" placeholder="Ürün ara..."
+                           oninput="aimSearch(this.value)" autocomplete="off" />
                 </div>
-                <div class="qty-line-total" id="addItemLineTotal">₺0,00</div>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">Not (opsiyonel)</label>
-                <input class="form-control" name="note" id="addItemNote" placeholder="Az pişmiş, acısız..." maxlength="200" />
+            <div class="aim-cats">
+                <button type="button" class="aim-ctab on"
+                        data-c="all" onclick="aimCat('all',this)">
+                    Tümü
+                </button>
+                @foreach (var cat in categories)
+                {
+                    <button type="button" class="aim-ctab"
+                            data-c="acat-@cat.CategoryId"
+                            onclick="aimCat('acat-@cat.CategoryId',this)">
+                        @cat.CategoryName
+                    </button>
+                }
             </div>
 
-            <div class="modal-footer">
-                <button type="button" class="btn-ghost" onclick="closeModal('addItemModal')">İptal</button>
-                <button type="submit" class="btn-primary" id="addItemSubmitBtn">Ekle (1 adet)</button>
+            <div class="aim-list" id="aimList">
+                <div class="aim-search-lbl" id="aimLbl"></div>
+                @foreach (var cat in categories)
+                {
+                    <div class="aim-cat-blk" id="acat-@cat.CategoryId">
+                        <div class="aim-cat-lbl">@cat.CategoryName</div>
+                        @foreach (var mi in cat.MenuItems)
+                        {
+                            <div class="aim-row"
+                                 id="arow-@mi.MenuItemId"
+                                 data-id="@mi.MenuItemId"
+                                 data-name="@Html.Raw(mi.MenuItemName.Replace("\"", "&quot;"))"
+                                 data-price="@mi.MenuItemPrice.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)"
+                                 data-cat="acat-@cat.CategoryId"
+                                 data-kw="@mi.MenuItemName.ToLowerInvariant()"
+                                 onclick="aimPick(@mi.MenuItemId)">
+                                <span class="aim-row-name">@mi.MenuItemName</span>
+                                <span class="aim-row-price">₺@mi.MenuItemPrice.ToString("N2")</span>
+                                <span class="aim-row-arr">→</span>
+                            </div>
+                        }
+                    </div>
+                }
+                <div class="aim-no-result" id="aimNoRes">Ürün bulunamadı.</div>
             </div>
-        </form>
+        </div>
+
+        @* ── Sağ: Form ── *@
+        <div class="aim-right">
+            <button type="button" class="aim-close" onclick="closeModal('addItemModal')">×</button>
+
+            @* Placeholder *@
+            <div class="aim-ph" id="aimPh">
+                <div class="aim-ph-arrow">←</div>
+                <div class="aim-ph-txt">Soldan bir ürün seçin</div>
+            </div>
+
+            @* Form (gizli başlar) *@
+            <div class="aim-form" id="aimForm" style="display:none">
+                <div class="aim-sel-name" id="aimSelName">—</div>
+                <div class="aim-sel-unit" id="aimSelUnit"></div>
+
+                <form asp-controller="Orders" asp-action="AddItem" method="post">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="orderId" value="@Model.OrderId" />
+                    <input type="hidden" name="menuItemId" id="aimMiId" />
+                    <input type="hidden" name="quantity" id="aimQtyH" value="1" />
+
+                    <div class="aim-qty-box">
+                        <div class="aim-qty-lbl">Adet</div>
+                        <div class="aim-qty-row">
+                            <button type="button" class="aim-qbtn minus" onclick="aimDelta(-1)">−</button>
+                            <span class="aim-qty-num" id="aimQtyNum">1</span>
+                            <button type="button" class="aim-qbtn plus" onclick="aimDelta(+1)">+</button>
+                        </div>
+                        <div class="aim-qty-total" id="aimTotal">₺0,00</div>
+                    </div>
+
+                    <label class="aim-note-lbl">Not (opsiyonel)</label>
+                    <input class="aim-note-inp" type="text" name="note" id="aimNoteInp"
+                           placeholder="Az pişmiş, acısız, soğuk..." maxlength="200" />
+
+                    <div class="aim-btns">
+                        <button type="button" class="aim-btn-cancel"
+                                onclick="closeModal('addItemModal')">
+                            İptal
+                        </button>
+                        <button type="submit" class="aim-btn-add" id="aimAddBtn">
+                            ✓ Ekle
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -1500,8 +1954,6 @@
         const orderTotal  = @Model.OrderTotalAmount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
         const alreadyPaid = @totalPaid.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
         let currentMethod = 'cash';
-        let addItemUnitPrice = 0;
-        let addItemQty = 1;
 
         // ── helpers ──────────────────────────────────────────────────
         function parseLD(str) {
@@ -1518,31 +1970,101 @@
             o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
         });
 
-        // ── ÜRÜN EKLE MODAL ─────────────────────────────────────────
-        function openAddItemModal(id, name, price) {
-            addItemUnitPrice = price;
-            addItemQty       = 1;
-            document.getElementById('addItemId').value          = id;
-            document.getElementById('addItemTitle').textContent = name + ' Ekle';
-            document.getElementById('addItemSub').textContent   = fmt(price) + ' / adet';
-            document.getElementById('addItemNote').value        = '';
-            refreshAddQty();
-            openModal('addItemModal');
+        // ═══════════════════════════════════════════════════════════
+        // ✅ #2 — Yeni Ürün Ekle Modalı JS (AIM)
+        // ═══════════════════════════════════════════════════════════
+        let aimPrice = 0;
+        let aimQty   = 1;
+        let aimCatActive = 'all';
+
+        // Ürün seç
+        function aimPick(id) {
+            const row = document.getElementById('arow-' + id);
+            if (!row) return;
+
+            document.querySelectorAll('.aim-row.picked').forEach(r => r.classList.remove('picked'));
+            row.classList.add('picked');
+
+            aimPrice = parseFloat(row.dataset.price);
+            aimQty   = 1;
+
+            document.getElementById('aimMiId').value       = id;
+            document.getElementById('aimSelName').textContent = row.dataset.name;
+            document.getElementById('aimSelUnit').textContent = fmt(aimPrice) + ' / adet';
+            document.getElementById('aimNoteInp').value    = '';
+            aimRefresh();
+
+            document.getElementById('aimPh').style.display   = 'none';
+            document.getElementById('aimForm').style.display = 'flex';
+            document.getElementById('aimForm').style.flexDirection = 'column';
         }
 
-        function changeAddQty(delta) {
-            addItemQty = Math.max(1, Math.min(99, addItemQty + delta));
-            refreshAddQty();
+        function aimDelta(d) {
+            aimQty = Math.max(1, Math.min(99, aimQty + d));
+            aimRefresh();
         }
 
-        function refreshAddQty() {
-            document.getElementById('addItemQtyDisplay').textContent = addItemQty;
-            document.getElementById('addItemQtyHidden').value        = addItemQty;
-            document.getElementById('addItemLineTotal').textContent  = fmt(addItemQty * addItemUnitPrice);
-            document.getElementById('addItemSubmitBtn').textContent  = `Ekle (${addItemQty} adet)`;
+        function aimRefresh() {
+            document.getElementById('aimQtyNum').textContent  = aimQty;
+            document.getElementById('aimQtyH').value            = aimQty;
+            document.getElementById('aimTotal').textContent   = fmt(aimPrice * aimQty);
+            document.getElementById('aimAddBtn').textContent  =
+                '✓ Ekle (' + aimQty + ' adet — ' + fmt(aimPrice * aimQty) + ')';
         }
 
-        function validateAddItem() { return true; }
+        // Kategori tab
+        function aimCat(catKey, btn) {
+            aimCatActive = catKey;
+            document.querySelectorAll('.aim-ctab').forEach(b => b.classList.remove('on'));
+            if (btn) btn.classList.add('on');
+            document.getElementById('aimQ').value = '';
+            document.getElementById('aimLbl').classList.remove('on');
+            document.querySelectorAll('.aim-row').forEach(r => r.style.display = '');
+            document.querySelectorAll('.aim-cat-blk').forEach(b => {
+                b.style.display = (catKey === 'all' || b.id === catKey) ? '' : 'none';
+            });
+            document.getElementById('aimNoRes').classList.remove('on');
+        }
+
+        // Arama
+        function aimSearch(q) {
+            q = (q || '').toLowerCase().trim();
+            const lbl = document.getElementById('aimLbl');
+            if (!q) {
+                aimCat(aimCatActive, document.querySelector('.aim-ctab[data-c="' + aimCatActive + '"]'));
+                return;
+            }
+            document.querySelectorAll('.aim-ctab').forEach(b => b.classList.remove('on'));
+            document.querySelectorAll('.aim-cat-blk').forEach(b => b.style.display = '');
+            let n = 0;
+            document.querySelectorAll('.aim-row').forEach(r => {
+                const ok = r.dataset.kw.includes(q);
+                r.style.display = ok ? '' : 'none';
+                if (ok) n++;
+            });
+            document.querySelectorAll('.aim-cat-blk').forEach(b => {
+                const any = [...b.querySelectorAll('.aim-row')].some(r => r.style.display !== 'none');
+                b.style.display = any ? '' : 'none';
+            });
+            lbl.textContent = '"' + q + '" — ' + n + ' ürün';
+            lbl.classList.toggle('on', true);
+            document.getElementById('aimNoRes').classList.toggle('on', n === 0);
+        }
+
+        // Modal açıldığında reset
+        const _origOpenModal = window.openModal;
+        window.openModal = function(id) {
+            _origOpenModal(id);
+            if (id === 'addItemModal') {
+                document.querySelectorAll('.aim-row.picked').forEach(r => r.classList.remove('picked'));
+                document.getElementById('aimPh').style.display   = '';
+                document.getElementById('aimForm').style.display = 'none';
+                document.getElementById('aimQ').value            = '';
+                aimSearch('');
+                aimCat('all', document.querySelector('.aim-ctab[data-c="all"]'));
+                aimQty = 1;
+            }
+        };
 
         // ── ÖDEME MODAL: kalem seçimi ────────────────────────────────
         const piselState = {};

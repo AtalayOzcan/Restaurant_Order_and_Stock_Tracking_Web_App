@@ -212,7 +212,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> AddItem(int orderId, int menuItemId, int quantity, string? note)
         {
-            var order = await _db.Orders.FindAsync(orderId);
+            // ✅ #1 FIX: OrderItems dahil çek — aynı ürün varsa birleştireceğiz
+            var order = await _db.Orders
+                .Include(o => o.OrderItems)
+                .FirstOrDefaultAsync(o => o.OrderId == orderId);
             var mi = await _db.MenuItems.FindAsync(menuItemId);
 
             if (order == null || mi == null) { TempData["Error"] = "Adisyon veya ürün bulunamadı."; return RedirectToAction(nameof(Detail), new { id = orderId }); }
@@ -222,20 +225,38 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
-                var item = new OrderItem
+                var noteNorm = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+
+                // ✅ #1: Aynı ürün, iptal edilmemiş, henüz tamamen ödenmemiş,
+                //        aynı nota sahip kalem var mı? → varsa miktar ekle, yeni satır açma
+                var existing = order.OrderItems.FirstOrDefault(oi =>
+                    oi.MenuItemId == menuItemId &&
+                    oi.OrderItemStatus != "cancelled" &&
+                    oi.PaidQuantity < oi.OrderItemQuantity &&
+                    oi.OrderItemNote == noteNorm);
+
+                if (existing != null)
                 {
-                    OrderId = orderId,
-                    MenuItemId = menuItemId,
-                    OrderItemQuantity = quantity,
-                    PaidQuantity = 0,
-                    OrderItemUnitPrice = mi.MenuItemPrice,
-                    OrderItemLineTotal = mi.MenuItemPrice * quantity,
-                    OrderItemNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
-                    OrderItemStatus = "pending",
-                    OrderItemAddedAt = DateTime.UtcNow
-                };
-                _db.OrderItems.Add(item);
-                order.OrderTotalAmount += item.OrderItemLineTotal;
+                    existing.OrderItemQuantity += quantity;
+                    existing.OrderItemLineTotal = existing.OrderItemUnitPrice * existing.OrderItemQuantity;
+                }
+                else
+                {
+                    _db.OrderItems.Add(new OrderItem
+                    {
+                        OrderId = orderId,
+                        MenuItemId = menuItemId,
+                        OrderItemQuantity = quantity,
+                        PaidQuantity = 0,
+                        OrderItemUnitPrice = mi.MenuItemPrice,
+                        OrderItemLineTotal = mi.MenuItemPrice * quantity,
+                        OrderItemNote = noteNorm,
+                        OrderItemStatus = "pending",
+                        OrderItemAddedAt = DateTime.UtcNow
+                    });
+                }
+
+                order.OrderTotalAmount += mi.MenuItemPrice * quantity;
 
                 if (mi.TrackStock)
                 {
