@@ -102,10 +102,13 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                           && oi.IsWasted == true)
                 .SumAsync(oi => oi.OrderItemLineTotal);
 
+            
             // Kritik stok ürünleri
             var criticalItems = await _context.MenuItems
-                .Where(m => !m.IsDeleted && m.TrackStock
-                         && m.CriticalThreshold > 0
+                .Where(m => !m.IsDeleted
+                         && m.TrackStock
+                         // m.CriticalThreshold > 0 şartını >= 0 olarak değiştirdik
+                         && m.CriticalThreshold >= 0
                          && m.StockQuantity <= m.CriticalThreshold)
                 .Select(m => new CriticalStockItemDto
                 {

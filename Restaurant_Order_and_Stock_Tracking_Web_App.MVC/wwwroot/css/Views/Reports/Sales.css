@@ -1,0 +1,216 @@
+﻿
+.rpt-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+    .rpt-page-header h1 {
+        font-family: 'Syne',sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+    }
+
+    .rpt-page-header .sub {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 3px;
+    }
+
+/* ── Filter bar ── */
+.filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+}
+
+.preset-btn {
+    padding: 6px 14px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all .15s;
+}
+
+    .preset-btn:hover {
+        background: var(--surface2);
+        color: var(--text);
+    }
+
+    .preset-btn.active {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+    }
+
+.filter-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    margin: 0 4px;
+}
+
+.filter-date {
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+}
+
+    .filter-date:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+
+.filter-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    margin-left: auto;
+}
+
+.export-btns {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-export {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: opacity .2s;
+}
+
+.btn-csv {
+    background: rgba(16,185,129,.1);
+    color: #10b981;
+    border: 1px solid rgba(16,185,129,.25);
+}
+
+.btn-pdf {
+    background: rgba(239,68,68,.1);
+    color: #ef4444;
+    border: 1px solid rgba(239,68,68,.25);
+}
+
+    .btn-csv:hover, .btn-pdf:hover {
+        opacity: .8;
+    }
+
+/* ── Summary cards ── */
+.sum-grid {
+    display: grid;
+    grid-template-columns: repeat(4,1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+@media(max-width:900px) {
+    .sum-grid {
+        grid-template-columns: repeat(2,1fr);
+    }
+}
+
+@media(max-width:500px) {
+    .sum-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.sum-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+}
+
+    .sum-card .sum-val {
+        font-size: 22px;
+        font-weight: 800;
+        color: var(--text);
+        margin-bottom: 4px;
+    }
+
+    .sum-card .sum-label {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+/* ── Chart grid ── */
+.chart-row {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.chart-row2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+@@media(max-width:900px) {
+    .chart-row, .chart-row2 {
+        grid-template-columns: 1fr;
+    }
+}
+
+.chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+}
+
+.chart-card-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 14px;
+}
+
+.chart-container {
+    position: relative;
+    height: 250px;
+}
+
+    .chart-container.tall {
+        height: 300px;
+    }
+
+.loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+}
