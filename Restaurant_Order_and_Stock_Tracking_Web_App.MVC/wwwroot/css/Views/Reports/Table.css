@@ -1,0 +1,209 @@
+﻿
+.rpt-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+    .rpt-page-header h1 {
+        font-family: 'Syne',sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+    }
+
+    .rpt-page-header .sub {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 3px;
+    }
+
+.filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 16px;
+}
+
+.preset-btn {
+    padding: 6px 14px;
+    border-radius: 7px;
+    font-size: 13px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all .15s;
+}
+
+    .preset-btn:hover {
+        background: var(--surface2);
+        color: var(--text);
+    }
+
+    .preset-btn.active {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+    }
+
+.filter-sep {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+    margin: 0 4px;
+}
+
+.filter-date {
+    padding: 6px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-size: 13px;
+}
+
+.btn-csv {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    background: rgba(16,185,129,.1);
+    color: #10b981;
+    border: 1px solid rgba(16,185,129,.25);
+    cursor: pointer;
+    transition: opacity .2s;
+    margin-left: auto;
+}
+
+    .btn-csv:hover {
+        opacity: .8;
+    }
+
+.sum-grid {
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+@media(max-width:700px) {
+    .sum-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.sum-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+}
+
+    .sum-card .sum-val {
+        font-size: 22px;
+        font-weight: 800;
+        color: var(--text);
+        margin-bottom: 4px;
+    }
+
+    .sum-card .sum-label {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+.chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    margin-bottom: 14px;
+}
+
+.chart-card-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 14px;
+}
+
+.chart-container {
+    position: relative;
+    height: 260px;
+}
+
+.loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+    .data-table th {
+        padding: 10px 14px;
+        color: var(--text-muted);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        border-bottom: 1px solid var(--border);
+        background: var(--surface2);
+        text-align: left;
+    }
+
+    .data-table td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+    }
+
+    .data-table tr:last-child td {
+        border-bottom: none;
+    }
+
+    .data-table tr:hover td {
+        background: var(--surface2);
+    }
+
+.pill-accent {
+    display: inline-block;
+    background: rgba(249,115,22,.12);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-muted);
+    font-size: 13px;
+}

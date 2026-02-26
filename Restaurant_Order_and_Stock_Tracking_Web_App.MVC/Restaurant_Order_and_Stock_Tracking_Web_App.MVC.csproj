@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <Folder Include="Views\Orders\" />
+    <Folder Include="wwwroot\js\Views\Shared\" />
   </ItemGroup>
 
 </Project>

@@ -124,44 +124,8 @@
 
     </div>
 
-    <script>
-        // Sidebar collapse
-        const sidebar   = document.getElementById('sidebar');
-        const mainEl    = document.getElementById('main');
-        const toggleBtn = document.getElementById('toggleBtn');
-
-        toggleBtn.addEventListener('click', () => {
-            const collapsed = sidebar.classList.toggle('collapsed');
-            mainEl.classList.toggle('shifted', collapsed);
-            localStorage.setItem('sidebarCollapsed', collapsed);
-        });
-
-        if (localStorage.getItem('sidebarCollapsed') === 'true') {
-            sidebar.classList.add('collapsed');
-            mainEl.classList.add('shifted');
-        }
-
-        // Dark / Light toggle
-        const html        = document.documentElement;
-        const themeToggle = document.getElementById('themeToggle');
-
-        html.dataset.theme = localStorage.getItem('theme') || 'dark';
-
-        themeToggle.addEventListener('click', () => {
-            const next = html.dataset.theme === 'dark' ? 'light' : 'dark';
-            html.dataset.theme = next;
-            localStorage.setItem('theme', next);
-        });
-
-        // Canlı saat
-        function tick() {
-            document.getElementById('clock').textContent =
-                new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-        }
-        setInterval(tick, 1000);
-        tick();
-    </script>
-
+    </div>
+    <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 
 </body>
