@@ -23,87 +23,118 @@
 
         <nav class="nav-section">
 
-            <span class="nav-label">Ana Menü</span>
-
-            <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Dashboard" ? "active" : "")"
-               asp-controller="Dashboard" asp-action="Index">
-                <span class="nav-icon">📊</span>
-                <span class="nav-text">Dashboard</span>
-            </a>
-
-            <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Tables" ? "active" : "")"
-               asp-controller="Tables" asp-action="Index">
-                <span class="nav-icon">🪑</span>
-                <span class="nav-text">Masalar</span>
-                @if (ViewData["OccupiedCount"] is int oc && oc > 0)
-                {
-                    <span class="badge">@oc</span>
-                }
-            </a>
-
-            <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Orders" ? "active" : "")"
-               asp-controller="Orders" asp-action="Index">
-                <span class="nav-icon">🧾</span>
-                <span class="nav-text">Siparişler</span>
-                @if (ViewData["ActiveOrderCount"] is int ao && ao > 0)
-                {
-                    <span class="badge">@ao</span>
-                }
-            </a>
-
-            <span class="nav-label">Yönetim</span>
-
+            @* ── Admin: Dashboard, Masalar, Siparişler ─────────────── *@
             @if (User.IsInRole("Admin"))
             {
+                <span class="nav-label">Ana Menü</span>
+
+                <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Home" ? "active" : "")"
+                   asp-controller="Home" asp-action="Index">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">Dashboard</span>
+                </a>
+
+                <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Tables" ? "active" : "")"
+                   asp-controller="Tables" asp-action="Index">
+                    <span class="nav-icon">🪑</span>
+                    <span class="nav-text">Masalar</span>
+                    @if (ViewData["OccupiedCount"] is int oc && oc > 0)
+                    {
+                        <span class="badge">@oc</span>
+                    }
+                </a>
+
+                <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Orders" ? "active" : "")"
+                   asp-controller="Orders" asp-action="Index">
+                    <span class="nav-icon">🧾</span>
+                    <span class="nav-text">Siparişler</span>
+                    @if (ViewData["ActiveOrderCount"] is int ao && ao > 0)
+                    {
+                        <span class="badge">@ao</span>
+                    }
+                </a>
+
+                <span class="nav-label">Yönetim</span>
+
                 <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "User" ? "active" : "")"
                    asp-controller="User" asp-action="Index">
                     <span class="nav-icon">👥</span>
                     <span class="nav-text">Kullanıcılar</span>
                 </a>
+
+                <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Menu" ? "active" : "")"
+                   asp-controller="Menu" asp-action="Index">
+                    <span class="nav-icon">🍕</span>
+                    <span class="nav-text">Menü</span>
+                </a>
+
+                <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Category" ? "active" : "")"
+                   asp-controller="Category" asp-action="Index">
+                    <span class="nav-icon">🏷️</span>
+                    <span class="nav-text">Kategori</span>
+                </a>
+
+                <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Stock" ? "active" : "")"
+                   asp-controller="Stock" asp-action="Index">
+                    <span class="nav-icon">📦</span>
+                    <span class="nav-text">Stok</span>
+                </a>
+
+                <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Reports" ? "active" : "")"
+                   asp-controller="Reports" asp-action="Index">
+                    <span class="nav-icon">📈</span>
+                    <span class="nav-text">Raporlar</span>
+                </a>
+
+                <span class="nav-label">Sistem</span>
+
+                <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Settings" ? "active" : "")"
+                   asp-controller="Settings" asp-action="Index">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">Ayarlar</span>
+                </a>
             }
 
-            <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Menu" ? "active" : "")"
-               asp-controller="Menu" asp-action="Index">
-                <span class="nav-icon">🍕</span>
-                <span class="nav-text">Menü</span>
-            </a>
-            <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Category" ? "active" : "")"
-               asp-controller="Category" asp-action="Index">
-                <span class="nav-icon">🍕</span>
-                <span class="nav-text">Kategori</span>
-            </a>
+            @* ── Garson / Kasiyer: Sadece Masalar ve Siparişler ─────── *@
+            @if (User.IsInRole("Garson") || User.IsInRole("Kasiyer"))
+            {
+                <span class="nav-label">Ana Menü</span>
 
-            <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Stock" ? "active" : "")"
-               asp-controller="Stock" asp-action="Index">
-                <span class="nav-icon">📦</span>
-                <span class="nav-text">Stok</span>
-            </a>
+                <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Tables" ? "active" : "")"
+                   asp-controller="Tables" asp-action="Index">
+                    <span class="nav-icon">🪑</span>
+                    <span class="nav-text">Masalar</span>
+                    @if (ViewData["OccupiedCount"] is int oc2 && oc2 > 0)
+                    {
+                        <span class="badge">@oc2</span>
+                    }
+                </a>
 
-            <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Reports" ? "active" : "")"
-               asp-controller="Reports" asp-action="Index">
-                <span class="nav-icon">📈</span>
-                <span class="nav-text">Raporlar</span>
-            </a>
-
-            <span class="nav-label">Sistem</span>
-
-            <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Settings" ? "active" : "")"
-               asp-controller="Settings" asp-action="Index">
-                <span class="nav-icon">⚙️</span>
-                <span class="nav-text">Ayarlar</span>
-            </a>
+                <a class="nav-item @(ViewContext.RouteData.Values["controller"]?.ToString() == "Orders" ? "active" : "")"
+                   asp-controller="Orders" asp-action="Index">
+                    <span class="nav-icon">🧾</span>
+                    <span class="nav-text">Siparişler</span>
+                    @if (ViewData["ActiveOrderCount"] is int ao2 && ao2 > 0)
+                    {
+                        <span class="badge">@ao2</span>
+                    }
+                </a>
+            }
 
         </nav>
 
         <div class="sidebar-footer">
             @{
                 var currentUser = SignInManager.IsSignedIn(User)
-                    ? await UserManager.GetUserAsync(User)
-                    : null;
+                ? await UserManager.GetUserAsync(User)
+                : null;
                 var displayName = currentUser?.FullName?.Trim();
-                if (string.IsNullOrEmpty(displayName)) displayName = currentUser?.UserName ?? "Kullanıcı";
+                if (string.IsNullOrEmpty(displayName))
+                    displayName = currentUser?.UserName ?? "Kullanıcı";
                 var userInitial = displayName.Length > 0 ? displayName[0].ToString().ToUpper() : "?";
-                var userRole = User.IsInRole("Admin") ? "Yönetici" : "Garson";
+                var userRole = User.IsInRole("Admin") ? "Yönetici"
+                : User.IsInRole("Kasiyer") ? "Kasiyer"
+                : "Garson";
             }
             <div class="avatar">@userInitial</div>
             <div class="avatar-info">
@@ -151,7 +182,6 @@
 
     </div>
 
-    </div>
     <script src="~/js/site.js" asp-append-version="true"></script>
     @await RenderSectionAsync("Scripts", required: false)
 

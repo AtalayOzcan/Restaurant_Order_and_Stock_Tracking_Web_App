@@ -24,7 +24,12 @@ public class AuthController : Controller
     public IActionResult Login(string? returnUrl = null)
     {
         if (User.Identity?.IsAuthenticated == true)
-            return RedirectBasedOnRole();
+        {
+            if (User.IsInRole("Admin"))
+                return RedirectToAction("Index", "Home");
+
+            return RedirectToAction("Index", "Tables");
+        }
 
         ViewBag.ReturnUrl = returnUrl;
         return View();
@@ -48,21 +53,39 @@ public class AuthController : Controller
             return View(model);
         }
 
-        // Tekil oturum: önceki oturumu geçersiz kıl
-        await _userManager.UpdateSecurityStampAsync(user);
-
         var result = await _signInManager.PasswordSignInAsync(
             user, model.Password, model.RememberMe, lockoutOnFailure: false);
 
         if (result.Succeeded)
         {
+            // Tekil oturum: sonraki request'lerde eski cookie'ler geçersiz kalır
+            await _userManager.UpdateSecurityStampAsync(user);
+
             user.LastLoginAt = DateTime.UtcNow;
             await _userManager.UpdateAsync(user);
 
-            if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
-                return Redirect(returnUrl);
+            // PasswordSignInAsync sonrası User.IsInRole() çalışmaz (cookie
+            // henüz bu request'e işlenmedi) → DB'den oku
+            var roles = await _userManager.GetRolesAsync(user);
 
-            return RedirectBasedOnRole();
+            // Rolsüz kullanıcı — Admin panelinden düzeltilmeli
+            if (roles.Count == 0)
+            {
+                await _signInManager.SignOutAsync();
+                ModelState.AddModelError(string.Empty,
+                    "Hesabınıza henüz bir rol atanmamış. Lütfen Admin ile iletişime geçin.");
+                return View(model);
+            }
+
+            // Admin → Dashboard, diğer tüm roller (Garson, Kasiyer) → Masalar
+            if (roles.Contains("Admin"))
+            {
+                if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
+                    return Redirect(returnUrl);
+                return RedirectToAction("Index", "Home");
+            }
+
+            return RedirectToAction("Index", "Tables");
         }
 
         ModelState.AddModelError(string.Empty, "Kullanıcı adı veya şifre hatalı.");
@@ -83,14 +106,5 @@ public class AuthController : Controller
     public IActionResult AccessDenied()
     {
         return View();
-    }
-
-    // ── Yardımcı: Rol'e göre yönlendir ──────────────────────────────
-    private IActionResult RedirectBasedOnRole()
-    {
-        if (User.IsInRole("Admin"))
-            return RedirectToAction("Index", "Home");
-
-        return RedirectToAction("Index", "Tables");
     }
 }

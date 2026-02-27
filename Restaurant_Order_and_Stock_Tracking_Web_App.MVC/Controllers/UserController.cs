@@ -11,6 +11,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers;
 [Authorize(Roles = "Admin")]
 public class UserController : Controller
 {
+    // ── Sistemde izin verilen roller — tek kaynak gerçek ────────────
+    private static readonly string[] AllowedRoles = { "Admin", "Garson", "Kasiyer" };
+
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly RestaurantDbContext _db;
@@ -43,7 +46,7 @@ public class UserController : Controller
                 FullName = user.FullName,
                 Email = user.Email,
                 PhoneNumber = user.PhoneNumber,
-                Role = roles.FirstOrDefault() ?? "—",
+                Role = roles.FirstOrDefault() ?? "— Rol Yok —",
                 CreatedAt = user.CreatedAt,
                 LastLoginAt = user.LastLoginAt
             });
@@ -53,10 +56,10 @@ public class UserController : Controller
     }
 
     // ── GET /User/Create ──────────────────────────────────────────────
-    public async Task<IActionResult> Create()
+    public IActionResult Create()
     {
         ViewData["Title"] = "Yeni Kullanıcı";
-        ViewBag.Roles = await _roleManager.Roles.Select(r => r.Name).ToListAsync();
+        ViewBag.Roles = AllowedRoles; // DB'ye bağımlı değil, her zaman 3 rol
         return View();
     }
 
@@ -65,18 +68,26 @@ public class UserController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(UserCreateViewModel model)
     {
+        // Rol izin listesi dışında bir değer form'dan gönderilmeye çalışılırsa reddet
+        if (!string.IsNullOrEmpty(model.Role) && !AllowedRoles.Contains(model.Role))
+            ModelState.AddModelError("Role", "Geçersiz rol seçimi.");
+
         if (!ModelState.IsValid)
         {
-            ViewBag.Roles = await _roleManager.Roles.Select(r => r.Name).ToListAsync();
+            ViewBag.Roles = AllowedRoles;
             return View(model);
         }
 
         if (await _userManager.FindByNameAsync(model.UserName) != null)
         {
             ModelState.AddModelError("UserName", "Bu kullanıcı adı zaten kullanılıyor.");
-            ViewBag.Roles = await _roleManager.Roles.Select(r => r.Name).ToListAsync();
+            ViewBag.Roles = AllowedRoles;
             return View(model);
         }
+
+        // Rol DB'de yoksa seed edip oluştur (her ortamda güvenli)
+        if (!await _roleManager.RoleExistsAsync(model.Role))
+            await _roleManager.CreateAsync(new IdentityRole(model.Role));
 
         var user = new ApplicationUser
         {
@@ -88,19 +99,26 @@ public class UserController : Controller
             EmailConfirmed = true
         };
 
-        var result = await _userManager.CreateAsync(user, model.Password);
-        if (!result.Succeeded)
+        var createResult = await _userManager.CreateAsync(user, model.Password);
+        if (!createResult.Succeeded)
         {
-            foreach (var e in result.Errors)
+            foreach (var e in createResult.Errors)
                 ModelState.AddModelError(string.Empty, e.Description);
-            ViewBag.Roles = await _roleManager.Roles.Select(r => r.Name).ToListAsync();
+            ViewBag.Roles = AllowedRoles;
             return View(model);
         }
 
-        if (!string.IsNullOrEmpty(model.Role))
-            await _userManager.AddToRoleAsync(user, model.Role);
+        var roleResult = await _userManager.AddToRoleAsync(user, model.Role);
+        if (!roleResult.Succeeded)
+        {
+            await _userManager.DeleteAsync(user); // işlemi geri al
+            foreach (var e in roleResult.Errors)
+                ModelState.AddModelError(string.Empty, $"Rol ataması başarısız: {e.Description}");
+            ViewBag.Roles = AllowedRoles;
+            return View(model);
+        }
 
-        TempData["Success"] = $"'{user.FullName}' kullanıcısı oluşturuldu.";
+        TempData["Success"] = $"'{user.FullName}' kullanıcısı '{model.Role}' rolüyle oluşturuldu.";
         return RedirectToAction(nameof(Index));
     }
 
@@ -112,9 +130,12 @@ public class UserController : Controller
 
         var roles = await _userManager.GetRolesAsync(user);
         ViewData["Title"] = "Kullanıcı Düzenle";
-        ViewBag.Roles = await _roleManager.Roles.Select(r => r.Name).ToListAsync();
+        ViewBag.Roles = AllowedRoles;
 
-        var model = new UserEditViewModel
+        if (!roles.Any())
+            TempData["Warning"] = "Bu kullanıcıya henüz rol atanmamış! Aşağıdan bir rol seçip kaydedin.";
+
+        return View(new UserEditViewModel
         {
             Id = user.Id,
             UserName = user.UserName ?? "",
@@ -122,9 +143,7 @@ public class UserController : Controller
             Email = user.Email,
             PhoneNumber = user.PhoneNumber,
             Role = roles.FirstOrDefault() ?? ""
-        };
-
-        return View(model);
+        });
     }
 
     // ── POST /User/Edit ───────────────────────────────────────────────
@@ -132,9 +151,12 @@ public class UserController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(UserEditViewModel model)
     {
+        if (!string.IsNullOrEmpty(model.Role) && !AllowedRoles.Contains(model.Role))
+            ModelState.AddModelError("Role", "Geçersiz rol seçimi.");
+
         if (!ModelState.IsValid)
         {
-            ViewBag.Roles = await _roleManager.Roles.Select(r => r.Name).ToListAsync();
+            ViewBag.Roles = AllowedRoles;
             return View(model);
         }
 
@@ -143,11 +165,10 @@ public class UserController : Controller
 
         if (user.UserName != model.UserName)
         {
-            var existing = await _userManager.FindByNameAsync(model.UserName);
-            if (existing != null)
+            if (await _userManager.FindByNameAsync(model.UserName) != null)
             {
                 ModelState.AddModelError("UserName", "Bu kullanıcı adı zaten kullanılıyor.");
-                ViewBag.Roles = await _roleManager.Roles.Select(r => r.Name).ToListAsync();
+                ViewBag.Roles = AllowedRoles;
                 return View(model);
             }
         }
@@ -162,15 +183,26 @@ public class UserController : Controller
         {
             foreach (var e in updateResult.Errors)
                 ModelState.AddModelError(string.Empty, e.Description);
-            ViewBag.Roles = await _roleManager.Roles.Select(r => r.Name).ToListAsync();
+            ViewBag.Roles = AllowedRoles;
             return View(model);
         }
 
         var currentRoles = await _userManager.GetRolesAsync(user);
         await _userManager.RemoveFromRolesAsync(user, currentRoles);
-        if (!string.IsNullOrEmpty(model.Role))
-            await _userManager.AddToRoleAsync(user, model.Role);
 
+        if (!await _roleManager.RoleExistsAsync(model.Role))
+            await _roleManager.CreateAsync(new IdentityRole(model.Role));
+
+        var roleResult = await _userManager.AddToRoleAsync(user, model.Role);
+        if (!roleResult.Succeeded)
+        {
+            foreach (var e in roleResult.Errors)
+                ModelState.AddModelError(string.Empty, $"Rol ataması başarısız: {e.Description}");
+            ViewBag.Roles = AllowedRoles;
+            return View(model);
+        }
+
+        // Rol değiştiyse mevcut oturumu güvenli şekilde geçersiz kıl
         await _userManager.UpdateSecurityStampAsync(user);
 
         TempData["Success"] = $"'{user.FullName}' güncellendi.";
@@ -215,32 +247,28 @@ public class UserController : Controller
         var user = await _userManager.FindByIdAsync(id);
         if (user == null) return NotFound();
 
-        // Admin kendini silemez
-        var currentUserId = _userManager.GetUserId(User);
-        if (user.Id == currentUserId)
+        if (user.Id == _userManager.GetUserId(User))
         {
             TempData["Error"] = "Kendi hesabınızı silemezsiniz.";
             return RedirectToAction(nameof(Index));
         }
 
-        // Son Admin koruması
         var roles = await _userManager.GetRolesAsync(user);
         if (roles.Contains("Admin"))
         {
             var adminCount = (await _userManager.GetUsersInRoleAsync("Admin")).Count;
             if (adminCount <= 1)
             {
-                TempData["Error"] = "Sistemde en az bir Admin bulunmalıdır. Bu kullanıcı silinemez.";
+                TempData["Error"] = "Sistemde en az bir Admin bulunmalıdır.";
                 return RedirectToAction(nameof(Index));
             }
         }
 
-        // Açık siparişi olan garson koruması
         var hasActiveOrders = await _db.Orders
             .AnyAsync(o => o.OrderOpenedBy == user.FullName && o.OrderStatus == "open");
         if (hasActiveOrders)
         {
-            TempData["Error"] = $"'{user.FullName}' adına açık siparişler bulunuyor. Önce siparişleri kapatın.";
+            TempData["Error"] = $"'{user.FullName}' adına açık siparişler var. Önce kapatın.";
             return RedirectToAction(nameof(Index));
         }
 

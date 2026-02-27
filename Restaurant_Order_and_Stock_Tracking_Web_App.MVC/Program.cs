@@ -48,7 +48,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
                 options.SlidingExpiration = true;
             });
 
-            // ── Security Stamp (Validation Interval Buraya Taşındı) ──────
+            // ── Security Stamp Validation ────────────────────────────────
             builder.Services.Configure<SecurityStampValidatorOptions>(options =>
             {
                 options.ValidationInterval = TimeSpan.FromSeconds(30);
@@ -71,7 +71,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
 
             app.UseHttpsRedirection();
             app.UseRouting();
-
             app.UseAuthentication();   // UseAuthorization'dan ÖNCE
             app.UseAuthorization();
 
@@ -81,36 +80,18 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
                 pattern: "{controller=Home}/{action=Index}/{id?}")
                 .WithStaticAssets();
 
-            //// ── İlk Admin Seed ───────────────────────────────────────────────
-            //using (var scope = app.Services.CreateScope())
-            //{
-            //    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
-            //    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-
-            //    // Rolleri oluştur
-            //    string[] roles = { "Admin", "Waiter", "Kitchen" };
-            //    foreach (var role in roles)
-            //    {
-            //        if (!await roleManager.RoleExistsAsync(role))
-            //            await roleManager.CreateAsync(new IdentityRole(role));
-            //    }
-
-            //    // Admin kullanıcısı yoksa oluştur
-            //    var adminUser = await userManager.FindByNameAsync("admin");
-            //    if (adminUser == null)
-            //    {
-            //        adminUser = new ApplicationUser
-            //        {
-            //            UserName = "admin",
-            //            Email = "admin@restaurant.com",
-            //            FullName = "Admin",
-            //            CreatedAt = DateTime.UtcNow
-            //        };
-            //        await userManager.CreateAsync(adminUser, "admin123");
-            //        await userManager.AddToRoleAsync(adminUser, "Admin");
-            //    }
-            //}
-            //// ────────────────────────────────────────────────────────────────
+            // ── Rol Seed: Uygulama başlarken Admin/Garson/Kasiyer rollerini garantile ──
+            // Rol yoksa oluşturur; varsa dokunmaz. Her deploy'da güvenle çalışır.
+            using (var scope = app.Services.CreateScope())
+            {
+                var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+                foreach (var roleName in new[] { "Admin", "Garson", "Kasiyer" })
+                {
+                    if (!await roleManager.RoleExistsAsync(roleName))
+                        await roleManager.CreateAsync(new IdentityRole(roleName));
+                }
+            }
+            // ─────────────────────────────────────────────────────────────────────────
 
             app.Run();
         }

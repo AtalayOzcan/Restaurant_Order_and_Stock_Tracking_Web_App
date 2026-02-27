@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 {
-    [Authorize(Roles = "Admin,Garson")]
+    [Authorize(Roles = "Admin,Garson,Kasiyer")]
     public class TablesController : Controller
     {
         private readonly RestaurantDbContext _db;
