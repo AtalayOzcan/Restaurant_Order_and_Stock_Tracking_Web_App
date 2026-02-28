@@ -1,27 +1,48 @@
 ﻿document.addEventListener("DOMContentLoaded", () => {
 
-    // ── 1. C# Verilerini HTML'den (JSON Adacığından) Oku ──
+    // ── 1. C# Verilerini HTML'den (JSON Adacığından) Oku ──────────────────────
     const configEl = document.getElementById('wasteReportConfig');
     let state = { preset: 'today', from: '', to: '' };
-
     if (configEl) {
         state = JSON.parse(configEl.textContent);
     }
 
-    // ── Ortak Fonksiyonlar ──
+    // ── Ortak Yardımcılar ──────────────────────────────────────────────────────
     let charts = {};
 
     function destroyChart(id) {
-        if (charts[id]) {
-            charts[id].destroy();
-            delete charts[id];
-        }
+        if (charts[id]) { charts[id].destroy(); delete charts[id]; }
     }
 
     function isDark() { return document.documentElement.dataset.theme !== 'light'; }
     function gridColor() { return isDark() ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.06)'; }
     function textColor() { return isDark() ? '#687080' : '#8A95A3'; }
 
+    // ── Para Birimi Formatlama ─────────────────────────────────────────────────
+    function formatCurrency(val) {
+        return '₺' + Number(val || 0).toLocaleString('tr-TR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+
+    // ── FIX: Widget DOM Güncellemesi ───────────────────────────────────────────
+    // Eski yapı: navigatePage() → window.location → full page reload.
+    //   Grafikler AJAX ile yüklenirken widget'lar Razor'ın ilk render değerinde
+    //   kalıyordu; filtre değiştikçe sayfa tamamen yeniden yüklenmek zorundaydı.
+    // Yeni yapı: applyFilter() → loadWasteCharts() AJAX → hem grafikler hem de
+    //   3 özet kart aynı fetch cevabıyla anlık güncellenir (Sales.js ile aynı pattern).
+    function updateSummaryCards(data) {
+        const total = document.getElementById('wv-total');
+        const order = document.getElementById('wv-order');
+        const stock = document.getElementById('wv-stock');
+
+        if (total) total.textContent = formatCurrency(data.totalWasteLoss);
+        if (order) order.textContent = formatCurrency(data.orderWasteTotal);
+        if (stock) stock.textContent = formatCurrency(data.stockLogWasteTotal);
+    }
+
+    // ── QueryString Oluşturucu ─────────────────────────────────────────────────
     function buildQs() {
         const q = new URLSearchParams({ preset: state.preset });
         if (state.preset === 'custom') {
@@ -31,11 +52,13 @@
         return q.toString();
     }
 
-    function navigatePage() {
-        window.location = `/Reports/CancelAndWaste?${buildQs()}`;
+    // ── Filtre Uygulama: AJAX (full reload yok) ────────────────────────────────
+    function applyFilter() {
+        history.replaceState(null, '', `/Reports/CancelAndWaste?${buildQs()}`);
+        loadWasteCharts();
     }
 
-    // ── Accordion Toggle (Eğer HTML'de onclick="toggleAcc(this)" varsa global yapalım) ──
+    // ── Accordion Toggle ───────────────────────────────────────────────────────
     window.toggleAcc = function (header) {
         const body = header.nextElementSibling;
         body.classList.toggle('open');
@@ -47,7 +70,7 @@
         }
     };
 
-    // ── Olay Dinleyicileri (Event Listeners) ──
+    // ── Olay Dinleyicileri ─────────────────────────────────────────────────────
     document.querySelectorAll('.preset-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
@@ -57,28 +80,21 @@
             const isCustom = state.preset === 'custom';
             const dateFromEl = document.getElementById('dateFrom');
             const dateToEl = document.getElementById('dateTo');
-
             if (dateFromEl) dateFromEl.style.display = isCustom ? '' : 'none';
             if (dateToEl) dateToEl.style.display = isCustom ? '' : 'none';
 
-            if (!isCustom) navigatePage();
+            if (!isCustom) applyFilter();  // eski: navigatePage() → full reload
         });
     });
 
     const dateFromEl = document.getElementById('dateFrom');
     if (dateFromEl) {
-        dateFromEl.addEventListener('change', e => {
-            state.from = e.target.value;
-            navigatePage();
-        });
+        dateFromEl.addEventListener('change', e => { state.from = e.target.value; applyFilter(); });
     }
 
     const dateToEl = document.getElementById('dateTo');
     if (dateToEl) {
-        dateToEl.addEventListener('change', e => {
-            state.to = e.target.value;
-            navigatePage();
-        });
+        dateToEl.addEventListener('change', e => { state.to = e.target.value; applyFilter(); });
     }
 
     const btnCsv = document.getElementById('btnCsv');
@@ -88,19 +104,25 @@
         });
     }
 
-    // ── Grafik Yükleme (Fetch) ──
+    // ── Grafik + Widget Yükleme (Fetch) ───────────────────────────────────────
     async function loadWasteCharts() {
+        const srcLoading = document.getElementById('sourceLoading');
+        const prodLoading = document.getElementById('productLoading');
+        if (srcLoading) srcLoading.style.display = 'flex';
+        if (prodLoading) prodLoading.style.display = 'flex';
+
         try {
             const res = await fetch(`/Reports/GetWasteChartData?${buildQs()}`);
             if (!res.ok) throw new Error("Veri çekilemedi.");
             const data = await res.json();
 
-            const srcLoading = document.getElementById('sourceLoading');
-            const prodLoading = document.getElementById('productLoading');
             if (srcLoading) srcLoading.style.display = 'none';
             if (prodLoading) prodLoading.style.display = 'none';
 
-            // ── Kaynak Dağılımı (Doughnut) ──
+            // ── FIX: Fetch cevabıyla 3 özet kartı anında güncelle ─────────────
+            updateSummaryCards(data);
+
+            // ── Kaynak Dağılımı (Doughnut) ────────────────────────────────────
             const ctxSource = document.getElementById('wasteSourceChart');
             if (ctxSource) {
                 destroyChart('wasteSource');
@@ -130,10 +152,9 @@
                 });
             }
 
-            // ── En Çok Fire Veren Ürünler (Bar) ──
+            // ── En Çok Fire Veren Ürünler (Bar) ──────────────────────────────
             const top = data.topProducts || [];
             const ctxProduct = document.getElementById('wasteProductChart');
-
             if (ctxProduct) {
                 destroyChart('wasteProduct');
                 charts['wasteProduct'] = new Chart(ctxProduct.getContext('2d'), {
@@ -169,10 +190,13 @@
             }
         } catch (error) {
             console.error("Grafik yükleme hatası:", error);
-            // İsteğe bağlı olarak kullanıcıya bir hata mesajı gösterebilirsin
+            const srcLoading2 = document.getElementById('sourceLoading');
+            const prodLoading2 = document.getElementById('productLoading');
+            if (srcLoading2) srcLoading2.style.display = 'none';
+            if (prodLoading2) prodLoading2.style.display = 'none';
         }
     }
 
-    // Sayfa yüklendiğinde grafikleri yüklemeyi başlat
+    // ── İlk Yükleme ───────────────────────────────────────────────────────────
     loadWasteCharts();
 });

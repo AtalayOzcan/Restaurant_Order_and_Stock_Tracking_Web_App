@@ -30,15 +30,15 @@
 <!-- ── Özet Kartlar ── -->
 <div class="sum-grid">
     <div class="sum-card red">
-        <div class="sum-val">₺@Model.TotalWasteLoss.ToString("N2")</div>
+        <div class="sum-val" id="wv-total">₺@Model.TotalWasteLoss.ToString("N2")</div>
         <div class="sum-label">Toplam Fire Tutarı</div>
     </div>
     <div class="sum-card amber">
-        <div class="sum-val">₺@Model.OrderWasteTotal.ToString("N2")</div>
+        <div class="sum-val" id="wv-order">₺@Model.OrderWasteTotal.ToString("N2")</div>
         <div class="sum-label">Sipariş Kaynaklı Fire</div>
     </div>
     <div class="sum-card blue">
-        <div class="sum-val">₺@Model.StockLogWasteTotal.ToString("N2")</div>
+        <div class="sum-val" id="wv-stock">₺@Model.StockLogWasteTotal.ToString("N2")</div>
         <div class="sum-label">Stok Kaynaklı Fire</div>
     </div>
 </div>

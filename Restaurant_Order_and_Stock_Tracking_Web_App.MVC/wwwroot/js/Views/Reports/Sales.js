@@ -92,6 +92,24 @@
         await Promise.all([loadTrend(), loadPayment(), loadProducts(), loadCategory()]);
     }
 
+    // ── Para birimi formatlama ────────────────────────────────────────────────────
+    function formatCurrency(val) {
+        return '₺' + Number(val).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    // ── Widget güncelleme (FIX: filtre değiştiğinde 4 kart statik kalıyordu) ────
+    function updateSummaryCards(data) {
+        const gross = document.getElementById('sv-gross');
+        const net = document.getElementById('sv-net');
+        const diff = document.getElementById('sv-diff');
+        const count = document.getElementById('sv-count');
+
+        if (gross) gross.textContent = formatCurrency(data.totalGross ?? 0);
+        if (net) net.textContent = formatCurrency(data.totalCollected ?? 0);
+        if (diff) diff.textContent = formatCurrency(data.difference ?? 0);
+        if (count) count.textContent = data.orderCount ?? 0;
+    }
+
     async function loadTrend() {
         const loadingEl = document.getElementById('trendLoading');
         if (loadingEl) loadingEl.style.display = 'flex';
@@ -100,6 +118,9 @@
             const res = await fetch(`/Reports/GetSalesChartData?${buildQs()}`);
             const data = await res.json();
             if (loadingEl) loadingEl.style.display = 'none';
+
+            // ── FIX: Widget'ları yeni tarih aralığının toplamlarıyla güncelle ──
+            updateSummaryCards(data);
 
             destroyChart('trend');
             const canvas = document.getElementById('trendChart');

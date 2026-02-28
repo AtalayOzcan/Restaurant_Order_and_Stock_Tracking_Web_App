@@ -488,7 +488,19 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                     .Select(h => payments.Where(p => p.PaymentsPaidAt.ToLocalTime().Hour == h)
                                          .Sum(p => p.PaymentsAmount))
                     .ToList();
-                return Json(new { labels, grossData, netData });
+                // ── FIX: Widget toplamları — filtre değiştiğinde 4 kart da güncellenir ──
+                var totalGross = orders.Sum(o => o.OrderTotalAmount);
+                var totalCollected = payments.Sum(p => p.PaymentsAmount);
+                return Json(new
+                {
+                    labels,
+                    grossData,
+                    netData,
+                    totalGross,
+                    totalCollected,
+                    difference = totalGross - totalCollected,
+                    orderCount = orders.Count
+                });
             }
             else
             {
@@ -512,7 +524,19 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                         return payments.Where(p => p.PaymentsPaidAt >= d && p.PaymentsPaidAt < d2)
                                        .Sum(p => p.PaymentsAmount);
                     }).ToList();
-                return Json(new { labels, grossData, netData });
+                // ── FIX: Widget toplamları ──
+                var totalGross = orders.Sum(o => o.OrderTotalAmount);
+                var totalCollected = payments.Sum(p => p.PaymentsAmount);
+                return Json(new
+                {
+                    labels,
+                    grossData,
+                    netData,
+                    totalGross,
+                    totalCollected,
+                    difference = totalGross - totalCollected,
+                    orderCount = orders.Count
+                });
             }
         }
 
@@ -641,11 +665,17 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 .Take(10)
                 .ToListAsync();
 
+            // FIX: Widget toplamları — filtre değiştiğinde 3 kart da AJAX ile güncellenir
+            var totalWasteLoss = orderWasteTotal + stockLogWasteTotal;
+
             return Json(new
             {
+                // Grafik dizileri (değişmedi)
                 orderWasteTotal,
                 stockLogWasteTotal,
-                topProducts = topProducts.Select(x => new { x.Name, x.Loss }).ToList()
+                topProducts = topProducts.Select(x => new { x.Name, x.Loss }).ToList(),
+                // Yeni: widget'lar için özet toplamlar
+                totalWasteLoss
             });
         }
 
