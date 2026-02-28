@@ -278,6 +278,9 @@
     </div> @* sol panel kapanış *@
 
     @* ── SAĞ PANEL ── *@
+
+    @if (User.IsInRole("Admin") || User.IsInRole("Kasiyer"))
+    {
     <div class="pay-panel">
         <div class="pay-head"><div class="pay-title">Ödeme Durumu</div></div>
         <div class="pay-summary">
@@ -358,6 +361,9 @@
             }
         </div>
     </div>
+
+    }
+
 </div> @* *@
 
 

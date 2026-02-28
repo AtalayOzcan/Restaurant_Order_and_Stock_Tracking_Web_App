@@ -169,7 +169,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         // ✅ YENİ #4: Masa birleştirme
         // sourceTableId adisyonu → targetTableId adisyonuna birleşir
         // Aynı MenuItemId ise miktarlar toplanır, ayrı satır açılmaz
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin,Garson,Kasiyer")]
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> MergeOrder(int sourceTableId, int targetTableId)

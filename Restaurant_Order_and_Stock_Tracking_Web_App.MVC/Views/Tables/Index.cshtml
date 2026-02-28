@@ -31,7 +31,10 @@
             <button class="filter-btn" data-filter="occupied">Dolu</button>
             <button class="filter-btn" data-filter="reserved">Rezerve</button>
         </div>
+        @if (User.IsInRole("Admin"))
+{
         <button class="btn-add" onclick="openModal('addModal')">＋ Masa Ekle</button>
+}
     </div>
 </div>
 
@@ -165,7 +168,8 @@ else
         }
     </div>
 }
-
+@if (User.IsInRole("Admin"))
+    {
 @* ── MASA EKLE MODAL ── *@
 <div class="modal-overlay" id="addModal">
     <div class="modal">
@@ -189,7 +193,7 @@ else
         </form>
     </div>
 </div>
-
+}
 @* ── REZERVE ET MODAL ── *@
 <div class="modal-overlay" id="reserveModal">
     <div class="modal">
