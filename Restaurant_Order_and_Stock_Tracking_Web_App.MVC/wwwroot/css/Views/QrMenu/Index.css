@@ -1,0 +1,762 @@
+﻿/* ═══════════════════════════════════════════════════════════════════════
+   QR Menü — Minimalist Fine-Dining CSS  (v2 — Okunabilirlik Güncellemesi)
+   Dosya yolu : wwwroot/css/Views/QrMenu/Index.css
+   Yazı tipleri: Cormorant Garamond (başlık/serif) · Montserrat (açıklama/sans)
+   Renk paleti : Krem #FAF9F6 · Derin Siyah #1C1614 · Altın/Bronz #C5A059
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS Custom Properties ──────────────────────────────────────────── */
+:root {
+    --cream: #FAF9F6;
+    --cream-2: #F3EFE8;
+    --cream-3: #EDE8DF;
+    /* ── v2: Daha derin, sıcak siyah (#1C1614) ── */
+    --ink: #1C1614;
+    --ink-65: rgba(28, 22, 20, 0.65);
+    --ink-40: rgba(28, 22, 20, 0.40);
+    --ink-20: rgba(28, 22, 20, 0.20);
+    --ink-10: rgba(28, 22, 20, 0.10);
+    --gold: #C5A059;
+    --gold-lt: #D4B57A;
+    --gold-dk: #A8833D;
+    --gold-glow: rgba(197, 160, 89, 0.16);
+    --serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+    --sans: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+    --radius-sm: 4px;
+    --radius: 8px;
+    --transition: all 0.25s ease;
+    --max-w: 680px;
+}
+
+/* ── Reset & Base ───────────────────────────────────────────────────── */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    font-family: var(--sans);
+    background-color: var(--cream);
+    color: var(--ink);
+    min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23noise)' opacity='0.025'/%3E%3C/svg%3E");
+}
+
+/* ── Page Wrapper ───────────────────────────────────────────────────── */
+.qr-page {
+    max-width: var(--max-w);
+    margin: 0 auto;
+    padding: 0 0 100px;
+    position: relative;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   HEADER
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qr-header {
+    text-align: center;
+    padding: calc(44px + env(safe-area-inset-top, 0px)) 28px 32px;
+    border-bottom: 1px solid var(--ink-20);
+    position: relative;
+    background: var(--cream);
+}
+
+    .qr-header::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(to right, transparent 0%, var(--gold) 35%, var(--gold-lt) 50%, var(--gold) 65%, transparent 100%);
+    }
+
+.header-eyebrow {
+    font-family: var(--sans);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 16px;
+}
+
+.header-restaurant-name {
+    font-family: var(--serif);
+    font-size: clamp(32px, 8vw, 48px);
+    font-weight: 400;
+    letter-spacing: -0.5px;
+    line-height: 1.1;
+    color: var(--ink);
+    margin-bottom: 10px;
+}
+
+    .header-restaurant-name em {
+        font-style: italic;
+        color: var(--gold);
+    }
+
+.header-table {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--ink-40);
+    margin-top: 4px;
+}
+
+    .header-table::before,
+    .header-table::after {
+        content: '—';
+        color: var(--ink-20);
+    }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ŞEFİN NOTU
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.chef-note-section {
+    margin: 32px 28px;
+    padding: 28px 28px 24px;
+    border: 1px solid var(--ink-20);
+    border-radius: var(--radius-sm);
+    position: relative;
+    background: var(--cream);
+}
+
+    .chef-note-section::before,
+    .chef-note-section::after {
+        content: '';
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        border-color: var(--gold);
+        border-style: solid;
+    }
+
+    .chef-note-section::before {
+        top: -1px;
+        left: -1px;
+        border-width: 1.5px 0 0 1.5px;
+    }
+
+    .chef-note-section::after {
+        bottom: -1px;
+        right: -1px;
+        border-width: 0 1.5px 1.5px 0;
+    }
+
+.chef-note-inner {
+    position: relative;
+}
+
+    .chef-note-inner::before,
+    .chef-note-inner::after {
+        content: '';
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        border-color: var(--gold);
+        border-style: solid;
+    }
+
+    .chef-note-inner::before {
+        top: -29px;
+        right: -29px;
+        border-width: 1.5px 1.5px 0 0;
+    }
+
+    .chef-note-inner::after {
+        bottom: -25px;
+        left: -29px;
+        border-width: 0 0 1.5px 1.5px;
+    }
+
+.chef-note-label {
+    font-family: var(--sans);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--gold);
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.chef-note-quote {
+    font-family: var(--serif);
+    font-size: clamp(17px, 4.5vw, 20px);
+    font-weight: 400; /* v2: 300 → 400 */
+    font-style: italic;
+    line-height: 1.85; /* v2: daha geniş satır aralığı */
+    color: var(--ink-65); /* v2: yeni ink-65 değişkeni */
+    text-align: center;
+    position: relative;
+}
+
+    .chef-note-quote::before {
+        content: '\201C';
+        font-family: var(--serif);
+        font-size: 72px;
+        color: var(--gold-glow);
+        position: absolute;
+        top: -28px;
+        left: -8px;
+        line-height: 1;
+        pointer-events: none;
+    }
+
+.chef-note-author {
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold);
+    text-align: center;
+    margin-top: 16px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   GARSON ÇAĞIR
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.waiter-section {
+    padding: 8px 28px 20px;
+    display: flex;
+    justify-content: center;
+}
+
+.btn-waiter {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    background: transparent;
+    border: 1px solid var(--ink-20);
+    color: var(--ink-65);
+    padding: 11px 26px;
+    font-family: var(--sans);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+    .btn-waiter:hover:not(:disabled) {
+        background: var(--ink);
+        border-color: var(--ink);
+        color: var(--cream);
+    }
+
+    .btn-waiter:active:not(:disabled) {
+        transform: scale(0.97);
+    }
+
+    .btn-waiter:disabled {
+        border-color: var(--gold);
+        color: var(--gold);
+        cursor: default;
+        opacity: 0.85;
+    }
+
+.btn-waiter-icon {
+    font-size: 14px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   KATEGORİ FİLTRE NAV — Sticky + Yatay Kaydırmalı
+   (v2: "Tümü" butonu eklendi, filtreleme mantığıyla çalışır)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.cat-nav-wrap {
+    position: sticky;
+    top: 0;
+    z-index: 80;
+    background: rgba(250, 249, 246, 0.97);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--ink-10);
+    padding: 0 28px;
+    /* Hafif gölge — diğer içerikten ayrışması için */
+    box-shadow: 0 2px 12px rgba(28, 22, 20, 0.06);
+}
+
+.cat-nav {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    max-width: var(--max-w);
+    margin: 0 auto;
+    /* Kenarlardan soluk kaybolma efekti */
+    -webkit-mask-image: linear-gradient(to right, transparent 0, black 20px, black calc(100% - 20px), transparent 100%);
+    mask-image: linear-gradient(to right, transparent 0, black 20px, black calc(100% - 20px), transparent 100%);
+}
+
+    .cat-nav::-webkit-scrollbar {
+        display: none;
+    }
+
+.cat-nav-btn {
+    flex-shrink: 0;
+    padding: 15px 0;
+    margin-right: 26px;
+    background: none;
+    border: none;
+    /* Altın çizgi — aktif değilken şeffaf */
+    border-bottom: 1.5px solid transparent;
+    font-family: var(--sans);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--ink-40);
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease;
+    white-space: nowrap;
+    position: relative;
+    bottom: -1px; /* border-bottom'u nav alt çizgisiyle örtüştür */
+}
+
+    .cat-nav-btn:last-child {
+        margin-right: 0;
+    }
+
+    /* ── AKTİF: altın rengi yazı + altın alt çizgi ── */
+    .cat-nav-btn.active {
+        color: var(--gold);
+        border-bottom-color: var(--gold);
+        font-weight: 600;
+    }
+
+    .cat-nav-btn:hover:not(.active) {
+        color: var(--ink-65);
+    }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MENÜ BÖLÜMÜ
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.menu-section {
+    padding: 44px 28px 0;
+}
+
+    /* JS filter: gizlenince display:none uygulanır, bu sınıf gerekmiyor */
+    .menu-section.hidden {
+        display: none;
+    }
+
+.cat-header {
+    text-align: center;
+    padding-bottom: 24px;
+    position: relative;
+}
+
+.cat-divider-top {
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--gold-lt), transparent);
+    margin-bottom: 24px;
+}
+
+.cat-roman {
+    font-family: var(--serif);
+    font-size: 11px;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--gold);
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.cat-title {
+    font-family: var(--serif);
+    font-size: clamp(26px, 7vw, 36px);
+    font-weight: 400;
+    letter-spacing: -0.3px;
+    color: var(--ink);
+    line-height: 1.15;
+}
+
+    .cat-title em {
+        font-style: italic;
+    }
+
+.cat-divider-bottom {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 22px;
+}
+
+.cat-divider-line {
+    flex: 1;
+    height: 1px;
+}
+
+    .cat-divider-line.left {
+        background: linear-gradient(to right, transparent, var(--ink-20));
+    }
+
+    .cat-divider-line.right {
+        background: linear-gradient(to left, transparent, var(--ink-20));
+    }
+
+.cat-divider-diamond {
+    color: var(--gold);
+    font-size: 7px;
+    letter-spacing: 5px;
+}
+
+/* ── Menu Item Row ───────────────────────────────────────────────────── */
+
+.menu-list {
+    padding-top: 8px;
+}
+
+.menu-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 0 20px;
+    align-items: start;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--ink-10);
+    cursor: default;
+    position: relative;
+}
+
+    .menu-item:first-child {
+        border-top: 1px solid var(--ink-10);
+    }
+
+    /* Hover: hafif krem vurgu */
+    .menu-item::before {
+        content: '';
+        position: absolute;
+        inset: 0 -28px;
+        background: var(--cream-2);
+        opacity: 0;
+        transition: opacity 0.2s;
+        border-radius: var(--radius-sm);
+        pointer-events: none;
+    }
+
+    .menu-item:hover::before {
+        opacity: 1;
+    }
+
+/* Sütun 1 — Numara */
+.item-number {
+    font-family: var(--serif);
+    font-size: 12px;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--gold);
+    letter-spacing: 0.5px;
+    padding-top: 4px;
+    white-space: nowrap;
+    min-width: 44px;
+    position: relative;
+    z-index: 1;
+}
+
+/* Sütun 2 — İsim + Açıklama */
+.item-info {
+    flex: 1;
+    position: relative;
+    z-index: 1;
+}
+
+/* v2: font-size artırıldı (en az 1.25rem = 20px), line-height açıldı */
+.item-name {
+    font-family: var(--serif);
+    font-size: clamp(20px, 5.5vw, 26px); /* v2: 18px → 20px min */
+    font-weight: 600; /* v2: 500 → 600 (daha belirgin) */
+    letter-spacing: -0.2px;
+    color: var(--ink);
+    line-height: 1.35; /* v2: 1.2 → 1.35 */
+    margin-bottom: 8px;
+}
+
+/* v2: font-weight 300→400, font-size 11px→13px, line-height 1.65→1.80 */
+.item-desc {
+    font-family: var(--sans);
+    font-size: 13px; /* v2: 11px → 13px */
+    font-weight: 400; /* v2: 300 → 400 */
+    font-style: italic;
+    color: var(--ink-65); /* v2: yeni değişken — daha koyu */
+    line-height: 1.80; /* v2: 1.65 → 1.80 */
+    letter-spacing: 0.1px;
+    max-width: 340px;
+}
+
+.item-tags {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.item-tag {
+    font-family: var(--sans);
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--gold-dk);
+    border: 1px solid var(--ink-20);
+    padding: 3px 8px;
+    border-radius: 2px;
+    background: transparent;
+}
+
+/* Sütun 3 — Fiyat */
+.item-price-col {
+    text-align: right;
+    padding-top: 4px;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.item-price-currency {
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--ink-40);
+    vertical-align: super;
+    letter-spacing: 0;
+    margin-right: 1px;
+}
+
+/* v2: fiyat boyutu da biraz büyütüldü */
+.item-price {
+    font-family: var(--serif);
+    font-size: clamp(20px, 5.5vw, 25px);
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: -0.5px;
+    white-space: nowrap;
+}
+
+/* ── Bölüm Arası Boşluk ──────────────────────────────────────────────── */
+.section-gap {
+    height: 24px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FOOTER
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.qr-footer {
+    text-align: center;
+    padding: 44px 28px calc(28px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--ink-10);
+    margin-top: 40px;
+    position: relative;
+}
+
+    .qr-footer::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: linear-gradient(to right, transparent 0%, var(--gold) 35%, var(--gold-lt) 50%, var(--gold) 65%, transparent 100%);
+    }
+
+.footer-ornament {
+    color: var(--gold);
+    font-size: 7px;
+    letter-spacing: 8px;
+    margin-bottom: 12px;
+    display: block;
+}
+
+.footer-text {
+    font-family: var(--serif);
+    font-size: 16px;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--ink-40);
+    margin-bottom: 6px;
+    line-height: 1.7;
+}
+
+.footer-sub {
+    font-family: var(--sans);
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--ink-20);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TOAST
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.toast-wrap {
+    position: fixed;
+    bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9000;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.toast {
+    background: var(--ink);
+    color: var(--cream);
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 13px 24px;
+    border-radius: 2px;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    border-left: 2px solid var(--gold);
+}
+
+    .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   BOŞ DURUM
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.menu-empty {
+    text-align: center;
+    padding: 60px 28px;
+    font-family: var(--serif);
+    font-size: 20px;
+    font-style: italic;
+    color: var(--ink-40);
+    line-height: 1.7;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RESPONSIVE
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 420px) {
+    .menu-item {
+        gap: 0 14px;
+    }
+
+    .item-number {
+        min-width: 38px;
+        font-size: 11px;
+    }
+
+    .item-desc {
+        font-size: 12px;
+    }
+    /* küçük ekranda 1px küçük */
+    .chef-note-section {
+        margin: 24px 20px;
+        padding: 24px 20px;
+    }
+
+    .menu-section {
+        padding: 36px 20px 0;
+    }
+
+    .waiter-section {
+        padding: 8px 20px 16px;
+    }
+
+    .cat-nav-wrap {
+        padding: 0 16px;
+    }
+
+    .qr-header {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+
+    .qr-footer {
+        padding-left: 20px;
+        padding-right: 20px;
+    }
+
+    .menu-item::before {
+        inset: 0 -20px;
+    }
+}
+
+@media (min-width: 680px) {
+    .qr-page {
+        border-left: 1px solid var(--ink-10);
+        border-right: 1px solid var(--ink-10);
+    }
+
+    .qr-header::before {
+        left: -1px;
+        right: -1px;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SAYFA GİRİŞ ANİMASYONLARI
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@keyframes fadeSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.qr-header {
+    animation: fadeSlideUp 0.6s ease 0.05s both;
+}
+
+.chef-note-section {
+    animation: fadeSlideUp 0.6s ease 0.15s both;
+}
+
+.waiter-section {
+    animation: fadeSlideUp 0.6s ease 0.22s both;
+}
+
+.cat-nav-wrap {
+    animation: fadeSlideUp 0.5s ease 0.28s both;
+}
+
+.menu-section {
+    animation: fadeSlideUp 0.6s ease 0.35s both;
+}
