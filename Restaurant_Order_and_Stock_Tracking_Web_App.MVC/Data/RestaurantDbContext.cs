@@ -13,6 +13,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
         public DbSet<OrderItem> OrderItems { get; set; }
         public DbSet<Payment> Payments { get; set; }
         public DbSet<StockLog> StockLogs { get; set; }
+        public DbSet<ShiftLog> ShiftLogs { get; set; } // Kasa vardiyası kayıtları
 
         public RestaurantDbContext(DbContextOptions options) : base(options) { }
 
@@ -116,6 +117,35 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.HasOne(o => o.Order)
                     .WithMany(p => p.Payments)
                     .HasForeignKey(o => o.OrderId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            // ── ShiftLog ─────────────────────────────────────────────────────────
+            modelBuilder.Entity<ShiftLog>(entity =>
+            {
+                entity.ToTable("shift_logs");
+                entity.HasKey(s => s.ShiftLogId);
+                entity.Property(s => s.OpenedAt).HasDefaultValueSql("NOW()").IsRequired();
+                entity.Property(s => s.OpeningBalance).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
+                entity.Property(s => s.ClosingBalance).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
+                entity.Property(s => s.TotalSales).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
+                entity.Property(s => s.TotalCash).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
+                entity.Property(s => s.TotalCard).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
+                entity.Property(s => s.TotalOther).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
+                entity.Property(s => s.TotalDiscount).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
+                entity.Property(s => s.TotalWaste).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
+                entity.Property(s => s.Difference).HasPrecision(12, 2).HasDefaultValue(0m).IsRequired();
+                entity.Property(s => s.DifferenceThreshold).HasPrecision(12, 2).HasDefaultValue(100m).IsRequired();
+                entity.Property(s => s.Notes).HasColumnType("text");
+                entity.Property(s => s.IsClosed).HasDefaultValue(false).IsRequired();
+                entity.Property(s => s.IsLocked).HasDefaultValue(false).IsRequired();
+                entity.HasOne(s => s.OpenedByUser)
+                    .WithMany()
+                    .HasForeignKey(s => s.OpenedByUserId)
+                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(s => s.ClosedByUser)
+                    .WithMany()
+                    .HasForeignKey(s => s.ClosedByUserId)
                     .OnDelete(DeleteBehavior.Restrict);
             });
 

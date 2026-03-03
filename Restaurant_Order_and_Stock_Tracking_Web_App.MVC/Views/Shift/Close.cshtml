@@ -1,0 +1,252 @@
+﻿@model Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.ShiftLog
+@{
+    ViewData["Title"] = $"Vardiya #{Model.ShiftLogId} Kapat";
+}
+
+@section Styles {
+    <link href="~/css/Views/Shift/Index.css" rel="stylesheet" asp-append-version="true" />
+}
+
+<div class="z-header">
+    <div>
+        <h1>⏹ Vardiyayı Kapat — #@Model.ShiftLogId</h1>
+        <div class="sub">
+            Açılış: @Model.OpenedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+            &nbsp;·&nbsp; Açan: @(Model.OpenedByUser?.FullName ?? Model.OpenedByUser?.UserName ?? "—")
+        </div>
+    </div>
+    <a asp-action="Index" class="btn-z btn-z-ghost">← İptal</a>
+</div>
+
+<div id="alertBox"></div>
+
+<div style="max-width:760px;margin:0 auto">
+
+    @* ── Sistem hesaplamaları ─────────────────────────────────────────────── *@
+    <div class="z-card" style="margin-bottom:16px">
+        <div class="z-card-title" style="margin-bottom:14px">
+            <span>📊 Sistem Hesaplamaları</span>
+            <span style="font-size:11px;font-weight:400;color:var(--text-muted);background:var(--surface2);padding:3px 10px;border-radius:20px">Otomatik</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px" id="sysGrid">
+            <div class="sys-box">
+                <div class="sys-lbl">💰 Toplam Satış</div>
+                <div class="sys-val" id="sysSales" style="color:var(--accent)">
+                    <span class="sys-loading">Yükleniyor…</span>
+                </div>
+            </div>
+            <div class="sys-box">
+                <div class="sys-lbl">💵 Nakit Tahsilat</div>
+                <div class="sys-val" id="sysCash">
+                    <span class="sys-loading">—</span>
+                </div>
+            </div>
+            <div class="sys-box">
+                <div class="sys-lbl">💳 Kart Tahsilat</div>
+                <div class="sys-val" id="sysCard">
+                    <span class="sys-loading">—</span>
+                </div>
+            </div>
+            <div class="sys-box">
+                <div class="sys-lbl">🎫 Diğer Ödeme</div>
+                <div class="sys-val" id="sysOther">
+                    <span class="sys-loading">—</span>
+                </div>
+            </div>
+            <div class="sys-box">
+                <div class="sys-lbl">🔥 Zayi Tutarı</div>
+                <div class="sys-val" id="sysWaste" style="color:#ef4444">
+                    <span class="sys-loading">—</span>
+                </div>
+            </div>
+            <div class="sys-box" style="background:rgba(249,115,22,.06);border-color:rgba(249,115,22,.2)">
+                <div class="sys-lbl">🏦 Açılış Bakiyesi</div>
+                <div class="sys-val" id="sysOpening" style="color:var(--accent)">
+                    ₺@Model.OpeningBalance.ToString("N2")
+                </div>
+            </div>
+        </div>
+
+        @* Kasa Farkı Önizleme *@
+        <div id="diffBox" class="diff-preview-box" style="margin-bottom:0">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:600;margin-bottom:6px">
+                Tahmini Kasa Farkı
+            </div>
+            <div class="diff-preview-number" id="diffPreview" style="color:var(--text-muted)">
+                Kapanış bakiyesi girin…
+            </div>
+            <div style="font-size:12px;margin-top:4px" id="diffFormula"></div>
+            <div style="font-size:12px;color:#ef4444;margin-top:4px;font-weight:600" id="diffNote"></div>
+        </div>
+    </div>
+
+    @* ── Kapanış Formu ────────────────────────────────────────────────────── *@
+    <div class="z-card">
+        <div class="z-card-title" style="margin-bottom:20px">✏️ Kapanış Bilgileri</div>
+
+        @* Kapanış Kasası — en önemli alan, büyük *@
+        <div style="margin-bottom:20px">
+            <label style="font-size:12px;font-weight:700;color:var(--text);display:block;margin-bottom:8px">
+                Kapanış Kasası (₺)
+                <span style="color:#ef4444;font-size:14px">*</span>
+                <span style="font-size:11px;font-weight:400;color:var(--text-muted);margin-left:6px">Fiziksel nakit sayım sonucu</span>
+            </label>
+            <div style="position:relative">
+                <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--text-muted);font-weight:600;pointer-events:none">₺</span>
+                <input type="number" id="closingBalance" class="form-control"
+                       placeholder="0.00" min="0" step="0.01" value="0"
+                       style="padding-left:36px;font-size:22px;font-weight:700;height:56px;font-family:'Syne',sans-serif" />
+            </div>
+        </div>
+
+        @* İkili satır: Eşik + Not *@
+        <div style="display:grid;grid-template-columns:1fr 2fr;gap:14px;margin-bottom:20px">
+            <div>
+                <label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:600;display:block;margin-bottom:6px">
+                    Fark Eşiği (₺)
+                </label>
+                <input type="number" id="threshold" class="form-control"
+                       min="0" step="0.01" value="@Model.DifferenceThreshold"
+                       style="height:42px" />
+                <div style="font-size:10px;color:var(--text-muted);margin-top:3px">Bu eşik aşılınca SignalR uyarısı gönderilir</div>
+            </div>
+            <div>
+                <label style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:600;display:block;margin-bottom:6px">
+                    Notlar
+                </label>
+                <textarea id="notes" class="form-control" rows="2"
+                          placeholder="Kapanış notu, açıklama…"
+                          style="resize:none">@Model.Notes</textarea>
+            </div>
+        </div>
+
+        @* Kapat butonu *@
+        <button id="btnClose" class="btn-z btn-z-danger"
+                style="width:100%;justify-content:center;padding:15px;font-size:15px;border-radius:10px;letter-spacing:.02em">
+            ⏹&nbsp; Vardiyayı Kapat &amp; Z Raporu Oluştur
+        </button>
+
+        <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-top:10px">
+            Bu işlem geri alınamaz. Kapatmadan önce kasa sayımını doğrulayın.
+        </div>
+    </div>
+
+</div>
+
+@section Scripts {
+    <script>
+        const shiftId   = @Model.ShiftLogId;
+        const fmt       = v => '₺' + Number(v).toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+        let sysCashVal  = 0;
+        let sysOpenVal  = @Model.OpeningBalance.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        // ── Sistem verilerini AJAX ile çek ─────────────────────────────────────
+        (async function loadPreview() {
+            try {
+                const res = await fetch(`/Shift/PreviewTotals/${shiftId}`);
+                if (!res.ok) { console.warn('PreviewTotals failed', res.status); return; }
+                const d = await res.json();
+
+                sysCashVal = d.totalCash ?? 0;
+                sysOpenVal = d.openingBalance ?? sysOpenVal;
+
+                // JSON property isimleri camelCase (C# serializasyonu küçük harf)
+                document.getElementById('sysSales').textContent   = fmt(d.totalSales ?? 0);
+                document.getElementById('sysCash').textContent    = fmt(d.totalCash ?? 0);
+                document.getElementById('sysCard').textContent    = fmt(d.totalCard ?? 0);
+                document.getElementById('sysOther').textContent   = fmt(d.totalOther ?? 0);
+                document.getElementById('sysWaste').textContent   = fmt(d.totalWaste ?? 0);
+                document.getElementById('sysOpening').textContent = fmt(d.openingBalance ?? sysOpenVal);
+
+                if (d.differenceThreshold > 0)
+                    document.getElementById('threshold').value = d.differenceThreshold;
+
+                updateDiff();
+            } catch (e) {
+                console.error('PreviewTotals error:', e);
+            }
+        })();
+
+        // ── Canlı fark önizleme ─────────────────────────────────────────────────
+        document.getElementById('closingBalance').addEventListener('input', updateDiff);
+        document.getElementById('threshold').addEventListener('input', updateDiff);
+
+        function updateDiff() {
+            const closing  = parseFloat(document.getElementById('closingBalance').value) || 0;
+            const thr      = parseFloat(document.getElementById('threshold').value) || 100;
+            const expected = sysOpenVal + sysCashVal;   // Kasada olması gereken
+            const diff     = closing - expected;
+            const isOver   = Math.abs(diff) > thr;
+            const hasInput = document.getElementById('closingBalance').value !== '';
+
+            const elNum    = document.getElementById('diffPreview');
+            const elBox    = document.getElementById('diffBox');
+            const elNote   = document.getElementById('diffNote');
+            const elForm   = document.getElementById('diffFormula');
+
+            if (!hasInput) {
+                elNum.textContent  = 'Kapanış bakiyesi girin…';
+                elNum.style.color  = 'var(--text-muted)';
+                elBox.className    = 'diff-preview-box';
+                elNote.textContent = '';
+                elForm.textContent = '';
+                return;
+            }
+
+            elNum.textContent  = (diff >= 0 ? '+' : '') + fmt(diff);
+            elNum.style.color  = isOver ? '#ef4444' : '#10b981';
+            elBox.className    = 'diff-preview-box ' + (isOver ? 'warn' : 'ok');
+            elForm.textContent = `${fmt(closing)} - (${fmt(sysOpenVal)} açılış + ${fmt(sysCashVal)} nakit) = ${(diff >= 0 ? '+' : '') + fmt(diff)}`;
+            elForm.style.color = 'var(--text-muted)';
+            elNote.textContent = isOver ? `⚠️ Uyarı eşiği ${fmt(thr)} aşılacak! SignalR uyarısı gönderilecek.` : '';
+        }
+
+        // ── Kapat ───────────────────────────────────────────────────────────────
+        document.getElementById('btnClose').addEventListener('click', async function () {
+            const closingBalance    = parseFloat(document.getElementById('closingBalance').value) || 0;
+            const differenceThreshold = parseFloat(document.getElementById('threshold').value) || 100;
+            const notes             = document.getElementById('notes').value.trim();
+            const diff              = closingBalance - (sysOpenVal + sysCashVal);
+
+            if (!confirm(
+                `Vardiyayı kapatmak üzeresiniz.\n\n` +
+                `Kapanış Kasası : ${fmt(closingBalance)}\n` +
+                `Tahmini Fark   : ${(diff >= 0 ? '+' : '') + fmt(diff)}\n\n` +
+                `Bu işlem geri alınamaz. Onaylıyor musunuz?`
+            )) return;
+
+            this.disabled    = true;
+            this.textContent = 'Kapatılıyor…';
+
+            try {
+                const res = await fetch(`/Shift/Close/${shiftId}`, {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify({ closingBalance, notes, differenceThreshold })
+                });
+                const d = await res.json();
+
+                if (res.ok && d.success) {
+                    window.location.href = `/Shift/Detail/${d.shiftId}`;
+                } else {
+                    showAlert(d.message || 'Vardiya kapatılamadı.');
+                    this.disabled    = false;
+                    this.innerHTML   = '⏹&nbsp; Vardiyayı Kapat &amp; Z Raporu Oluştur';
+                }
+            } catch {
+                showAlert('Sunucu bağlantı hatası. Tekrar deneyin.');
+                this.disabled    = false;
+                this.innerHTML   = '⏹&nbsp; Vardiyayı Kapat &amp; Z Raporu Oluştur';
+            }
+        });
+
+        function showAlert(msg) {
+            document.getElementById('alertBox').innerHTML =
+                `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:10px;
+                             padding:12px 16px;font-size:13px;color:#ef4444;margin-bottom:16px;display:flex;gap:8px;align-items:center">
+                    <span>❌</span><span>${msg}</span>
+                 </div>`;
+        }
+    </script>
+}
