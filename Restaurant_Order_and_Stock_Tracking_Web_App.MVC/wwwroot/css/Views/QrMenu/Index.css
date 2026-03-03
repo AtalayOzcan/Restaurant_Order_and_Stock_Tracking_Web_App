@@ -507,7 +507,7 @@ body.rtl .cat-divider-line.right {
 
 .menu-item {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto 56px 1fr auto;
     gap: 0 20px;
     align-items: start;
     padding: 22px 0;
@@ -608,7 +608,12 @@ body.rtl .item-tags {
     border-radius: 2px;
     background: transparent;
 }
+.item-thumb{
 
+    height:50px;
+    width:50px;
+}
+/* Sütun 3 — Fiyat */
 .item-price-col {
     text-align: right;
     padding-top: 4px;
@@ -847,4 +852,272 @@ body.rtl .toast {
 
 .menu-section {
     animation: fadeSlideUp 0.6s ease 0.35s both;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ÜRÜN DETAY BOTTOM-SHEET  — QrDetail Modülü
+   Tasarım dili: Fine-dining; krem, mürekkep, altın renk paleti
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Ürün listesinde tıklanabilirlik ipucu ────────────────────────── */
+.menu-item[tabindex="0"] {
+    cursor: pointer;
+}
+
+.item-detail-hint {
+    display: inline-block;
+    margin-left: 6px;
+    font-size: 13px;
+    color: var(--gold);
+    opacity: .75;
+    vertical-align: middle;
+    transition: opacity .2s, transform .2s;
+}
+
+.menu-item:hover .item-detail-hint {
+    opacity: 1;
+    transform: translateX(3px);
+}
+
+/* ── Karartma (backdrop) ─────────────────────────────────────────── */
+.qrd-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(28, 22, 20, 0);
+    z-index: 200;
+    transition: background .3s ease;
+    pointer-events: none;
+}
+
+    .qrd-backdrop.visible {
+        background: rgba(28, 22, 20, .62);
+        pointer-events: auto;
+    }
+
+/* ── Bottom-sheet kapsayıcı ──────────────────────────────────────── */
+.qrd-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%) translateY(100%);
+    width: 100%;
+    max-width: var(--max-w, 680px);
+    max-height: 92dvh;
+    background: var(--cream);
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -8px 40px rgba(28,22,20,.18);
+    z-index: 201;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: transform .38s cubic-bezier(.32,.72,0,1);
+    will-change: transform;
+}
+
+    .qrd-sheet.open {
+        transform: translateX(-50%) translateY(0);
+    }
+
+/* ── Kaydırma tutacağı ───────────────────────────────────────────── */
+.qrd-handle {
+    flex-shrink: 0;
+    width: 40px;
+    height: 4px;
+    background: var(--ink-20);
+    border-radius: 99px;
+    margin: 12px auto 4px;
+}
+
+/* ── Görsel alanı ────────────────────────────────────────────────── */
+.qrd-image-wrap {
+    flex-shrink: 0;
+    width: 100%;
+    height: 240px;
+    overflow: hidden;
+    background: var(--cream-2);
+    position: relative;
+}
+
+    .qrd-image-wrap.no-image {
+        height: 130px;
+    }
+
+.qrd-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform .4s ease;
+}
+
+.qrd-sheet.open .qrd-image {
+    transform: scale(1);
+}
+
+/* Fotoğrafi olmayan ürünler için placeholder */
+.qrd-image-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--cream-2) 0%, var(--cream-3) 100%);
+    font-size: 52px;
+    opacity: .55;
+    display: none;
+}
+
+.qrd-image-wrap.no-image .qrd-image-placeholder {
+    display: flex;
+}
+
+/* Görselin alt kısmına hafif degrade geçiş */
+.qrd-image-wrap::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(to top, var(--cream), transparent);
+    pointer-events: none;
+}
+
+.qrd-image-wrap.no-image::after {
+    display: none;
+}
+
+/* ── İçerik kaydırma alanı ───────────────────────────────────────── */
+.qrd-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px 12px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.qrd-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.qrd-title {
+    font-family: var(--serif);
+    font-size: 1.65rem;
+    font-weight: 500;
+    color: var(--ink);
+    line-height: 1.2;
+    flex: 1;
+    margin: 0;
+}
+
+.qrd-price {
+    font-family: var(--serif);
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--gold-dk);
+    white-space: nowrap;
+    flex-shrink: 0;
+    padding-top: 2px;
+}
+
+/* ── Altın çizgi ayırıcı ─────────────────────────────────────────── */
+.qrd-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--gold-lt), transparent);
+    margin: 0 0 16px;
+}
+
+/* ── Kısa açıklama ────────────────────────────────────────────────── */
+.qrd-desc {
+    font-family: var(--sans);
+    font-size: .88rem;
+    color: var(--ink-65);
+    line-height: 1.65;
+    margin-bottom: 14px;
+    font-style: italic;
+}
+
+/* ── Detaylı açıklama (uzun metin) ──────────────────────────────── */
+.qrd-detail {
+    font-family: var(--serif);
+    font-size: 1.05rem;
+    color: var(--ink);
+    line-height: 1.8;
+    letter-spacing: .01em;
+    white-space: pre-line;
+    margin-bottom: 14px;
+}
+
+/* ── Sınırlı stok etiketi ────────────────────────────────────────── */
+.qrd-tag-wrap {
+    margin-bottom: 8px;
+}
+
+.qrd-tag {
+    display: inline-block;
+    font-family: var(--sans);
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--gold-dk);
+    border: 1px solid var(--gold-lt);
+    border-radius: 4px;
+    padding: 3px 10px;
+    background: var(--gold-glow);
+}
+
+/* ── Alt buton alanı ─────────────────────────────────────────────── */
+.qrd-footer {
+    flex-shrink: 0;
+    padding: 12px 24px max(16px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--ink-10);
+    background: var(--cream);
+}
+
+.qrd-btn-close {
+    width: 100%;
+    padding: 15px;
+    background: var(--ink);
+    color: var(--cream);
+    font-family: var(--sans);
+    font-size: .9rem;
+    font-weight: 600;
+    letter-spacing: .05em;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background .2s, transform .1s;
+    text-transform: uppercase;
+}
+
+    .qrd-btn-close:hover {
+        background: var(--gold-dk);
+    }
+
+    .qrd-btn-close:active {
+        transform: scale(.98);
+    }
+
+/* ── Dokunuş yüzeyi iyileştirme (mobile) ────────────────────────── */
+@media (max-width: 480px) {
+    .qrd-title {
+        font-size: 1.45rem;
+    }
+
+    .qrd-price {
+        font-size: 1.35rem;
+    }
+
+    .qrd-detail {
+        font-size: 1rem;
+    }
+
+    .qrd-image-wrap {
+        height: 200px;
+    }
 }

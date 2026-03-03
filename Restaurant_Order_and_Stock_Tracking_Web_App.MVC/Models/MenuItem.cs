@@ -1,6 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
-
-namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models
+﻿namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models
 {
     public class MenuItem
     {
@@ -8,10 +6,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models
         public int CategoryId { get; set; }
         public virtual Category Category { get; set; }
 
-        public string MenuItemName { get; set; }   // TR (mevcut)
-        public string? NameEn { get; set; }   // EN
-        public string? NameAr { get; set; }   // AR
-        public string? NameRu { get; set; }   // RU
+        // ── Ürün Adı (çok dilli) ─────────────────────────────────────
+        public string MenuItemName { get; set; }   // TR (zorunlu)
+        public string? NameEn { get; set; }         // EN
+        public string? NameAr { get; set; }         // AR
+        public string? NameRu { get; set; }         // RU
 
         public decimal MenuItemPrice { get; set; }
         public decimal? CostPrice { get; set; } = null;
@@ -23,10 +22,17 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models
         public bool IsAvailable { get; set; }
         public bool IsDeleted { get; set; } = false;
 
-        public string? Description { get; set; }   // TR (mevcut)
+        // ── Kısa Açıklama (çok dilli) ────────────────────────────────
+        public string? Description { get; set; }     // TR (mevcut)
         public string? DescriptionEn { get; set; }   // EN
         public string? DescriptionAr { get; set; }   // AR
         public string? DescriptionRu { get; set; }   // RU
+
+        /// <summary>QR Menü detay sayfasında gösterilen uzun açıklama.</summary>
+        public string? DetailedDescription { get; set; }
+
+        /// <summary>wwwroot göreli yolu, ör: /images/menu/abc123.jpg</summary>
+        public string? ImagePath { get; set; }
 
         public DateTime MenuItemCreatedTime { get; set; }
     }

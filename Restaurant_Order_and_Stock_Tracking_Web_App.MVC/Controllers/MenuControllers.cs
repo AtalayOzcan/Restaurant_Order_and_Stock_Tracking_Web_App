@@ -12,13 +12,19 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
     public class MenuController : Controller
     {
         private readonly RestaurantDbContext _context;
+        private readonly IWebHostEnvironment _env;
 
-        public MenuController(RestaurantDbContext context)
+        private static readonly HashSet<string> _allowedExtensions =
+            new(StringComparer.OrdinalIgnoreCase) { ".jpg", ".jpeg", ".png", ".webp", ".gif" };
+        private const long MaxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
+
+        public MenuController(RestaurantDbContext context, IWebHostEnvironment env)
         {
             _context = context;
+            _env = env;
         }
 
-        // ── GET: /Menu ───────────────────────────────────────────────
+        // ── GET: /Menu ──────────────────────────────────────────────────
         public async Task<IActionResult> Index()
         {
             ViewData["Title"] = "Menü Ürünleri";
@@ -42,23 +48,21 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             return View(menuItems);
         }
 
-        // ── GET: /Menu/Detail/5 ──────────────────────────────────────
+        // ── GET: /Menu/Detail/5 ─────────────────────────────────────────
         public async Task<IActionResult> Detail(int id)
         {
             var item = await _context.MenuItems
                 .Include(m => m.Category)
                 .FirstOrDefaultAsync(m => m.MenuItemId == id);
-
             if (item == null) return NotFound();
 
             ViewData["Title"] = $"{item.MenuItemName} — Detay";
             ViewData["HasLowStock"] = await _context.MenuItems
                 .AnyAsync(m => !m.IsDeleted && m.TrackStock && m.StockQuantity < 5);
-
             return View(item);
         }
 
-        // ── GET: /Menu/Create ────────────────────────────────────────
+        // ── GET: /Menu/Create ───────────────────────────────────────────
         public async Task<IActionResult> Create()
         {
             ViewData["Title"] = "Yeni Ürün";
@@ -66,27 +70,34 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 .Where(c => c.IsActive)
                 .OrderBy(c => c.CategorySortOrder)
                 .ToListAsync();
-
             return View();
         }
 
-        // ── POST: /Menu/Create  (AJAX JSON) ─────────────────────────
-        [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([FromBody] MenuItemCreateDto dto)
+        // ── POST: /Menu/Create  (AJAX — multipart/form-data) ────────────
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([FromForm] MenuItemCreateDto dto)
         {
-            if (string.IsNullOrWhiteSpace(dto.MenuItemName))
-                return Json(new { success = false, message = "Ürün adı boş olamaz." });
-
+            // Fiyat parse — virgül/nokta her ikisini de kabul eder
             if (!decimal.TryParse(
                     dto.MenuItemPriceStr?.Replace(',', '.'),
                     NumberStyles.Any,
                     CultureInfo.InvariantCulture,
                     out decimal menuItemPrice) || menuItemPrice < 0)
-                return Json(new { success = false, message = "Geçerli bir fiyat giriniz." });
+                return Json(new { success = false, message = "Geçersiz fiyat değeri." });
 
             bool catExists = await _context.Categories.AnyAsync(c => c.CategoryId == dto.CategoryId);
             if (!catExists)
-                return Json(new { success = false, message = "Geçersiz kategori seçildi." });
+                return Json(new { success = false, message = "Seçilen kategori bulunamadı." });
+
+            // Görsel yükleme
+            string? imagePath = null;
+            if (dto.ImageFile != null && dto.ImageFile.Length > 0)
+            {
+                var (path, err) = await SaveImageAsync(dto.ImageFile);
+                if (err != null) return Json(new { success = false, message = err });
+                imagePath = path;
+            }
 
             var item = new MenuItem
             {
@@ -100,62 +111,69 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 DescriptionEn = string.IsNullOrWhiteSpace(dto.DescriptionEn) ? null : dto.DescriptionEn.Trim(),
                 DescriptionAr = string.IsNullOrWhiteSpace(dto.DescriptionAr) ? null : dto.DescriptionAr.Trim(),
                 DescriptionRu = string.IsNullOrWhiteSpace(dto.DescriptionRu) ? null : dto.DescriptionRu.Trim(),
+                DetailedDescription = string.IsNullOrWhiteSpace(dto.DetailedDescription) ? null : dto.DetailedDescription.Trim(),
                 StockQuantity = dto.StockQuantity,
                 TrackStock = dto.TrackStock,
                 IsAvailable = dto.IsAvailable,
                 IsDeleted = false,
+                ImagePath = imagePath,
                 MenuItemCreatedTime = DateTime.UtcNow
             };
 
             _context.MenuItems.Add(item);
             await _context.SaveChangesAsync();
-
             return Json(new { success = true, message = "Ürün başarıyla eklendi." });
         }
 
-        // ── GET: /Menu/Edit/5 ────────────────────────────────────────
+        // ── GET: /Menu/Edit/5 ───────────────────────────────────────────
         public async Task<IActionResult> Edit(int id)
         {
             var item = await _context.MenuItems
                 .Include(m => m.Category)
                 .FirstOrDefaultAsync(m => m.MenuItemId == id);
-
             if (item == null) return NotFound();
 
-            ViewData["Title"] = "Ürün Düzenle";
+            ViewData["Title"] = $"{item.MenuItemName} — Düzenle";
             ViewData["Categories"] = await _context.Categories
                 .Where(c => c.IsActive)
                 .OrderBy(c => c.CategorySortOrder)
                 .ToListAsync();
-
             return View(item);
         }
 
-        // ── POST: /Menu/Edit  (AJAX JSON) ────────────────────────────
-        [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit([FromBody] MenuItemEditDto dto)
+        // ── POST: /Menu/Edit  (AJAX — multipart/form-data) ──────────────
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit([FromForm] MenuItemEditDto dto)
         {
-            if (dto.Id == null)
-                return Json(new { success = false, message = "Geçersiz ürün ID." });
-
             var item = await _context.MenuItems.FindAsync(dto.Id);
             if (item == null)
                 return Json(new { success = false, message = "Ürün bulunamadı." });
 
-            if (string.IsNullOrWhiteSpace(dto.MenuItemName))
-                return Json(new { success = false, message = "Ürün adı boş olamaz." });
-
+            // Fiyat parse
             if (!decimal.TryParse(
                     dto.MenuItemPriceStr?.Replace(',', '.'),
                     NumberStyles.Any,
                     CultureInfo.InvariantCulture,
                     out decimal menuItemPrice) || menuItemPrice < 0)
-                return Json(new { success = false, message = "Geçerli bir fiyat giriniz." });
+                return Json(new { success = false, message = "Geçersiz fiyat değeri." });
 
-            bool catExists = await _context.Categories.AnyAsync(c => c.CategoryId == dto.CategoryId);
-            if (!catExists)
-                return Json(new { success = false, message = "Geçersiz kategori seçildi." });
+            // Görsel işlemleri
+            if (dto.RemoveImage && item.ImagePath != null)
+            {
+                DeleteImageFile(item.ImagePath);
+                item.ImagePath = null;
+            }
+            else if (dto.ImageFile != null && dto.ImageFile.Length > 0)
+            {
+                // Yeni görsel yüklendi — eskiyi sil, yerine kaydet
+                if (item.ImagePath != null) DeleteImageFile(item.ImagePath);
+                var (path, err) = await SaveImageAsync(dto.ImageFile);
+                if (err != null) return Json(new { success = false, message = err });
+                item.ImagePath = path;
+            }
 
+            // Alanları güncelle
             item.MenuItemName = dto.MenuItemName.Trim();
             item.NameEn = string.IsNullOrWhiteSpace(dto.NameEn) ? null : dto.NameEn.Trim();
             item.NameAr = string.IsNullOrWhiteSpace(dto.NameAr) ? null : dto.NameAr.Trim();
@@ -166,25 +184,25 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             item.DescriptionEn = string.IsNullOrWhiteSpace(dto.DescriptionEn) ? null : dto.DescriptionEn.Trim();
             item.DescriptionAr = string.IsNullOrWhiteSpace(dto.DescriptionAr) ? null : dto.DescriptionAr.Trim();
             item.DescriptionRu = string.IsNullOrWhiteSpace(dto.DescriptionRu) ? null : dto.DescriptionRu.Trim();
+            item.DetailedDescription = string.IsNullOrWhiteSpace(dto.DetailedDescription) ? null : dto.DetailedDescription.Trim();
             item.StockQuantity = dto.StockQuantity;
             item.TrackStock = dto.TrackStock;
             item.IsAvailable = dto.IsAvailable;
 
             await _context.SaveChangesAsync();
-            return Json(new { success = true, message = "Ürün güncellendi." });
+            return Json(new { success = true, message = "Ürün başarıyla güncellendi." });
         }
 
-        // ── POST: /Menu/Delete  (AJAX JSON) ──────────────────────────
-        [HttpPost, ValidateAntiForgeryToken]
+        // ── POST: /Menu/Delete ──────────────────────────────────────────
+        // Siparişlerde kullanıldıysa → soft delete; hiç kullanılmadıysa → fiziksel sil
+        [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Delete(int id)
         {
             var item = await _context.MenuItems.FindAsync(id);
-            if (item == null)
-                return Json(new { success = false, message = "Ürün bulunamadı." });
+            if (item == null) return Json(new { success = false, message = "Ürün bulunamadı." });
 
-            bool usedInOrders = await _context.OrderItems
-                .AnyAsync(oi => oi.MenuItemId == id);
-
+            bool usedInOrders = await _context.OrderItems.AnyAsync(oi => oi.MenuItemId == id);
             if (usedInOrders)
             {
                 item.IsDeleted = true;
@@ -193,12 +211,14 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 return Json(new { success = true, message = "Ürün pasife alındı (geçmiş siparişlerde kullanılmış)." });
             }
 
+            // Fiziksel sil — görseli de temizle
+            if (item.ImagePath != null) DeleteImageFile(item.ImagePath);
             _context.MenuItems.Remove(item);
             await _context.SaveChangesAsync();
             return Json(new { success = true, message = "Ürün silindi." });
         }
 
-        // ── GET: /Menu/GetById/5  ────────────────────────────────────
+        // ── GET: /Menu/GetById/5  (Edit modal için AJAX) ────────────────
         [HttpGet]
         public async Task<IActionResult> GetById(int id)
         {
@@ -219,10 +239,42 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 descriptionEn = m.DescriptionEn ?? "",
                 descriptionAr = m.DescriptionAr ?? "",
                 descriptionRu = m.DescriptionRu ?? "",
+                detailedDescription = m.DetailedDescription ?? "",
                 stockQuantity = m.StockQuantity,
                 trackStock = m.TrackStock,
-                isAvailable = m.IsAvailable
+                isAvailable = m.IsAvailable,
+                imagePath = m.ImagePath
             });
+        }
+
+        // ── Yardımcı: Görsel kaydet ─────────────────────────────────────
+        private async Task<(string? path, string? error)> SaveImageAsync(IFormFile file)
+        {
+            var ext = Path.GetExtension(file.FileName);
+            if (!_allowedExtensions.Contains(ext))
+                return (null, "Geçersiz dosya türü. Yalnızca JPG, PNG, WEBP veya GIF yüklenebilir.");
+            if (file.Length > MaxFileSizeBytes)
+                return (null, "Dosya boyutu 5 MB'ı geçemez.");
+
+            var folder = Path.Combine(_env.WebRootPath, "images", "menu");
+            Directory.CreateDirectory(folder);
+
+            var fileName = $"{Guid.NewGuid():N}{ext.ToLowerInvariant()}";
+            var fullPath = Path.Combine(folder, fileName);
+            await using var stream = new FileStream(fullPath, FileMode.Create);
+            await file.CopyToAsync(stream);
+            return ($"/images/menu/{fileName}", null);
+        }
+
+        // ── Yardımcı: Görsel sil ────────────────────────────────────────
+        private void DeleteImageFile(string relativePath)
+        {
+            try
+            {
+                var full = Path.Combine(_env.WebRootPath, relativePath.TrimStart('/'));
+                if (System.IO.File.Exists(full)) System.IO.File.Delete(full);
+            }
+            catch { /* Dosya yoksa veya silinemiyorsa sessizce geç */ }
         }
     }
 }

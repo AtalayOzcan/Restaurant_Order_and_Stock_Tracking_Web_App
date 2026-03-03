@@ -59,12 +59,14 @@
         ["thanks"] = new() { ["tr"] = "Bizi tercih ettiğiniz için teşekkür ederiz.", ["en"] = "Thank you for choosing us.", ["ar"] = "شكراً لاختياركم لنا.", ["ru"] = "Спасибо, что выбрали нас." },
         ["enjoy"] = new() { ["tr"] = "Afiyet Olsun", ["en"] = "Enjoy Your Meal", ["ar"] = "بالهناء والشفاء", ["ru"] = "Приятного аппетита" },
         ["connError"] = new() { ["tr"] = "Bağlantı hatası. Lütfen tekrar deneyiniz.", ["en"] = "Connection error. Please try again.", ["ar"] = "خطأ في الاتصال. حاول مجدداً.", ["ru"] = "Ошибка подключения. Попробуйте снова." },
-        ["waiterMsg"] = new() { ["tr"] = "Garsonunuz en kısa sürede gelecek.", ["en"] = "Your waiter will be with you shortly.", ["ar"] = "سيأتي النادل إليك قريباً.", ["ru"] = "Официант скоро подойдёт к вам." },
+        ["waiterMsg"] = new() { ["tr"] = "Garsonunuz en kısa sürede gelecek.", ["en"] = "Your waiter will be with you shortly.", ["ar"] = "سيأتي النادل إليك قريباً.", ["ru"] = "Официант скоро подойдёт к вам." }
     };
+
     string T(string key) => uiStrings.TryGetValue(key, out var d)
         ? (d.TryGetValue(lang, out var v) ? v : d["tr"])
         : key;
 }
+
 <!DOCTYPE html>
 <html lang="@lang" @(isRtl? Html.Raw("dir=\"rtl\"") : Html.Raw(""))>
 <head>
@@ -109,8 +111,7 @@
         </section>
 
         <div class="waiter-section">
-            <button class="btn-waiter" id="btnCallWaiter" onclick="callWaiter()"
-                    @(isWaiterCalled ? "disabled" : "") aria-label="@T("callWaiter")">
+            <button class="btn-waiter" id="btnCallWaiter" onclick="callWaiter()" @(isWaiterCalled ? "disabled" : "") aria-label="@T("callWaiter")">
                 @if (isWaiterCalled)
                 {
                     <span class="btn-waiter-icon">✓</span>
@@ -124,19 +125,30 @@
             </button>
         </div>
 
+        @* ════════════════════════════════════════════════════════
+           KATEGORİ FİLTRE NAV — Sticky + Yatay Kaydırmalı
+           ════════════════════════════════════════════════════════ *@
         @if (Model.Any())
         {
             <nav class="cat-nav-wrap" id="catNavWrap" aria-label="Kategori filtresi">
                 <div class="cat-nav" id="catNav">
+                    @* ── "Tümü" — sabit ilk buton ── *@
                     <button class="cat-nav-btn active" data-cat="all" onclick="filterCategory('all', this)">@T("allItems")</button>
+
+                    @* ── Veritabanından gelen kategoriler — dinamik ── *@
                     @foreach (var cat in Model)
                     {
-                        <button class="cat-nav-btn" data-cat="@cat.CategoryId" onclick="filterCategory('@cat.CategoryId', this)">@CatName(cat)</button>
+                        <button class="cat-nav-btn" data-cat="@cat.CategoryId" onclick="filterCategory('@cat.CategoryId', this)">
+                            @CatName(cat)
+                        </button>
                     }
                 </div>
             </nav>
         }
 
+        @* ════════════════════════════════════════════════════════
+           MENÜ — Kategorilere göre Dinamik Bölümler
+           ════════════════════════════════════════════════════════ *@
         @if (!Model.Any())
         {
             <div class="menu-empty">@T("noProduct")</div>
@@ -153,7 +165,7 @@
                          id="cat-section-@cat.CategoryId"
                          data-cat-id="@cat.CategoryId"
                          aria-labelledby="cat-title-@cat.CategoryId"
-                         style="animation-delay: @animDelay.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)s">
+                         style="animation-delay:@animDelay.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)s">
 
                     <div class="cat-header">
                         <div class="cat-divider-top"></div>
@@ -171,24 +183,54 @@
                         {
                             itemCounter++;
                             var itemNo = "No. " + itemCounter.ToString().PadLeft(2, '0');
-                            bool isLowStock = item.TrackStock && item.StockQuantity > 0
-                            && item.StockQuantity <= item.AlertThreshold && item.AlertThreshold > 0;
+                            bool isLowStock = item.TrackStock && item.StockQuantity > 0 && item.StockQuantity <= item.AlertThreshold && item.AlertThreshold > 0;
                             var displayName = ItemName(item);
                             var displayDesc = ItemDesc(item);
+                            var detailUrl = $"/QrMenu/Detail/{item.MenuItemId}?tableName={Uri.EscapeDataString(tableName)}";
 
-                            <div class="menu-item" role="listitem">
-                                <div class="item-number" aria-hidden="true">@itemNo</div>
+                            <div class="menu-item" role="listitem" tabindex="0"
+                                 onclick="location.href='@detailUrl'"
+                                 onkeydown="if(event.key==='Enter')location.href='@detailUrl'">
+
+                                @* Sütun 0: Görsel *@
+                                <div class="item-thumb-col" aria-hidden="true">
+                                    @if (!string.IsNullOrWhiteSpace(item.ImagePath))
+                                    {
+                                        <img class="item-thumb" src="@item.ImagePath" alt="@item.MenuItemName" loading="lazy" />
+                                    }
+                                    else
+                                    {
+                                        <div class="item-thumb-ph">🍽</div>
+                                    }
+                                </div>
+
+                                @* Sütun 1: Numara *@
+                                <div class="item-number" aria-hidden="true" style="display:none;">@itemNo</div>
+
+                                @* Sütun 2: İsim + Açıklama + Etiket *@
                                 <div class="item-info">
-                                    <div class="item-name">@displayName</div>
+                                    <div class="item-name">
+                                        @displayName
+                                        @if (!string.IsNullOrWhiteSpace(item.DetailedDescription) || !string.IsNullOrWhiteSpace(item.ImagePath))
+                                        {
+                                            <span class="item-arrow" aria-hidden="true">›</span>
+                                        }
+                                    </div>
+
                                     @if (!string.IsNullOrWhiteSpace(displayDesc))
                                     {
                                         <div class="item-desc">@displayDesc</div>
                                     }
+
                                     @if (isLowStock)
                                     {
-                                        <div class="item-tags"><span class="item-tag">@T("limitedStock")</span></div>
+                                        <div class="item-tags">
+                                            <span class="item-tag">@T("limitedStock")</span>
+                                        </div>
                                     }
                                 </div>
+
+                                @* Sütun 3: Fiyat *@
                                 <div class="item-price-col" aria-label="Fiyat: @item.MenuItemPrice.ToString("N2") Türk Lirası">
                                     <div class="item-price">
                                         <span class="item-price-currency">₺</span>@item.MenuItemPrice.ToString("N0")
@@ -207,11 +249,15 @@
             }
         }
 
+        @* ════════════════════════════════════════════════════════
+           FOOTER
+           ════════════════════════════════════════════════════════ *@
         <footer class="qr-footer">
             <span class="footer-ornament">◆ &nbsp; ◆ &nbsp; ◆</span>
             <p class="footer-text">@T("thanks")</p>
             <span class="footer-sub">@T("enjoy")</span>
         </footer>
+
     </div>
 
     <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
@@ -224,6 +270,9 @@
             window.location.href = url.toString();
         }
 
+        /* ════════════════════════════════════════════════════════════════
+           KATEGORİ FİLTRELEME
+           ════════════════════════════════════════════════════════════════ */
         let activeFilter = 'all';
 
         function filterCategory(catId, btn) {
@@ -237,7 +286,7 @@
 
             if (catId === 'all') {
                 sections.forEach(s => s.style.display = '');
-                gaps.forEach(g     => g.style.display = '');
+                gaps.forEach(g => g.style.display = '');
             } else {
                 sections.forEach(s => { s.style.display = (s.dataset.catId === catId) ? '' : 'none'; });
                 gaps.forEach(g => g.style.display = 'none');
@@ -249,10 +298,14 @@
             }
         }
 
+        /* ════════════════════════════════════════════════════════════════
+           SCROLL SPY
+           ════════════════════════════════════════════════════════════════ */
         (function initScrollSpy() {
             const sections = document.querySelectorAll('.menu-section[id]');
             const navBtns  = document.querySelectorAll('.cat-nav-btn');
             if (!sections.length) return;
+
             const navH = document.getElementById('catNavWrap')?.offsetHeight ?? 50;
             const observer = new IntersectionObserver(entries => {
                 if (activeFilter !== 'all') return;
@@ -266,21 +319,26 @@
                     });
                 });
             }, { rootMargin: `-${navH + 8}px 0px -60% 0px` });
+
             sections.forEach(s => observer.observe(s));
         })();
 
+        /* ════════════════════════════════════════════════════════════════
+           GARSON ÇAĞIR
+           ════════════════════════════════════════════════════════════════ */
         const TABLE_NAME_JS = "@Html.Raw(tableName.Replace("\"", "\\\""))";
 
         async function callWaiter() {
             const btn = document.getElementById('btnCallWaiter');
             btn.disabled = true;
             try {
-                const res  = await fetch('/QrMenu/CallWaiter', {
-                    method:  'POST',
+                const res = await fetch('/QrMenu/CallWaiter', {
+                    method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body:    JSON.stringify({ TableName: TABLE_NAME_JS })
+                    body: JSON.stringify({ TableName: TABLE_NAME_JS })
                 });
                 const data = await res.json();
+
                 if (data.success) {
                     btn.innerHTML = '<span class="btn-waiter-icon">✓</span><span>@T("waiterCalled")</span>';
                     showToast('@T("waiterMsg")');
@@ -293,10 +351,13 @@
             }
         }
 
+        /* ════════════════════════════════════════════════════════════════
+           TOAST
+           ════════════════════════════════════════════════════════════════ */
         function showToast(msg) {
             const wrap = document.getElementById('toastWrap');
-            const t    = document.createElement('div');
-            t.className   = 'toast';
+            const t = document.createElement('div');
+            t.className = 'toast';
             t.textContent = msg;
             wrap.appendChild(t);
             requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
