@@ -1,2 +1,470 @@
-﻿body {
+﻿/* ════════════════════════════════════════════════════════════════════════════
+   Views/Home/Index.css  —  Dashboard Bento Box Layout
+   Yol: wwwroot/css/Views/Home/Index.css
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Sayfa başlığı ──────────────────────────────────────────────────────── */
+.dash-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.75rem;
+    flex-wrap: wrap;
+    gap: .75rem;
+}
+
+.dash-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.55rem;
+    font-weight: 700;
+    letter-spacing: -.3px;
+    color: var(--text);
+}
+
+.dash-date {
+    font-size: .8rem;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.dash-subtitle {
+    font-size: .8rem;
+    color: var(--text-muted);
+    margin-top: .2rem;
+}
+
+/* ── Hızlı Alarm Şeridi ─────────────────────────────────────────────────── */
+.alert-strip {
+    display: flex;
+    gap: .6rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.alert-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .3rem .85rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    border: 1px solid;
+    cursor: default;
+    transition: opacity .2s;
+}
+
+    .alert-chip.chip-orange {
+        background: rgba(249,115,22,.12);
+        border-color: rgba(249,115,22,.35);
+        color: #F97316;
+    }
+
+    .alert-chip.chip-red {
+        background: rgba(239,68,68,.12);
+        border-color: rgba(239,68,68,.35);
+        color: #EF4444;
+    }
+
+    .alert-chip.chip-green {
+        background: rgba(34,197,94,.10);
+        border-color: rgba(34,197,94,.3);
+        color: #22C55E;
+    }
+
+/* ── KPI KART SATIRI (4 kart) ───────────────────────────────────────────── */
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 1100px) {
+    .kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .kpi-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Bento Kart Temel Stili ─────────────────────────────────────────────── */
+.bento-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.4rem 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform .18s ease, box-shadow .18s ease;
+}
+
+    .bento-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 32px rgba(0,0,0,.25);
+    }
+
+    /* Dekoratif turuncu köşe parıltısı */
+    .bento-card::before {
+        content: '';
+        position: absolute;
+        top: -40px;
+        right: -40px;
+        width: 100px;
+        height: 100px;
+        background: radial-gradient(circle, rgba(249,115,22,.12) 0%, transparent 70%);
+        border-radius: 50%;
+        pointer-events: none;
+    }
+
+/* ── KPI Kart İçeriği ───────────────────────────────────────────────────── */
+.kpi-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(249,115,22,.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(249,115,22,.2);
+}
+
+.kpi-label {
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: .4rem;
+}
+
+.kpi-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    margin-bottom: .55rem;
+    letter-spacing: -.5px;
+}
+
+.kpi-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .2rem;
+    padding: .2rem .6rem;
+    border-radius: 999px;
+    font-size: .72rem;
+    font-weight: 600;
+}
+
+    .kpi-badge.up {
+        background: rgba(34,197,94,.12);
+        color: #22C55E;
+        border: 1px solid rgba(34,197,94,.25);
+    }
+
+    .kpi-badge.down {
+        background: rgba(239,68,68,.12);
+        color: #EF4444;
+        border: 1px solid rgba(239,68,68,.25);
+    }
+
+    .kpi-badge.neutral {
+        background: rgba(156,163,175,.1);
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+    }
+
+.kpi-meta {
+    font-size: .72rem;
+    color: var(--text-muted);
+    margin-top: .3rem;
+}
+
+/* Aktif sipariş vurgusu */
+.kpi-active-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #22C55E;
+    margin-right: .3rem;
+    animation: pulse-dot 1.6s ease infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: .5;
+        transform: scale(1.4);
+    }
+}
+
+/* ── MASA DURUMU BARI ───────────────────────────────────────────────────── */
+.table-status-bar {
+    display: flex;
+    gap: .5rem;
+    margin-top: .75rem;
+    border-radius: 999px;
+    overflow: hidden;
+    height: 6px;
+}
+
+.tsb-segment {
+    border-radius: 999px;
+    transition: width .5s ease;
+}
+
+.tsb-occupied {
+    background: var(--accent);
+}
+
+.tsb-reserved {
+    background: #3B82F6;
+}
+
+.tsb-empty {
+    background: var(--border);
+}
+
+.table-legend {
+    display: flex;
+    gap: 1rem;
+    margin-top: .6rem;
+    flex-wrap: wrap;
+}
+
+.tl-item {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: .73rem;
+    color: var(--text-muted);
+}
+
+.tl-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* ── ALT GRAFİK SATIRI ──────────────────────────────────────────────────── */
+.chart-grid {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+@media (max-width: 1100px) {
+    .chart-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Grafik Kart ────────────────────────────────────────────────────────── */
+.chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.4rem 1.5rem;
+}
+
+.chart-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 1.25rem;
+}
+
+.chart-card-title {
+    font-family: 'Syne', sans-serif;
+    font-size: .95rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: .2rem;
+}
+
+.chart-card-sub {
+    font-size: .73rem;
+    color: var(--text-muted);
+}
+
+.chart-tag {
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    background: rgba(249,115,22,.1);
+    color: var(--accent);
+    border: 1px solid rgba(249,115,22,.2);
+    padding: .2rem .65rem;
+    border-radius: 999px;
+}
+
+.chart-wrap {
+    position: relative;
+}
+
+/* Boş durum */
+.chart-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 220px;
+    gap: .5rem;
+    color: var(--text-muted);
+    font-size: .82rem;
+}
+
+.chart-empty-icon {
+    font-size: 2rem;
+    opacity: .35;
+}
+
+/* ── Doughnut orta metni ────────────────────────────────────────────────── */
+.doughnut-wrap {
+    position: relative;
+    max-width: 240px;
+    margin: 0 auto;
+}
+
+.doughnut-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.dc-label {
+    font-size: .68rem;
+    color: var(--text-muted);
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.dc-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+}
+
+/* ── Top ürünler listesi ────────────────────────────────────────────────── */
+.top-list {
+    margin-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+}
+
+.top-item {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+}
+
+.top-rank {
+    font-family: 'Syne', sans-serif;
+    font-size: .75rem;
+    font-weight: 700;
+    color: var(--accent);
+    min-width: 20px;
+    text-align: center;
+}
+
+.top-name {
+    flex: 1;
+    font-size: .82rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.top-qty {
+    font-size: .78rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.top-bar-wrap {
+    width: 80px;
+    height: 4px;
+    background: var(--surface2);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.top-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 999px;
+    transition: width .6s ease;
+}
+
+/* ── Light mode overrides ───────────────────────────────────────────────── */
+[data-theme="light"] .bento-card,
+[data-theme="light"] .chart-card {
+    box-shadow: 0 1px 8px rgba(0,0,0,.06);
+}
+
+[data-theme="light"] .kpi-badge.up {
+    background: rgba(34,197,94,.08);
+}
+
+[data-theme="light"] .kpi-badge.down {
+    background: rgba(239,68,68,.08);
+}
+
+/* ── Animasyonlar ───────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.kpi-grid .bento-card:nth-child(1) {
+    animation: fadeUp .4s ease .05s both;
+}
+
+.kpi-grid .bento-card:nth-child(2) {
+    animation: fadeUp .4s ease .10s both;
+}
+
+.kpi-grid .bento-card:nth-child(3) {
+    animation: fadeUp .4s ease .15s both;
+}
+
+.kpi-grid .bento-card:nth-child(4) {
+    animation: fadeUp .4s ease .20s both;
+}
+
+.chart-card {
+    animation: fadeUp .4s ease .28s both;
 }
