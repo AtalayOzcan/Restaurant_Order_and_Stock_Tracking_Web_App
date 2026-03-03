@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
@@ -11,9 +12,11 @@ using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
 {
     [DbContext(typeof(RestaurantDbContext))]
-    partial class RestaurantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260303210523_AddMultiTenancy")]
+    partial class AddMultiTenancy
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -541,75 +544,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                     b.ToTable("payments", (string)null);
                 });
 
-            modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.ShiftLog", b =>
-                {
-                    b.Property<int>("ShiftLogId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ShiftLogId"));
-
-                    b.Property<DateTime?>("ClosedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("ClosedByUserId")
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("ClosingBalance")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("Difference")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("DifferenceThreshold")
-                        .HasColumnType("numeric");
-
-                    b.Property<bool>("IsClosed")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsLocked")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("OpenedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("OpenedByUserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("OpeningBalance")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("TotalCard")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("TotalCash")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("TotalDiscount")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("TotalOther")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("TotalSales")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("TotalWaste")
-                        .HasColumnType("numeric");
-
-                    b.HasKey("ShiftLogId");
-
-                    b.HasIndex("ClosedByUserId");
-
-                    b.HasIndex("OpenedByUserId");
-
-                    b.ToTable("ShiftLogs");
-                });
-
             modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.StockLog", b =>
                 {
                     b.Property<int>("StockLogId")
@@ -748,7 +682,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                         .HasDefaultValue("trial");
 
                     b.Property<int>("RestaurantType")
-                        .HasColumnType("integer");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.Property<string>("Subdomain")
                         .IsRequired()
@@ -984,23 +920,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                         .IsRequired();
 
                     b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.ShiftLog", b =>
-                {
-                    b.HasOne("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.ApplicationUser", "ClosedByUser")
-                        .WithMany()
-                        .HasForeignKey("ClosedByUserId");
-
-                    b.HasOne("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.ApplicationUser", "OpenedByUser")
-                        .WithMany()
-                        .HasForeignKey("OpenedByUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ClosedByUser");
-
-                    b.Navigation("OpenedByUser");
                 });
 
             modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.StockLog", b =>
