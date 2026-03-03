@@ -1,9 +1,30 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿// ════════════════════════════════════════════════════════════════════════════
+//  Controllers/OrdersController.cs  —  SignalR Entegrasyonlu Versiyon
+//  Yol: Restaurant_Order_and_Stock_Tracking_Web_App.MVC/Controllers/
+//
+//  DEĞİŞİKLİKLER (mevcut koda göre):
+//  1. using Microsoft.AspNetCore.SignalR      →  eklendi
+//  2. using ...Hubs                           →  eklendi
+//  3. _hub (IHubContext<NotificationHub>)     →  field + constructor inject
+//  4. NotifyAsync() private helper            →  eklendi
+//  5. POST Create     → CommitAsync sonrası  🧾 "Adisyon Açıldı" bildirimi
+//  6. POST AddItem    → CommitAsync sonrası  🍽️ "Ürün Eklendi"  bildirimi
+//  7. POST AddItemBulk→ CommitAsync sonrası  🛒 "Sipariş Güncellendi"
+//  8. POST AddPayment → isClosed=true sonrası ✅ "Adisyon Kapatıldı"
+//  9. POST Close      → CommitAsync sonrası  ✅ "Hesap Kapatıldı"
+// 10. POST CloseZero  → CommitAsync sonrası  🚫 "İptal Edildi"
+//
+//  Orijinal iş mantığı, validasyon ve hata yönetimi DOKUNULMADAN korunmuştur.
+// ════════════════════════════════════════════════════════════════════════════
+
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Dtos.Orders;
+using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Hubs;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models;
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
@@ -13,12 +34,31 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
     {
         private readonly RestaurantDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
+        private readonly IHubContext<NotificationHub> _hub; // ← YENİ
 
-        public OrdersController(RestaurantDbContext db, UserManager<ApplicationUser> userManager)
+        public OrdersController(
+            RestaurantDbContext db,
+            UserManager<ApplicationUser> userManager,
+            IHubContext<NotificationHub> hub)              // ← YENİ
         {
             _db = db;
             _userManager = userManager;
+            _hub = hub;
         }
+
+        // ═════════════════════════════════════════════════════════════
+        //  ÖZEL YARDIMCI: Dashboard'a SignalR bildirimi gönder.
+        //  Fire-and-forget; hub hatası controller'ı durdurmamalı.
+        //  Renk kodu:  turuncu=#f97316 | yeşil=#22c55e | kırmızı=#ef4444
+        // ═════════════════════════════════════════════════════════════
+        private Task NotifyAsync(string icon, string message, string color = "#f97316")
+            => _hub.Clients.All.SendAsync("ReceiveNotification", new
+            {
+                icon,
+                message,
+                color,
+                time = DateTime.Now.ToString("HH:mm")
+            });
 
         // ─────────────────────────────────────────────────────────────
         // GET /Orders
@@ -185,6 +225,12 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
 
+                // ── ▼ YENİ SATIR: Dashboard'a gerçek zamanlı bildirim ──────
+                _ = NotifyAsync("🧾",
+                    $"{table.TableName} için yeni adisyon açıldı — ₺{total:N0}",
+                    "#f97316");
+                // ── ▲ YENİ ──────────────────────────────────────────────────
+
                 return Json(new
                 {
                     success = true,
@@ -250,6 +296,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         {
             var order = await _db.Orders
                 .Include(o => o.OrderItems)
+                .Include(o => o.Table)
                 .FirstOrDefaultAsync(o => o.OrderId == dto.OrderId);
             var mi = await _db.MenuItems.FindAsync(dto.MenuItemId);
 
@@ -311,6 +358,12 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
 
+                // ── ▼ YENİ: Ürün ekleme bildirimi ──────────────────────────
+                _ = NotifyAsync("🍽️",
+                    $"{order.Table?.TableName ?? $"Adisyon #{order.OrderId}"} — {mi.MenuItemName} × {dto.Quantity} eklendi",
+                    "#f97316");
+                // ── ▲ YENİ ──────────────────────────────────────────────────
+
                 return Json(new { success = true, message = $"{mi.MenuItemName} eklendi." });
             }
             catch (Exception ex)
@@ -331,6 +384,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             var order = await _db.Orders
                 .Include(o => o.OrderItems)
+                .Include(o => o.Table)
                 .FirstOrDefaultAsync(o => o.OrderId == req.OrderId);
 
             if (order == null)
@@ -405,6 +459,12 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
 
+                // ── ▼ YENİ: Toplu ekleme bildirimi ─────────────────────────
+                _ = NotifyAsync("🛒",
+                    $"{order.Table?.TableName ?? $"Adisyon #{order.OrderId}"} — {req.Items.Count} ürün eklendi (+₺{totalAdded:N0})",
+                    "#f97316");
+                // ── ▲ YENİ ──────────────────────────────────────────────────
+
                 return Json(new { success = true, message = $"{req.Items.Count} ürün eklendi." });
             }
             catch (Exception ex)
@@ -415,18 +475,15 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         }
 
         // ─────────────────────────────────────────────────────────────
-        // POST /Orders/AddPayment   ← GÜNCELLENDI
+        // POST /Orders/AddPayment
         // ─────────────────────────────────────────────────────────────
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> AddPayment([FromBody] OrderPaymentDto dto)
         {
             if (dto.PaymentAmount <= 0)
                 return Json(new { success = false, message = "Geçerli bir ödeme tutarı giriniz." });
-
             if (dto.DiscountValue < 0)
                 return Json(new { success = false, message = "İndirim değeri negatif olamaz." });
-
-            // Yüzde indirimde 0–100 aralığı zorla
             if (dto.DiscountType == "percent" && dto.DiscountValue > 100)
                 return Json(new { success = false, message = "Yüzde indirim 0–100 arasında olmalıdır." });
 
@@ -441,22 +498,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             if (order.OrderStatus != "open")
                 return Json(new { success = false, message = "Bu adisyon zaten kapatılmış." });
 
-            // ── İndirim tutarını backend'de hesapla ve doğrula ────────
-            decimal discountAmount;
-            if (dto.DiscountType == "percent")
-            {
-                // Yüzde → TL: toplam * (yüzde / 100)
-                discountAmount = Math.Round(order.OrderTotalAmount * (dto.DiscountValue / 100m), 2);
-            }
-            else
-            {
-                // Sabit TL tutarı
-                discountAmount = Math.Round(dto.DiscountValue, 2);
-            }
+            decimal discountAmount = dto.DiscountType == "percent"
+                ? Math.Round(order.OrderTotalAmount * (dto.DiscountValue / 100m), 2)
+                : Math.Round(dto.DiscountValue, 2);
 
-            // İndirim tutarı adisyon toplamını aşamaz → net tutar 0'ın altına düşemez
-            discountAmount = Math.Min(discountAmount, order.OrderTotalAmount);
-            discountAmount = Math.Max(discountAmount, 0);
+            discountAmount = Math.Min(Math.Max(discountAmount, 0), order.OrderTotalAmount);
 
             var netTotal = order.OrderTotalAmount - discountAmount;
             var alreadyPaid = order.Payments.Sum(p => p.PaymentsAmount);
@@ -497,8 +543,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                     decimal budget = dto.PaymentAmount;
                     var unpaid = order.OrderItems
                         .Where(oi => oi.OrderItemStatus != "cancelled" && oi.PaidQuantity < oi.OrderItemQuantity)
-                        .OrderBy(oi => oi.OrderItemAddedAt)
-                        .ToList();
+                        .OrderBy(oi => oi.OrderItemAddedAt).ToList();
 
                     foreach (var oi in unpaid)
                     {
@@ -506,11 +551,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                         int remaining2 = oi.OrderItemQuantity - oi.PaidQuantity;
                         int canAfford = (int)Math.Floor(budget / oi.OrderItemUnitPrice);
                         int payQty = Math.Min(canAfford, remaining2);
-                        if (payQty > 0)
-                        {
-                            oi.PaidQuantity += payQty;
-                            budget -= payQty * oi.OrderItemUnitPrice;
-                        }
+                        if (payQty > 0) { oi.PaidQuantity += payQty; budget -= payQty * oi.OrderItemUnitPrice; }
                     }
                 }
 
@@ -531,7 +572,15 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 await tx.CommitAsync();
 
                 if (isClosed)
+                {
+                    // ── ▼ YENİ: Kısmi/tam ödemeyle adisyon kapandı ─────────
+                    _ = NotifyAsync("✅",
+                        $"{order.Table?.TableName ?? $"Adisyon #{order.OrderId}"} hesabını kapattı — ₺{netTotal:N0}",
+                        "#22c55e");
+                    // ── ▲ YENİ ──────────────────────────────────────────────
+
                     return Json(new { success = true, message = "Adisyon kapatıldı, ödeme tamamlandı.", redirectUrl = Url.Action("Index", "Orders") });
+                }
 
                 return Json(new
                 {
@@ -548,7 +597,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         }
 
         // ─────────────────────────────────────────────────────────────
-        // POST /Orders/Close
+        // POST /Orders/Close  (tek seferlik tam ödeme)
         // ─────────────────────────────────────────────────────────────
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Close([FromBody] OrderCloseDto dto)
@@ -587,9 +636,17 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 order.OrderStatus = "paid";
                 order.OrderClosedAt = DateTime.UtcNow;
                 order.Table!.TableStatus = 0;
+                var tableName = order.Table.TableName;
+                var total = order.OrderTotalAmount;
 
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
+
+                // ── ▼ YENİ: Tam ödeme kapanma bildirimi ────────────────────
+                _ = NotifyAsync("✅",
+                    $"{tableName} hesabını kapattı — ₺{total:N0}",
+                    "#22c55e");
+                // ── ▲ YENİ ──────────────────────────────────────────────────
 
                 return Json(new { success = true, message = "Adisyon kapatıldı, ödeme alındı.", redirectUrl = Url.Action("Index", "Tables") });
             }
@@ -628,12 +685,20 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
+                var tableName = order.Table?.TableName ?? $"Adisyon #{order.OrderId}";
+
                 order.OrderStatus = "cancelled";
                 order.OrderClosedAt = DateTime.UtcNow;
                 if (order.Table != null) order.Table.TableStatus = 0;
 
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
+
+                // ── ▼ YENİ: Sıfır-tutarlı adisyon iptal bildirimi ──────────
+                _ = NotifyAsync("🚫",
+                    $"{tableName} — sıfır tutarlı adisyon iptal edildi",
+                    "#ef4444");
+                // ── ▲ YENİ ──────────────────────────────────────────────────
 
                 return Json(new { success = true, message = "Sıfır tutarlı adisyon kapatıldı, masa boşaltıldı.", redirectUrl = Url.Action("Index", "Tables") });
             }
@@ -689,7 +754,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 if (tracksStock)
                 {
                     item.IsWasted = dto.IsWasted ?? false;
-
                     int prevStock = item.MenuItem!.StockQuantity;
 
                     if (dto.IsWasted != true)
