@@ -79,7 +79,45 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             return View(categories);
         }
 
-        // ── POST /QrMenu/CallWaiter ────────────────────────────────────
+        // ── GET /QrMenu/Detail/{id}?tableName={tableName} ─────────────────────
+        /// <summary>
+        /// Müşteri ürün kartına tıklayınca açılan tam sayfa ürün detayı.
+        /// tableName: geri dönüş linkini inşa etmek için query string olarak taşınır.
+        /// </summary>
+        [HttpGet]
+        [Route("QrMenu/Detail/{id}")]
+        public async Task<IActionResult> Detail(int id, string? tableName)
+        {
+            var item = await _context.MenuItems
+                .Include(m => m.Category)
+                .FirstOrDefaultAsync(m => m.MenuItemId == id && !m.IsDeleted);
+
+            if (item == null)
+                return NotFound("Ürün bulunamadı.");
+
+            // Aynı kategorideki önceki/sonraki ürün navigasyonu için tüm ürünleri al
+            var sibling = await _context.MenuItems
+                .Where(m => !m.IsDeleted && m.CategoryId == item.CategoryId
+                    && (m.IsAvailable || (m.TrackStock && m.StockQuantity > 0)))
+                .OrderBy(m => m.MenuItemCreatedTime)
+                .Select(m => new { m.MenuItemId, m.MenuItemName })
+                .ToListAsync();
+
+            var currentIdx = sibling.FindIndex(m => m.MenuItemId == id);
+            ViewData["PrevItemId"] = currentIdx > 0 ? sibling[currentIdx - 1].MenuItemId : (int?)null;
+            ViewData["NextItemId"] = currentIdx < sibling.Count - 1 ? sibling[currentIdx + 1].MenuItemId : (int?)null;
+
+            ViewData["Title"] = item.MenuItemName;
+            ViewData["TableName"] = tableName ?? "";
+            return View(item);
+        }
+
+        // ── POST /QrMenu/CallWaiter ────────────────────────────────────────────
+        /// <summary>
+        /// Müşteri "Garson Çağır" butonuna basınca çağrılır.
+        /// Payload: { "TableName": "Masa 1" }
+        /// SignalR ile tüm bağlı admin/garson ekranlarına anlık bildirim gönderir.
+        /// </summary>
         [HttpPost]
         [IgnoreAntiforgeryToken]
         [Route("QrMenu/CallWaiter")]

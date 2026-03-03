@@ -13,6 +13,7 @@ public class MenuItemEditDto
     public string? DescriptionEn { get; set; }
     public string? DescriptionAr { get; set; }
     public string? DescriptionRu { get; set; }
+    public string? DetailedDescription { get; set; }
     public int StockQuantity { get; set; }
     public bool TrackStock { get; set; }
     public bool IsAvailable { get; set; }

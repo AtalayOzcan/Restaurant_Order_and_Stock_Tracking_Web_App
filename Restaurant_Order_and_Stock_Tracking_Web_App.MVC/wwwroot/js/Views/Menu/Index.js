@@ -62,11 +62,36 @@ function resetTabsToTR(modalId, tablistId, panePrefix) {
     if (trPane) trPane.style.display = '';
 }
 
+// ── Görsel önizleme helper ───────────────────────────────────────────
+function bindImagePreview(inputId, previewWrapperId, previewImgId, previewNameId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.addEventListener('change', function () {
+        const file = this.files[0];
+        const wrap = document.getElementById(previewWrapperId);
+        const img = document.getElementById(previewImgId);
+        const name = document.getElementById(previewNameId);
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = e => { img.src = e.target.result; };
+            reader.readAsDataURL(file);
+            name.textContent = file.name;
+            wrap.style.display = 'block';
+        } else {
+            wrap.style.display = 'none';
+        }
+    });
+}
+
+// Preview binding'leri
+bindImagePreview('c_imageFile', 'c_preview', 'c_previewImg', 'c_previewName');
+bindImagePreview('e_imageFile', 'e_preview', 'e_previewImg', 'e_previewName');
+
+// ── Filter ───────────────────────────────────────────────────────────
 function filterTable() {
     const search = document.getElementById('searchInput').value.toLowerCase();
     const cat = document.getElementById('catFilter').value;
     const status = document.getElementById('statusFilter').value;
-
     document.querySelectorAll('#menuTable tbody tr[data-name]').forEach(row => {
         const matchName = row.dataset.name.includes(search);
         const matchCat = !cat || row.dataset.cat === cat;
@@ -75,18 +100,31 @@ function filterTable() {
     });
 }
 
-// ── CREATE ───────────────────────────────────────────────────────────
+// ── Create ───────────────────────────────────────────────────
 function openCreateModal() {
+    // Form sıfırla
     document.getElementById('createForm').reset();
     document.getElementById('c_isAvailable').checked = true;
     resetTabsToTR('createModal', 'createMenuLangTabs', 'cm');
+    document.getElementById('c_preview').style.display = 'none';
     openModal('createModal');
 }
 
 document.getElementById('createForm')?.addEventListener('submit', async e => {
     e.preventDefault();
     const btn = e.submitter;
-    btn.disabled = true;
+    const origText = btn.textContent;
+    btn.disabled = true; btn.textContent = '⏳ Kaydediliyor…';
+
+    const fd = new FormData();
+    fd.append('menuItemName', document.getElementById('c_name').value.trim());
+    fd.append('categoryId', document.getElementById('c_categoryId').value);
+    fd.append('menuItemPriceStr', document.getElementById('c_price').value);
+    fd.append('description', document.getElementById('c_description').value.trim());
+    fd.append('detailedDescription', document.getElementById('c_detailedDescription').value.trim());
+    fd.append('stockQuantity', document.getElementById('c_stock').value);
+    fd.append('trackStock', document.getElementById('c_trackStock').checked ? 'true' : 'false');
+    fd.append('isAvailable', document.getElementById('c_isAvailable').checked ? 'true' : 'false');
 
     const payload = {
         menuItemName: document.getElementById('c_name').value.trim(),
@@ -103,6 +141,8 @@ document.getElementById('createForm')?.addEventListener('submit', async e => {
         trackStock: document.getElementById('c_trackStock').checked,
         isAvailable: document.getElementById('c_isAvailable').checked
     };
+    const imgFile = document.getElementById('c_imageFile');
+    if (imgFile?.files[0]) fd.append('imageFile', imgFile.files[0]);
 
     try {
         const res = await fetch('/Menu/Create', {
@@ -111,7 +151,7 @@ document.getElementById('createForm')?.addEventListener('submit', async e => {
             body: JSON.stringify(payload)
         });
         const data = await res.json();
-        btn.disabled = false;
+        btn.disabled = false; btn.textContent = origText;
 
         if (data.success) {
             closeModal('createModal');
@@ -126,7 +166,15 @@ document.getElementById('createForm')?.addEventListener('submit', async e => {
     }
 });
 
-// ── EDIT ─────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════
+//  EDIT
+// ══════════════════════════════════════════════════════════════════════
+function removeEditImage() {
+    document.getElementById('e_removeImage').value = 'true';
+    document.getElementById('e_currentImgWrap').style.display = 'none';
+    document.getElementById('e_uploadHint').textContent = '🖼️  Tıkla veya sürükle';
+}
+
 async function openEditModal(id) {
     try {
         const res = await fetch(`/Menu/GetById/${id}`);
@@ -153,12 +201,45 @@ async function openEditModal(id) {
     } catch {
         showToast('Veri çekilirken hata oluştu.', 'error');
     }
+    // Form alanlarını doldur
+    document.getElementById('e_id').value = data.menuItemId;
+    document.getElementById('e_name').value = data.menuItemName;
+    document.getElementById('e_categoryId').value = data.categoryId;
+    document.getElementById('e_price').value = data.menuItemPrice;
+    document.getElementById('e_description').value = data.description ?? '';
+    document.getElementById('e_detailedDescription').value = data.detailedDescription ?? '';
+    document.getElementById('e_stock').value = data.stockQuantity;
+    document.getElementById('e_trackStock').checked = data.trackStock;
+    document.getElementById('e_isAvailable').checked = data.isAvailable;
+
+    // Görsel sıfırla
+    document.getElementById('e_removeImage').value = 'false';
+    document.getElementById('e_preview').style.display = 'none';
+
+    // Mevcut görsel
+    const wrap = document.getElementById('e_currentImgWrap');
+    const img = document.getElementById('e_currentImg');
+    if (data.imagePath) {
+        img.src = data.imagePath;
+        wrap.style.display = 'block';
+        document.getElementById('e_uploadHint').textContent = '🖼️  Yeni fotoğraf seçmek için tıkla';
+    } else {
+        wrap.style.display = 'none';
+        document.getElementById('e_uploadHint').textContent = '🖼️  Tıkla veya sürükle';
+    }
+
+    // Dosya input'unu temizle (eski seçimi kaldır)
+    const fileInput = document.getElementById('e_imageFile');
+    if (fileInput) fileInput.value = '';
+
+    openModal('editModal');
 }
 
 document.getElementById('editForm')?.addEventListener('submit', async e => {
     e.preventDefault();
     const btn = e.submitter;
-    btn.disabled = true;
+    const origText = btn.textContent;
+    btn.disabled = true; btn.textContent = '⏳ Güncelleniyor…';
 
     const payload = {
         id: parseInt(document.getElementById('e_id').value),
@@ -176,15 +257,31 @@ document.getElementById('editForm')?.addEventListener('submit', async e => {
         trackStock: document.getElementById('e_trackStock').checked,
         isAvailable: document.getElementById('e_isAvailable').checked
     };
+    const fd = new FormData();
+    fd.append('id', document.getElementById('e_id').value);
+    fd.append('menuItemName', document.getElementById('e_name').value.trim());
+    fd.append('categoryId', document.getElementById('e_categoryId').value);
+    fd.append('menuItemPriceStr', document.getElementById('e_price').value);
+    fd.append('description', document.getElementById('e_description').value.trim());
+    fd.append('detailedDescription', document.getElementById('e_detailedDescription').value.trim());
+    fd.append('stockQuantity', document.getElementById('e_stock').value);
+    fd.append('trackStock', document.getElementById('e_trackStock').checked ? 'true' : 'false');
+    fd.append('isAvailable', document.getElementById('e_isAvailable').checked ? 'true' : 'false');
+    fd.append('removeImage', document.getElementById('e_removeImage').value);
+
+    const imgFile = document.getElementById('e_imageFile');
+    if (imgFile?.files[0]) fd.append('imageFile', imgFile.files[0]);
 
     try {
         const res = await fetch('/Menu/Edit', {
             method: 'POST',
+            headers: { 'RequestVerificationToken': getToken() },
+            body: fd
             headers: { 'Content-Type': 'application/json', 'RequestVerificationToken': getToken() },
             body: JSON.stringify(payload)
         });
         const data = await res.json();
-        btn.disabled = false;
+        btn.disabled = false; btn.textContent = origText;
 
         if (data.success) {
             closeModal('editModal');
@@ -194,12 +291,14 @@ document.getElementById('editForm')?.addEventListener('submit', async e => {
             showToast(data.message, 'error');
         }
     } catch {
-        btn.disabled = false;
+        btn.disabled = false; btn.textContent = origText;
         showToast('Bağlantı hatası oluştu.', 'error');
     }
 });
 
-// ── DELETE ───────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════
+//  DELETE
+// ══════════════════════════════════════════════════════════════════════
 function openDeleteModal(id, name) {
     document.getElementById('d_id').value = id;
     document.getElementById('d_name').textContent = name;
@@ -234,4 +333,8 @@ document.getElementById('deleteForm').addEventListener('submit', async e => {
         closeModal('deleteModal');
         showToast('Bağlantı hatası oluştu.', 'error');
     }
+});
+    closeModal('deleteModal');
+    showToast(data.message, data.success ? 'success' : 'error');
+    if (data.success) setTimeout(() => location.reload(), 800);
 });

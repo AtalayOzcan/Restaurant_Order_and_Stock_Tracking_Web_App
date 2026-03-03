@@ -28,6 +28,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models
         public string? DescriptionAr { get; set; }   // AR
         public string? DescriptionRu { get; set; }   // RU
 
+        public string Description { get; set; }
+        /// <summary>QR Menü'de gösterilen detaylı/uzun açıklama metni.</summary>
+        public string? DetailedDescription { get; set; }
+        /// <summary>wwwroot göreli yolu, ör: /images/menu/abc123.jpg</summary>
+        public string? ImagePath { get; set; }
         public DateTime MenuItemCreatedTime { get; set; }
     }
 }

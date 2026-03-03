@@ -2,6 +2,7 @@
 
 public class MenuItemCreateDto
 {
+
     public string MenuItemName { get; set; }
     public string? NameEn { get; set; }
     public string? NameAr { get; set; }

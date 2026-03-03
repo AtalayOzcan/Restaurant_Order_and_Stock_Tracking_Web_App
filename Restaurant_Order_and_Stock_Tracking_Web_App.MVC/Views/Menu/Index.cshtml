@@ -78,6 +78,67 @@
             text-transform: none;
             margin-left: .3rem;
         }
+    <style>
+        /* ── Görsel upload zone (modal içi) ── */
+        .img-upload-zone {
+            border: 2px dashed rgba(255,255,255,.13);
+            border-radius: 10px;
+            padding: 1rem;
+            text-align: center;
+            cursor: pointer;
+            position: relative;
+            transition: border-color .2s, background .2s;
+            min-height: 64px;
+        }
+
+        [data-theme="light"] .img-upload-zone {
+            border-color: #d1d5db;
+        }
+
+        .img-upload-zone:hover {
+            border-color: #6366f1;
+            background: rgba(99,102,241,.04);
+        }
+
+        .img-upload-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+
+        .img-upload-hint {
+            font-size: .8rem;
+            opacity: .5;
+            pointer-events: none;
+        }
+
+        .img-upload-preview {
+            display: none;
+            margin-top: .6rem;
+            position: relative;
+        }
+
+            .img-upload-preview img {
+                max-height: 110px;
+                border-radius: 8px;
+                object-fit: cover;
+                border: 1px solid rgba(255,255,255,.1);
+                display: block;
+                margin: 0 auto;
+            }
+
+        [data-theme="light"] .img-upload-preview img {
+            border-color: #e5e7eb;
+        }
+
+        .img-upload-preview-name {
+            font-size: .74rem;
+            opacity: .45;
+            margin-top: .3rem;
+        }
 
         .rtl-input {
             font-family: 'Noto Sans Arabic', 'DM Sans', sans-serif;
@@ -89,14 +150,78 @@
     </style>
 }
 
+        .img-current-wrap {
+            margin-bottom: .5rem;
+            text-align: center;
+        }
+
+            .img-current-wrap img {
+                max-height: 100px;
+                border-radius: 8px;
+                object-fit: cover;
+                border: 1px solid rgba(255,255,255,.1);
+            }
+
+        [data-theme="light"] .img-current-wrap img {
+            border-color: #e5e7eb;
+        }
+
+        .img-remove-btn {
+            display: inline-block;
+            margin-top: .3rem;
+            font-size: .74rem;
+            padding: 2px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            background: rgba(239,68,68,.12);
+            border: 1px solid rgba(239,68,68,.3);
+            color: #ef4444;
+        }
+        /* thumbnail in table */
+        .item-thumb {
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            object-fit: cover;
+            border: 1px solid rgba(255,255,255,.1);
+            flex-shrink: 0;
+        }
+
+        [data-theme="light"] .item-thumb {
+            border-color: #e5e7eb;
+        }
+
+        .item-thumb-placeholder {
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            flex-shrink: 0;
+            background: rgba(255,255,255,.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            opacity: .4;
+        }
+
+        [data-theme="light"] .item-thumb-placeholder {
+            background: #f3f4f6;
+        }
+
+        .item-name-cell {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+        }
+    </style>
+}
+
 <div class="page-header">
     <div>
         <h1 class="page-title">🍕 Menü Ürünleri</h1>
         <div class="page-subtitle">@Model.Count() ürün listeleniyor</div>
     </div>
-    <button class="btn btn-primary" onclick="openCreateModal()">
-        ＋ Yeni Ürün
-    </button>
+    <button class="btn btn-primary" onclick="openCreateModal()">＋ Yeni Ürün</button>
 </div>
 
 <div class="filter-bar">
@@ -120,7 +245,7 @@
         <thead>
             <tr>
                 <th>#</th>
-                <th>Ürün Adı</th>
+                <th>Ürün</th>
                 <th>Kategori</th>
                 <th>Fiyat</th>
                 <th>Stok</th>
@@ -167,6 +292,23 @@
                                 }
                             </div>
                         }
+                        <div class="item-name-cell">
+                            @if (!string.IsNullOrEmpty(item.ImagePath))
+                            {
+                                <img src="@item.ImagePath" alt="@item.MenuItemName" class="item-thumb" loading="lazy" />
+                            }
+                            else
+                            {
+                                <div class="item-thumb-placeholder">🍽</div>
+                            }
+                            <div>
+                                <div style="font-weight:600;">@item.MenuItemName</div>
+                                @if (!string.IsNullOrEmpty(item.Description))
+                                {
+                                    <div style="font-size:.78rem; opacity:.45; margin-top:.1rem;">@(item.Description.Length > 48 ? item.Description.Substring(0, 48) + "…" : item.Description)</div>
+                                }
+                            </div>
+                        </div>
                     </td>
                     <td><span class="pill pill-indigo">@item.Category?.CategoryName</span></td>
                     <td><strong>₺@item.MenuItemPrice.ToString("N2")</strong></td>
@@ -206,13 +348,18 @@
 </div>
 
 <!-- CREATE MODAL -->
+
+
+<!-- ═══════════════════════════════════════════
+     CREATE MODAL
+═══════════════════════════════════════════ -->
 <div class="modal-overlay" id="createModal">
     <div class="modal">
         <div class="modal-header">
             <h2 class="modal-title">➕ Yeni Ürün</h2>
             <button class="modal-close" onclick="closeModal('createModal')">✕</button>
         </div>
-        <form id="createForm">
+        <form id="createForm" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
 
             <div class="lang-tabs-wrapper">
@@ -286,11 +433,17 @@
                     </div>
                 </div>
             </div>
+            <div class="form-group">
+                <label class="form-label">Ürün Adı *</label>
+                <input type="text" id="c_name" name="menuItemName" class="form-control" placeholder="örn. Türk Kahvesi" maxlength="200" required />
+            </div>
 
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Kategori <span class="required-star">*</span></label>
                     <select id="c_categoryId" class="form-control" required>
+                    <label class="form-label">Kategori *</label>
+                    <select id="c_categoryId" name="categoryId" class="form-control" required>
                         <option value="">— Seçin —</option>
                         @foreach (var cat in categories)
                         {
@@ -302,18 +455,43 @@
                     <label class="form-label">Fiyat (₺) <span class="required-star">*</span></label>
                     <input type="text" inputmode="decimal" id="c_price" class="form-control" placeholder="0.00" required />
                 </div>
+                    <label class="form-label">Fiyat (₺) *</label>
+                    <input type="text" inputmode="decimal" id="c_price" name="menuItemPriceStr" class="form-control" placeholder="0.00" required />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Kısa Açıklama</label>
+                <textarea id="c_description" name="description" class="form-control" rows="2" placeholder="Menü listesinde görünür"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Detaylı Açıklama <span style="opacity:.45;font-size:.75rem;">(QR Menü detay sayfasında görünür)</span></label>
+                <textarea id="c_detailedDescription" name="detailedDescription" class="form-control" rows="3" placeholder="Malzemeler, pişirme yöntemi, sunum önerisi…"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Ürün Fotoğrafı <span style="opacity:.45;font-size:.75rem;">maks. 5 MB · JPG PNG WEBP</span></label>
+                <div class="img-upload-zone" id="c_uploadZone">
+                    <input type="file" id="c_imageFile" name="imageFile" accept=".jpg,.jpeg,.png,.webp,.gif" />
+                    <div class="img-upload-hint">🖼️ &nbsp;Tıkla veya sürükle</div>
+                    <div class="img-upload-preview" id="c_preview">
+                        <img id="c_previewImg" src="#" alt="" />
+                        <div class="img-upload-preview-name" id="c_previewName"></div>
+                    </div>
+                </div>
             </div>
 
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Stok Miktarı</label>
-                    <input type="number" id="c_stock" class="form-control" value="0" min="0" />
+                    <input type="number" id="c_stock" name="stockQuantity" class="form-control" value="0" min="0" />
                 </div>
                 <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;">
                     <label class="form-label">Stok Takibi</label>
                     <div class="toggle-group">
                         <label class="toggle-switch">
-                            <input type="checkbox" id="c_trackStock" />
+                            <input type="checkbox" id="c_trackStock" name="trackStock" value="true" />
                             <span class="toggle-slider"></span>
                         </label>
                         <span class="toggle-label-text">Takip Et</span>
@@ -325,7 +503,7 @@
                 <label class="form-label">Satışa Açık</label>
                 <div class="toggle-group">
                     <label class="toggle-switch">
-                        <input type="checkbox" id="c_isAvailable" checked />
+                        <input type="checkbox" id="c_isAvailable" name="isAvailable" value="true" checked />
                         <span class="toggle-slider"></span>
                     </label>
                     <span class="toggle-label-text">Mevcut</span>
@@ -341,15 +519,20 @@
 </div>
 
 <!-- EDIT MODAL -->
+
+<!-- ═══════════════════════════════════════════
+     EDIT MODAL
+═══════════════════════════════════════════ -->
 <div class="modal-overlay" id="editModal">
     <div class="modal">
         <div class="modal-header">
             <h2 class="modal-title">✏️ Ürün Düzenle</h2>
             <button class="modal-close" onclick="closeModal('editModal')">✕</button>
         </div>
-        <form id="editForm">
+        <form id="editForm" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
-            <input type="hidden" id="e_id" />
+            <input type="hidden" id="e_id" name="id" />
+            <input type="hidden" id="e_removeImage" name="removeImage" value="false" />
 
             <div class="lang-tabs-wrapper">
                 <ul class="lang-tabs" role="tablist" id="editMenuLangTabs">
@@ -422,11 +605,17 @@
                     </div>
                 </div>
             </div>
+            <div class="form-group">
+                <label class="form-label">Ürün Adı *</label>
+                <input type="text" id="e_name" name="menuItemName" class="form-control" maxlength="200" required />
+            </div>
 
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Kategori <span class="required-star">*</span></label>
                     <select id="e_categoryId" class="form-control" required>
+                    <label class="form-label">Kategori *</label>
+                    <select id="e_categoryId" name="categoryId" class="form-control" required>
                         @foreach (var cat in categories)
                         {
                             <option value="@cat.CategoryId">@cat.CategoryName</option>
@@ -439,16 +628,44 @@
                 </div>
             </div>
 
+            <div class="form-group">
+                <label class="form-label">Kısa Açıklama</label>
+                <textarea id="e_description" name="description" class="form-control" rows="2"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Detaylı Açıklama <span style="opacity:.45;font-size:.75rem;">(QR Menü detay sayfasında görünür)</span></label>
+                <textarea id="e_detailedDescription" name="detailedDescription" class="form-control" rows="3" placeholder="Malzemeler, pişirme yöntemi, sunum önerisi…"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Ürün Fotoğrafı <span style="opacity:.45;font-size:.75rem;">maks. 5 MB · JPG PNG WEBP</span></label>
+                <div id="e_currentImgWrap" class="img-current-wrap" style="display:none;">
+                    <img id="e_currentImg" src="" alt="Mevcut görsel" />
+                    <div>
+                        <span class="img-remove-btn" onclick="removeEditImage()">🗑 Görseli Kaldır</span>
+                    </div>
+                </div>
+                <div class="img-upload-zone" id="e_uploadZone">
+                    <input type="file" id="e_imageFile" name="imageFile" accept=".jpg,.jpeg,.png,.webp,.gif" />
+                    <div class="img-upload-hint" id="e_uploadHint">🖼️ &nbsp;Tıkla veya sürükle</div>
+                    <div class="img-upload-preview" id="e_preview">
+                        <img id="e_previewImg" src="#" alt="" />
+                        <div class="img-upload-preview-name" id="e_previewName"></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Stok Miktarı</label>
-                    <input type="number" id="e_stock" class="form-control" min="0" />
+                    <input type="number" id="e_stock" name="stockQuantity" class="form-control" min="0" />
                 </div>
                 <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;">
                     <label class="form-label">Stok Takibi</label>
                     <div class="toggle-group">
                         <label class="toggle-switch">
-                            <input type="checkbox" id="e_trackStock" />
+                            <input type="checkbox" id="e_trackStock" name="trackStock" value="true" />
                             <span class="toggle-slider"></span>
                         </label>
                         <span class="toggle-label-text">Takip Et</span>
@@ -460,7 +677,7 @@
                 <label class="form-label">Satışa Açık</label>
                 <div class="toggle-group">
                     <label class="toggle-switch">
-                        <input type="checkbox" id="e_isAvailable" />
+                        <input type="checkbox" id="e_isAvailable" name="isAvailable" value="true" />
                         <span class="toggle-slider"></span>
                     </label>
                     <span class="toggle-label-text">Mevcut</span>
@@ -476,6 +693,9 @@
 </div>
 
 <!-- DELETE MODAL -->
+<!-- ═══════════════════════════════════════════
+     DELETE MODAL
+═══════════════════════════════════════════ -->
 <div class="modal-overlay" id="deleteModal">
     <div class="modal confirm-modal">
         <div class="confirm-icon">🗑️</div>
@@ -495,8 +715,10 @@
     </div>
 </div>
 
+
 <div class="toast-container" id="toastContainer"></div>
 
 @section Scripts {
     <script src="~/js/Views/Menu/Index.js" asp-append-version="true"></script>
+}
 }

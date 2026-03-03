@@ -1,0 +1,143 @@
+﻿@model Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.MenuItem
+
+@{
+    Layout = null;
+    var tableName = (string)(ViewData["TableName"] ?? "");
+    var prevId = (int?)ViewData["PrevItemId"];
+    var nextId = (int?)ViewData["NextItemId"];
+    var backUrl = string.IsNullOrEmpty(tableName) ? "#" : $"/QrMenu/Index/{Uri.EscapeDataString(tableName)}";
+    var prevUrl = prevId.HasValue ? $"/QrMenu/Detail/{prevId}?tableName={Uri.EscapeDataString(tableName)}" : null;
+    var nextUrl = nextId.HasValue ? $"/QrMenu/Detail/{nextId}?tableName={Uri.EscapeDataString(tableName)}" : null;
+    bool isLowStock = Model.TrackStock && Model.StockQuantity > 0
+                    && Model.StockQuantity <= Model.AlertThreshold
+                    && Model.AlertThreshold > 0;
+    bool isOutOfStock = Model.TrackStock && Model.StockQuantity <= 0;
+}
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#FAF9F6" />
+    <title>@Model.MenuItemName — Lezzet Durağı</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="~/css/Views/QrMenu/Index.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/Views/QrMenu/Detail.css" asp-append-version="true" />
+</head>
+<body class="detail-body">
+
+   
+    <header class="detail-topbar">
+        <a class="detail-back-btn" href="@backUrl" aria-label="Menüye dön">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+        </a>
+        <div class="detail-topbar-title">@Model.Category?.CategoryName</div>
+        <div class="detail-topbar-spacer"></div>
+    </header>
+
+   
+    <div class="detail-hero @(string.IsNullOrWhiteSpace(Model.ImagePath) ? "detail-hero--no-img" : "")">
+        @if (!string.IsNullOrWhiteSpace(Model.ImagePath))
+        {
+            <img class="detail-hero-img" src="@Model.ImagePath" alt="@Model.MenuItemName" />
+            <div class="detail-hero-gradient"></div>
+        }
+        else
+        {
+            <div class="detail-hero-placeholder">
+                <span>🍽️</span>
+            </div>
+        }
+    </div>
+
+    <div class="detail-card">
+
+       
+        <div class="detail-title-row">
+            <h1 class="detail-name">@Model.MenuItemName</h1>
+            <div class="detail-price">
+                <span class="detail-price-currency">₺</span>@Model.MenuItemPrice.ToString("N0")
+            </div>
+        </div>
+
+       
+        <div class="detail-meta-row">
+            <span class="detail-cat-pill">@Model.Category?.CategoryName</span>
+            @if (isOutOfStock)
+            {
+                <span class="detail-stock-pill detail-stock-out">Tükendi</span>
+            }
+            else if (isLowStock)
+            {
+                <span class="detail-stock-pill detail-stock-low">⚡ Sınırlı Stok</span>
+            }
+        </div>
+
+      
+        <div class="detail-divider"></div>
+
+       
+        @if (!string.IsNullOrWhiteSpace(Model.Description))
+        {
+            <p class="detail-short-desc">@Model.Description</p>
+        }
+
+        
+        @if (!string.IsNullOrWhiteSpace(Model.DetailedDescription))
+        {
+            <div class="detail-long-desc-wrap">
+                <div class="detail-long-desc-label">
+                    <span class="detail-orn">✦</span> Ürün Hakkında
+                </div>
+                <div class="detail-long-desc">@Model.DetailedDescription</div>
+            </div>
+        }
+
+    </div>
+
+    @if (prevUrl != null || nextUrl != null)
+    {
+        <div class="detail-nav-row">
+            @if (prevUrl != null)
+            {
+                <a class="detail-nav-btn" href="@prevUrl">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                    Önceki Ürün
+                </a>
+            }
+            else
+            {
+                <div></div>
+            }
+            @if (nextUrl != null)
+            {
+                <a class="detail-nav-btn" href="@nextUrl">
+                    Sonraki Ürün
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </a>
+            }
+            else
+            {
+                <div></div>
+            }
+        </div>
+    }
+
+    <div class="detail-footer">
+        <a class="detail-footer-btn" href="@backUrl">
+            ← Menüye Dön
+        </a>
+    </div>
+
+    <footer class="qr-footer" style="padding-bottom: calc(90px + env(safe-area-inset-bottom));">
+        <span class="footer-ornament">◆ &nbsp; ◆ &nbsp; ◆</span>
+        <p class="footer-text">Bizi tercih ettiğiniz için teşekkür ederiz.</p>
+        <span class="footer-sub">Afiyet Olsun</span>
+    </footer>
+
+</body>
+</html>

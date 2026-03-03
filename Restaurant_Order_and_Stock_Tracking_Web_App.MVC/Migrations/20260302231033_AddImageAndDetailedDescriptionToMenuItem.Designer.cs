@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
@@ -11,9 +12,11 @@ using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
 {
     [DbContext(typeof(RestaurantDbContext))]
-    partial class RestaurantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260302231033_AddImageAndDetailedDescriptionToMenuItem")]
+    partial class AddImageAndDetailedDescriptionToMenuItem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -251,15 +254,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
-                    b.Property<string>("NameAr")
-                        .HasColumnType("text");
-
-                    b.Property<string>("NameEn")
-                        .HasColumnType("text");
-
-                    b.Property<string>("NameRu")
-                        .HasColumnType("text");
-
                     b.HasKey("CategoryId");
 
                     b.HasIndex("CategoryName")
@@ -295,15 +289,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                         .HasDefaultValue(0);
 
                     b.Property<string>("Description")
-                        .HasColumnType("text");
-
-                    b.Property<string>("DescriptionAr")
-                        .HasColumnType("text");
-
-                    b.Property<string>("DescriptionEn")
-                        .HasColumnType("text");
-
-                    b.Property<string>("DescriptionRu")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("DetailedDescription")
@@ -333,15 +319,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                     b.Property<decimal>("MenuItemPrice")
                         .HasPrecision(10, 2)
                         .HasColumnType("numeric(10,2)");
-
-                    b.Property<string>("NameAr")
-                        .HasColumnType("text");
-
-                    b.Property<string>("NameEn")
-                        .HasColumnType("text");
-
-                    b.Property<string>("NameRu")
-                        .HasColumnType("text");
 
                     b.Property<int>("StockQuantity")
                         .ValueGeneratedOnAdd()
@@ -609,9 +586,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
-
-                    b.Property<DateTime?>("WaiterCalledAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("TableId");
 

@@ -84,6 +84,7 @@
 <body class="@(isRtl ? "rtl" : "")">
     <div class="qr-page">
 
+     
         <header class="qr-header">
             <nav class="lang-switcher" aria-label="Dil seçimi">
                 <button class="ls-item @(lang == "tr" ? "ls-active" : "")" onclick="setLang('tr')" aria-label="Türkçe">TR</button>
@@ -111,35 +112,59 @@
         <div class="waiter-section">
             <button class="btn-waiter" id="btnCallWaiter" onclick="callWaiter()"
                     @(isWaiterCalled ? "disabled" : "") aria-label="@T("callWaiter")">
-                @if (isWaiterCalled)
-                {
-                    <span class="btn-waiter-icon">✓</span>
+                    onclick="callWaiter()"
+                    @(isWaiterCalled ? "disabled" : "")
+                    aria-label="Garson çağır">
                     <span>@T("waiterCalled")</span>
-                }
-                else
+                    @(isWaiterCalled ? "disabled" : "")
+                    aria-label="Garson çağır">
+                    onclick="callWaiter()"
+                    @(isWaiterCalled ? "disabled" : "")
+                    <span>@T("callWaiter")</span>
+                    onclick="callWaiter()"
+                    @(isWaiterCalled ? "disabled" : "")
+                    aria-label="Garson çağır">
+                    onclick="callWaiter()"
+       KATEGORİ FİLTRE NAV — Sticky + Yatay Kaydırmalı
+       "Tümü" her zaman ilk sırada; sonra DB'den gelen kategoriler.
+       ════════════════════════════════════════════════════════ *@
+                    aria-label="Garson çağır">
+                    <button class="cat-nav-btn active" data-cat="all" onclick="filterCategory('all', this)">@T("allItems")</button>
                 {
                     <span class="btn-waiter-icon">◌</span>
-                    <span>@T("callWaiter")</span>
-                }
-            </button>
-        </div>
-
+                        <button class="cat-nav-btn" data-cat="@cat.CategoryId" onclick="filterCategory('@cat.CategoryId', this)">@CatName(cat)</button>
+        @* ════════════════════════════════════════════════════════
+       KATEGORİ FİLTRE NAV — Sticky + Yatay Kaydırmalı
+       "Tümü" her zaman ilk sırada; sonra DB'den gelen kategoriler.
+       ════════════════════════════════════════════════════════ *@
         @if (Model.Any())
-        {
-            <nav class="cat-nav-wrap" id="catNavWrap" aria-label="Kategori filtresi">
-                <div class="cat-nav" id="catNav">
-                    <button class="cat-nav-btn active" data-cat="all" onclick="filterCategory('all', this)">@T("allItems")</button>
+                    @* ── "Tümü" — sabit ilk buton ── *@
+                    <button class="cat-nav-btn active"
+            <div class="menu-empty">@T("noProduct")</div>
+                    </button>
+
+                    @* ── Veritabanından gelen kategoriler — dinamik ── *@
                     @foreach (var cat in Model)
                     {
-                        <button class="cat-nav-btn" data-cat="@cat.CategoryId" onclick="filterCategory('@cat.CategoryId', this)">@CatName(cat)</button>
+                        <button class="cat-nav-btn"
+                                data-cat="@cat.CategoryId"
+                                onclick="filterCategory('@cat.CategoryId', this)">
+                            @cat.CategoryName
+                        </button>
                     }
                 </div>
             </nav>
         }
 
+        @* ════════════════════════════════════════════════════════
+       MENÜ — Kategorilere göre Dinamik Bölümler
+       Her section'a data-cat-id ekleniyor → JS filtrelemesi bu niteliğe bakar
+       ════════════════════════════════════════════════════════ *@
         @if (!Model.Any())
         {
-            <div class="menu-empty">@T("noProduct")</div>
+            <div class="menu-empty">
+                Şu anda aktif ürün bulunmamaktadır.
+            </div>
         }
         else
         {
@@ -147,76 +172,79 @@
             @foreach (var cat in Model)
             {
                 var animDelay = 0.35 + (catIndex * 0.08);
-                var romanLabel = catIndex < romanNumerals.Length ? romanNumerals[catIndex] : (catIndex + 1).ToString();
-
-                <section class="menu-section"
-                         id="cat-section-@cat.CategoryId"
-                         data-cat-id="@cat.CategoryId"
+                            bool isLowStock = item.TrackStock && item.StockQuantity > 0
+                            && item.StockQuantity <= item.AlertThreshold && item.AlertThreshold > 0;
+                            var displayName = ItemName(item);
+                            var displayDesc = ItemDesc(item);
+                            bool isLowStock = item.TrackStock && item.StockQuantity > 0
+                            && item.StockQuantity <= item.AlertThreshold
+                            && item.AlertThreshold > 0;
+                            var detailUrl = $"/QrMenu/Detail/{item.MenuItemId}?tableName={Uri.EscapeDataString(tableName)}";
                          aria-labelledby="cat-title-@cat.CategoryId"
-                         style="animation-delay: @animDelay.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)s">
+                            <div class="menu-item" role="listitem" tabindex="0"
+                                 onclick="location.href='@detailUrl'"
+                                 onkeydown="if(event.key==='Enter')location.href='@detailUrl'">
 
-                    <div class="cat-header">
-                        <div class="cat-divider-top"></div>
-                        <span class="cat-roman">@romanLabel</span>
-                        <h2 class="cat-title" id="cat-title-@cat.CategoryId">@CatName(cat)</h2>
+                                
+                                <div class="item-thumb-col" aria-hidden="true">
+                                    @if (!string.IsNullOrWhiteSpace(item.ImagePath))
+                                    {
+                                        <img class="item-thumb" src="@item.ImagePath" alt="@item.MenuItemName" loading="lazy" />
+                                    }
+                                    else
+                                    {
+                                        <div class="item-thumb-ph">🍽</div>
+                                    }
+                                </div>
+
+                               
                         <div class="cat-divider-bottom">
-                            <div class="cat-divider-line left"></div>
-                            <div class="cat-divider-diamond">◆ ◆ ◆</div>
-                            <div class="cat-divider-line right"></div>
+                                    <div class="item-name">@displayName</div>
+                                    @if (!string.IsNullOrWhiteSpace(displayDesc))
+                                    <div class="item-name">
+                                        @item.MenuItemName
+                                        @if (!string.IsNullOrWhiteSpace(item.DetailedDescription) || !string.IsNullOrWhiteSpace(item.ImagePath))
+                                        {
+                                            <span class="item-arrow" aria-hidden="true">›</span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(item.Description))
                         </div>
                     </div>
 
                     <div class="menu-list" role="list">
                         @foreach (var item in cat.MenuItems)
-                        {
-                            itemCounter++;
-                            var itemNo = "No. " + itemCounter.ToString().PadLeft(2, '0');
-                            bool isLowStock = item.TrackStock && item.StockQuantity > 0
-                            && item.StockQuantity <= item.AlertThreshold && item.AlertThreshold > 0;
-                            var displayName = ItemName(item);
-                            var displayDesc = ItemDesc(item);
+                                        <div class="item-tags"><span class="item-tag">@T("limitedStock")</span></div>
 
+                            bool isLowStock = item.TrackStock
+                                <div class="item-price-col" aria-label="Fiyat: @item.MenuItemPrice.ToString("N2") Türk Lirası">
                             <div class="menu-item" role="listitem">
+
+                                @* Sütun 1: Numara *@
                                 <div class="item-number" aria-hidden="true">@itemNo</div>
+
+                                @* Sütun 2: İsim + Açıklama + Etiket *@
                                 <div class="item-info">
-                                    <div class="item-name">@displayName</div>
-                                    @if (!string.IsNullOrWhiteSpace(displayDesc))
+                                    <div class="item-name">@item.MenuItemName</div>
+
+                                    @if (!string.IsNullOrWhiteSpace(item.Description))
                                     {
                                         <div class="item-desc">@displayDesc</div>
                                     }
                                     @if (isLowStock)
                                     {
-                                        <div class="item-tags"><span class="item-tag">@T("limitedStock")</span></div>
-                                    }
-                                </div>
-                                <div class="item-price-col" aria-label="Fiyat: @item.MenuItemPrice.ToString("N2") Türk Lirası">
+                                        <div class="item-tags">
+                                            <span class="item-tag">Sınırlı Stok</span>
+
+                                @* Sütun 3: Fiyat *@
+                                <div class="item-price-col"
+                                     aria-label="Fiyat: @item.MenuItemPrice.ToString("N2") Türk Lirası">
                                     <div class="item-price">
                                         <span class="item-price-currency">₺</span>@item.MenuItemPrice.ToString("N0")
                                     </div>
                                 </div>
                             </div>
                         }
-                    </div>
-                </section>
-
-                @if (catIndex < Model.Count() - 1)
-                {
-                    <div class="section-gap" data-gap="true"></div>
-                }
-                catIndex++;
-            }
-        }
-
-        <footer class="qr-footer">
-            <span class="footer-ornament">◆ &nbsp; ◆ &nbsp; ◆</span>
-            <p class="footer-text">@T("thanks")</p>
-            <span class="footer-sub">@T("enjoy")</span>
-        </footer>
-    </div>
-
-    <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
-
-    <script>
         function setLang(lang) {
             document.cookie = `qrmenu_lang=${lang};path=/;max-age=${30 * 24 * 3600};samesite=lax`;
             const url = new URL(window.location.href);
@@ -224,13 +252,31 @@
             window.location.href = url.toString();
         }
 
-        let activeFilter = 'all';
+        @* ════════════════════════════════════════════════════════
+       FOOTER
+       ════════════════════════════════════════════════════════ *@
+        <footer class="qr-footer">
+            <span class="footer-ornament">◆ &nbsp; ◆ &nbsp; ◆</span>
+            btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
 
+    <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
+
+    <script>
+        /* ════════════════════════════════════════════════════════════════
+           KATEGORİ FİLTRELEME  (v2 — sayfa yenilenmeden gizle/göster)
+           ════════════════════════════════════════════════════════════════
+                gaps.forEach(g     => g.style.display = '');
+             'all'   → tüm .menu-section'lar gösterilir, scroll spy devreye girer
+             <id>    → yalnızca data-cat-id eşleşen section gösterilir; diğerleri
+                       display:none olur; section-gap'ler de gizlenir.
+        ════════════════════════════════════════════════════════════════ */
+
+        // Şu an hangi filtre aktif ('all' veya kategori ID string'i)
+                    window.scrollTo({ top: Math.max(0, target.getBoundingClientRect().top + window.scrollY - navH - 12), behavior: 'smooth' });
         function filterCategory(catId, btn) {
             document.querySelectorAll('.cat-nav-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-            activeFilter = catId;
+
 
             const sections = document.querySelectorAll('.menu-section');
             const gaps     = document.querySelectorAll('[data-gap]');
@@ -238,17 +284,17 @@
             if (catId === 'all') {
                 sections.forEach(s => s.style.display = '');
                 gaps.forEach(g     => g.style.display = '');
+
             } else {
                 sections.forEach(s => { s.style.display = (s.dataset.catId === catId) ? '' : 'none'; });
                 gaps.forEach(g => g.style.display = 'none');
                 const target = document.querySelector(`.menu-section[data-cat-id="${catId}"]`);
                 if (target) {
-                    const navH = document.getElementById('catNavWrap')?.offsetHeight ?? 50;
-                    window.scrollTo({ top: Math.max(0, target.getBoundingClientRect().top + window.scrollY - navH - 12), behavior: 'smooth' });
-                }
-            }
-        }
-
+                        if (match) b.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                    });
+                });
+            }, { rootMargin: `-${navH + 8}px 0px -60% 0px` });
+        ════════════════════════════════════════════════════════════════ */
         (function initScrollSpy() {
             const sections = document.querySelectorAll('.menu-section[id]');
             const navBtns  = document.querySelectorAll('.cat-nav-btn');
@@ -262,26 +308,7 @@
                     navBtns.forEach(b => {
                         const match = b.dataset.cat === id;
                         b.classList.toggle('active', match);
-                        if (match) b.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                    });
-                });
-            }, { rootMargin: `-${navH + 8}px 0px -60% 0px` });
-            sections.forEach(s => observer.observe(s));
-        })();
-
-        const TABLE_NAME_JS = "@Html.Raw(tableName.Replace("\"", "\\\""))";
-
-        async function callWaiter() {
-            const btn = document.getElementById('btnCallWaiter');
-            btn.disabled = true;
-            try {
-                const res  = await fetch('/QrMenu/CallWaiter', {
-                    method:  'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body:    JSON.stringify({ TableName: TABLE_NAME_JS })
-                });
-                const data = await res.json();
-                if (data.success) {
+                        if (match) {
                     btn.innerHTML = '<span class="btn-waiter-icon">✓</span><span>@T("waiterCalled")</span>';
                     showToast('@T("waiterMsg")');
                 } else {
@@ -291,12 +318,39 @@
                 btn.disabled = false;
                 showToast('@T("connError")');
             }
-        }
-
-        function showToast(msg) {
-            const wrap = document.getElementById('toastWrap');
+            sections.forEach(s => observer.observe(s));
+        })();
+        /* ════════════════════════════════════════════════════════════════
+           TOAST
+        ════════════════════════════════════════════════════════════════ */
+        ════════════════════════════════════════════════════════════════ */
+        const TABLE_NAME_JS = "@Html.Raw(tableName.Replace("\"", "\\\""))";
             const t    = document.createElement('div');
             t.className   = 'toast';
+            t.textContent = msg;
+            btn.disabled = true;
+            try {
+                const res  = await fetch('/QrMenu/CallWaiter', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ TableName: TABLE_NAME_JS }) });
+                const data = await res.json();
+                if (data.success) {
+                    btn.innerHTML = '<span class="btn-waiter-icon">✓</span><span>Garson Çağrıldı</span>';
+                    showToast('Garsonunuz en kısa sürede gelecek.');
+                } else {
+                    btn.disabled = false;
+                }
+            } catch {
+                btn.disabled = false;
+                showToast('Bağlantı hatası. Lütfen tekrar deneyiniz.');
+            }
+        }
+
+        /* ════════════════════════════════════════════════════════════════
+           TOAST
+        ════════════════════════════════════════════════════════════════ */
+        function showToast(msg) {
+            const wrap = document.getElementById('toastWrap');
+            const t = document.createElement('div');
+            t.className = 'toast';
             t.textContent = msg;
             wrap.appendChild(t);
             requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));

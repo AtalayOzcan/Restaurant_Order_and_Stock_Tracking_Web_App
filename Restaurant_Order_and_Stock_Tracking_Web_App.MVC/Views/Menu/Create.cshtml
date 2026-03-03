@@ -7,6 +7,69 @@
 
 @section Styles {
     <link href="~/css/Views/Menu/Create.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        /* ─── Görsel yükleme alanı ─── */
+        .image-upload-zone {
+            border: 2px dashed rgba(255,255,255,.15);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color .2s, background .2s;
+            position: relative;
+        }
+
+        [data-theme="light"] .image-upload-zone {
+            border-color: #d1d5db;
+        }
+
+        .image-upload-zone:hover {
+            border-color: #6366f1;
+            background: rgba(99,102,241,.04);
+        }
+
+        .image-upload-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+
+        .image-upload-icon {
+            font-size: 2rem;
+            margin-bottom: .5rem;
+            opacity: .5;
+        }
+
+        .image-upload-label {
+            font-size: .85rem;
+            opacity: .6;
+        }
+
+        .image-preview-wrap {
+            margin-top: .75rem;
+            display: none;
+        }
+
+            .image-preview-wrap img {
+                max-height: 160px;
+                border-radius: 8px;
+                object-fit: cover;
+                border: 1px solid rgba(255,255,255,.1);
+            }
+
+        [data-theme="light"] .image-preview-wrap img {
+            border-color: #e5e7eb;
+        }
+
+        .image-preview-name {
+            font-size: .78rem;
+            opacity: .55;
+            margin-top: .4rem;
+        }
+    </style>
 }
 
 <div class="form-page">
@@ -16,7 +79,8 @@
     </div>
 
     <div class="card">
-        <form id="createForm">
+        <%-- enctype="multipart/form-data" — dosya yüklemesi için zorunlu --%>
+        <form id="createForm" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
             <div id="alertBox" class="alert alert-error" style="display:none;"></div>
 
@@ -80,7 +144,7 @@
             <div class="form-row" style="margin-top:16px">
                 <div class="form-group">
                     <label class="form-label">Kategori *</label>
-                    <select id="c_categoryId" class="form-control" required>
+                    <select id="c_categoryId" name="categoryId" class="form-control" required>
                         <option value="">— Seçin —</option>
                         @foreach (var cat in categories)
                         {
@@ -90,20 +154,44 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Fiyat (₺) *</label>
-                    <input type="number" id="c_price" class="form-control" min="0" step="0.01" required />
+                    <input type="number" id="c_price" name="menuItemPriceStr" class="form-control" min="0" step="0.01" required />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Kısa Açıklama <span style="opacity:.5">(menü listesinde gösterilir)</span></label>
+                <textarea id="c_description" name="description" class="form-control" rows="2"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Detaylı Açıklama <span style="opacity:.5">(QR menü ürün detayında gösterilir)</span></label>
+                <textarea id="c_detailedDescription" name="detailedDescription" class="form-control" rows="4"
+                          placeholder="Malzemeler, pişirme yöntemi, sunum önerisi..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Ürün Fotoğrafı <span style="opacity:.5">(maks. 5 MB — JPG, PNG, WEBP)</span></label>
+                <div class="image-upload-zone" id="uploadZone">
+                    <input type="file" id="c_imageFile" name="imageFile" accept=".jpg,.jpeg,.png,.webp,.gif" />
+                    <div class="image-upload-icon">🖼️</div>
+                    <div class="image-upload-label">Fotoğraf seçmek için tıklayın veya sürükleyin</div>
+                    <div class="image-preview-wrap" id="previewWrap">
+                        <img id="previewImg" src="#" alt="Önizleme" />
+                        <div class="image-preview-name" id="previewName"></div>
+                    </div>
                 </div>
             </div>
 
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Stok Miktarı</label>
-                    <input type="number" id="c_stock" class="form-control" value="0" min="0" />
+                    <input type="number" id="c_stock" name="stockQuantity" class="form-control" value="0" min="0" />
                 </div>
                 <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;">
                     <label class="form-label">Stok Takibi</label>
                     <div class="toggle-group">
                         <label class="toggle-switch">
-                            <input type="checkbox" id="c_trackStock" />
+                            <input type="checkbox" id="c_trackStock" name="trackStock" value="true" />
                             <span class="toggle-slider"></span>
                         </label>
                         <span>Takip Et</span>
@@ -115,7 +203,7 @@
                 <label class="form-label">Satışa Açık</label>
                 <div class="toggle-group">
                     <label class="toggle-switch">
-                        <input type="checkbox" id="c_isAvailable" checked />
+                        <input type="checkbox" id="c_isAvailable" name="isAvailable" value="true" checked />
                         <span class="toggle-slider"></span>
                     </label>
                     <span>Mevcut</span>
