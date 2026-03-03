@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Dtos.Category;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models;
-using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.ViewModels.Reports;
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 {
@@ -59,9 +58,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         }
 
         // ── POST: /Category/Create  (AJAX JSON) ─────────────────────────
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([FromBody] CategoryCreateDto dto) // [FromBody] eklendi, parametreler DTO oldu
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create([FromBody] CategoryCreateDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.CategoryName))
                 return Json(new { success = false, message = "Kategori adı boş olamaz." });
@@ -72,9 +70,12 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             if (exists)
                 return Json(new { success = false, message = "Bu kategori adı zaten mevcut." });
 
-            var category = new Models.Category
+            var category = new Category
             {
                 CategoryName = dto.CategoryName.Trim(),
+                NameEn = string.IsNullOrWhiteSpace(dto.NameEn) ? null : dto.NameEn.Trim(),
+                NameAr = string.IsNullOrWhiteSpace(dto.NameAr) ? null : dto.NameAr.Trim(),
+                NameRu = string.IsNullOrWhiteSpace(dto.NameRu) ? null : dto.NameRu.Trim(),
                 CategorySortOrder = dto.CategorySortOrder,
                 IsActive = dto.IsActive
             };
@@ -84,6 +85,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             return Json(new { success = true, message = "Kategori başarıyla eklendi." });
         }
+
         // ── GET: /Category/Edit/5 ────────────────────────────────────────
         public async Task<IActionResult> Edit(int id)
         {
@@ -95,12 +97,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         }
 
         // ── POST: /Category/Edit  (AJAX JSON) ───────────────────────────
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit([FromBody] CategoryEditDto dto)
         {
-            if (dto.Id == null) return Json(new { success = false, message = "Geçersiz ID." });
-
             var category = await _context.Categories.FindAsync(dto.Id);
             if (category == null)
                 return Json(new { success = false, message = "Kategori bulunamadı." });
@@ -116,6 +115,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 return Json(new { success = false, message = "Bu kategori adı zaten mevcut." });
 
             category.CategoryName = dto.CategoryName.Trim();
+            category.NameEn = string.IsNullOrWhiteSpace(dto.NameEn) ? null : dto.NameEn.Trim();
+            category.NameAr = string.IsNullOrWhiteSpace(dto.NameAr) ? null : dto.NameAr.Trim();
+            category.NameRu = string.IsNullOrWhiteSpace(dto.NameRu) ? null : dto.NameRu.Trim();
             category.CategorySortOrder = dto.CategorySortOrder;
             category.IsActive = dto.IsActive;
 
@@ -124,8 +126,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         }
 
         // ── POST: /Category/Delete  (AJAX JSON) ─────────────────────────
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Delete(int id)
         {
             var category = await _context.Categories
@@ -148,7 +149,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             return Json(new { success = true, message = "Kategori silindi." });
         }
 
-        // ── GET: /Category/GetById/5  (Edit modal için) ─────────────────
+        // ── GET: /Category/GetById/5 ─────────────────────────────────────
         [HttpGet]
         public async Task<IActionResult> GetById(int id)
         {
@@ -160,6 +161,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 success = true,
                 categoryId = c.CategoryId,
                 categoryName = c.CategoryName,
+                nameEn = c.NameEn ?? "",
+                nameAr = c.NameAr ?? "",
+                nameRu = c.NameRu ?? "",
                 categorySortOrder = c.CategorySortOrder,
                 isActive = c.IsActive
             });

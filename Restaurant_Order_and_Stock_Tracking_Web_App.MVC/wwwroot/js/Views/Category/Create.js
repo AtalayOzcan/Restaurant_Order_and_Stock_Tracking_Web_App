@@ -1,19 +1,50 @@
-﻿
+﻿// ── Dil sekme geçişi ──────────────────────────────────────────
+function switchLangTab(lang, btn) {
+    document.querySelectorAll('.lang-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.lang-panel').forEach(p => p.style.display = 'none');
+    btn.classList.add('active');
+    document.getElementById('panel-' + lang).style.display = '';
+}
+
+// ── Form gönder ───────────────────────────────────────────────
 document.getElementById('createForm').addEventListener('submit', async e => {
     e.preventDefault();
-    const btn = e.submitter; btn.disabled = true;
-    const form = e.target;
-    const body = new URLSearchParams(new FormData(form));
+    const btn = e.submitter;
+    btn.disabled = true;
 
-    const res = await fetch('/Category/Create', { method: 'POST', body });
-    const data = await res.json();
-    btn.disabled = false;
+    const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
 
-    if (data.success) {
-        window.location.href = '/Category';
-    } else {
-        const box = document.getElementById('alertBox');
-        box.textContent = data.message;
-        box.style.display = 'block';
+    const payload = {
+        categoryName: document.getElementById('c_nameTr').value.trim(),
+        nameEn: document.getElementById('c_nameEn').value.trim(),
+        nameAr: document.getElementById('c_nameAr').value.trim(),
+        nameRu: document.getElementById('c_nameRu').value.trim(),
+        categorySortOrder: parseInt(document.getElementById('c_sortOrder').value) || 0,
+        isActive: document.getElementById('c_isActive').checked
+    };
+
+    try {
+        const res = await fetch('/Category/Create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': token
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        btn.disabled = false;
+
+        if (data.success) {
+            window.location.href = '/Category';
+        } else {
+            const box = document.getElementById('alertBox');
+            box.textContent = data.message;
+            box.style.display = 'block';
+        }
+    } catch {
+        btn.disabled = false;
+        document.getElementById('alertBox').textContent = 'Bağlantı hatası oluştu.';
+        document.getElementById('alertBox').style.display = 'block';
     }
 });

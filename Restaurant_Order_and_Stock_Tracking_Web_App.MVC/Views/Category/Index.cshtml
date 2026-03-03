@@ -6,6 +6,81 @@
 
 @section Styles {
     <link href="~/css/Views/Category/Index.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .lang-tabs-wrapper {
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border, rgba(255,255,255,.1));
+        }
+
+        .lang-tabs {
+            display: flex;
+            gap: 0;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .lang-tab-btn {
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: .5rem 1rem;
+            font-family: 'DM Sans', sans-serif;
+            font-size: .78rem;
+            font-weight: 600;
+            letter-spacing: .08em;
+            color: var(--text-muted, rgba(255,255,255,.4));
+            cursor: pointer;
+            transition: color .18s, border-color .18s;
+            margin-bottom: -1px;
+        }
+
+            .lang-tab-btn.active,
+            .lang-tab-btn[aria-selected="true"] {
+                color: #F97316;
+                border-bottom-color: #F97316;
+            }
+
+            .lang-tab-btn:hover:not(.active) {
+                color: var(--text, rgba(255,255,255,.75));
+            }
+
+        [data-theme="light"] .lang-tab-btn {
+            color: #6b7280;
+        }
+
+            [data-theme="light"] .lang-tab-btn.active {
+                color: #F97316;
+                border-bottom-color: #F97316;
+            }
+
+        .lang-tab-content {
+            padding-top: .15rem;
+        }
+
+        .lang-flag {
+            font-size: .9rem;
+            margin-right: .2rem;
+        }
+
+        .required-star {
+            color: #ef4444;
+            font-weight: 700;
+        }
+
+        .optional-badge {
+            font-size: .68rem;
+            font-weight: 400;
+            opacity: .5;
+            letter-spacing: 0;
+            text-transform: none;
+            margin-left: .3rem;
+        }
+
+        .rtl-input {
+            font-family: 'Noto Sans Arabic', 'DM Sans', sans-serif;
+        }
+    </style>
 }
 
 <div class="page-header">
@@ -46,7 +121,26 @@
             {
                 <tr>
                     <td style="opacity:.4; font-size:.8rem;">@cat.CategoryId</td>
-                    <td style="font-weight:600;">@cat.CategoryName</td>
+                    <td>
+                        <div style="font-weight:600;">@cat.CategoryName</div>
+                        @if (!string.IsNullOrWhiteSpace(cat.NameEn) || !string.IsNullOrWhiteSpace(cat.NameAr) || !string.IsNullOrWhiteSpace(cat.NameRu))
+                        {
+                            <div style="font-size:.72rem; opacity:.4; margin-top:.15rem;">
+                                @if (!string.IsNullOrWhiteSpace(cat.NameEn))
+                                {
+                                    <span>EN ✓</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(cat.NameAr))
+                                {
+                                    <span style="margin-left:.35rem;">AR ✓</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(cat.NameRu))
+                                {
+                                    <span style="margin-left:.35rem;">RU ✓</span>
+                                }
+                            </div>
+                        }
+                    </td>
                     <td><span class="pill pill-indigo">@cat.CategorySortOrder</span></td>
                     <td><span class="pill pill-indigo">@(cat.MenuItems?.Count ?? 0) ürün</span></td>
                     <td>
@@ -62,14 +156,8 @@
                     <td>
                         <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
                             <a asp-action="Detail" asp-route-id="@cat.CategoryId" class="btn btn-detail btn-sm">👁 Detay</a>
-                            <button class="btn btn-edit btn-sm"
-                                    onclick="openEditModal(@cat.CategoryId)">
-                                ✏️ Düzenle
-                            </button>
-                            <button class="btn btn-delete btn-sm"
-                                    onclick="openDeleteModal(@cat.CategoryId, '@cat.CategoryName')">
-                                🗑 Sil
-                            </button>
+                            <button class="btn btn-edit btn-sm" onclick="openEditModal(@cat.CategoryId)">✏️ Düzenle</button>
+                            <button class="btn btn-delete btn-sm" onclick="openDeleteModal(@cat.CategoryId, '@cat.CategoryName')">🗑 Sil</button>
                         </div>
                     </td>
                 </tr>
@@ -78,6 +166,7 @@
     </table>
 </div>
 
+<!-- CREATE MODAL -->
 <div class="modal-overlay" id="createModal">
     <div class="modal">
         <div class="modal-header">
@@ -86,10 +175,67 @@
         </div>
         <form id="createForm">
             @Html.AntiForgeryToken()
-            <div class="form-group">
-                <label class="form-label">Kategori Adı *</label>
-                <input type="text" id="create_categoryName" class="form-control" placeholder="örn. İçecekler" maxlength="100" required />
+
+            <div class="lang-tabs-wrapper">
+                <ul class="lang-tabs" role="tablist" id="createLangTabs">
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn active" role="tab" aria-selected="true"
+                                data-target="c-pane-tr" onclick="switchTab(this,'createLangTabs')">
+                            <span class="lang-flag">🇹🇷</span> TR
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn" role="tab" aria-selected="false"
+                                data-target="c-pane-en" onclick="switchTab(this,'createLangTabs')">
+                            <span class="lang-flag">🇬🇧</span> EN
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn" role="tab" aria-selected="false"
+                                data-target="c-pane-ar" onclick="switchTab(this,'createLangTabs')">
+                            <span class="lang-flag">🇸🇦</span> AR
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn" role="tab" aria-selected="false"
+                                data-target="c-pane-ru" onclick="switchTab(this,'createLangTabs')">
+                            <span class="lang-flag">🇷🇺</span> RU
+                        </button>
+                    </li>
+                </ul>
             </div>
+
+            <div class="lang-tab-content">
+                <div id="c-pane-tr" class="lang-pane">
+                    <div class="form-group">
+                        <label class="form-label">Kategori Adı <span class="required-star">*</span></label>
+                        <input type="text" id="create_categoryName" class="form-control"
+                               placeholder="örn. İçecekler" maxlength="100" required />
+                    </div>
+                </div>
+                <div id="c-pane-en" class="lang-pane" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">Category Name <span class="optional-badge">(opsiyonel)</span></label>
+                        <input type="text" id="create_nameEn" class="form-control"
+                               placeholder="e.g. Beverages" maxlength="100" />
+                    </div>
+                </div>
+                <div id="c-pane-ar" class="lang-pane" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">اسم الفئة <span class="optional-badge">(opsiyonel)</span></label>
+                        <input type="text" id="create_nameAr" class="form-control rtl-input"
+                               placeholder="مثال: المشروبات" maxlength="100" dir="rtl" />
+                    </div>
+                </div>
+                <div id="c-pane-ru" class="lang-pane" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">Название категории <span class="optional-badge">(opsiyonel)</span></label>
+                        <input type="text" id="create_nameRu" class="form-control"
+                               placeholder="например: Напитки" maxlength="100" />
+                    </div>
+                </div>
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Sıralama</label>
@@ -106,6 +252,7 @@
                     </div>
                 </div>
             </div>
+
             <div class="modal-footer">
                 <button type="button" class="btn btn-ghost" onclick="closeModal('createModal')">İptal</button>
                 <button type="submit" class="btn btn-primary">💾 Kaydet</button>
@@ -114,6 +261,7 @@
     </div>
 </div>
 
+<!-- EDIT MODAL -->
 <div class="modal-overlay" id="editModal">
     <div class="modal">
         <div class="modal-header">
@@ -123,10 +271,63 @@
         <form id="editForm">
             @Html.AntiForgeryToken()
             <input type="hidden" id="edit_id" />
-            <div class="form-group">
-                <label class="form-label">Kategori Adı *</label>
-                <input type="text" id="edit_categoryName" class="form-control" maxlength="100" required />
+
+            <div class="lang-tabs-wrapper">
+                <ul class="lang-tabs" role="tablist" id="editLangTabs">
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn active" role="tab" aria-selected="true"
+                                data-target="e-pane-tr" onclick="switchTab(this,'editLangTabs')">
+                            <span class="lang-flag">🇹🇷</span> TR
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn" role="tab" aria-selected="false"
+                                data-target="e-pane-en" onclick="switchTab(this,'editLangTabs')">
+                            <span class="lang-flag">🇬🇧</span> EN
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn" role="tab" aria-selected="false"
+                                data-target="e-pane-ar" onclick="switchTab(this,'editLangTabs')">
+                            <span class="lang-flag">🇸🇦</span> AR
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn" role="tab" aria-selected="false"
+                                data-target="e-pane-ru" onclick="switchTab(this,'editLangTabs')">
+                            <span class="lang-flag">🇷🇺</span> RU
+                        </button>
+                    </li>
+                </ul>
             </div>
+
+            <div class="lang-tab-content">
+                <div id="e-pane-tr" class="lang-pane">
+                    <div class="form-group">
+                        <label class="form-label">Kategori Adı <span class="required-star">*</span></label>
+                        <input type="text" id="edit_categoryName" class="form-control" maxlength="100" required />
+                    </div>
+                </div>
+                <div id="e-pane-en" class="lang-pane" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">Category Name <span class="optional-badge">(opsiyonel)</span></label>
+                        <input type="text" id="edit_nameEn" class="form-control" maxlength="100" />
+                    </div>
+                </div>
+                <div id="e-pane-ar" class="lang-pane" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">اسم الفئة <span class="optional-badge">(opsiyonel)</span></label>
+                        <input type="text" id="edit_nameAr" class="form-control rtl-input" maxlength="100" dir="rtl" />
+                    </div>
+                </div>
+                <div id="e-pane-ru" class="lang-pane" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">Название категории <span class="optional-badge">(opsiyonel)</span></label>
+                        <input type="text" id="edit_nameRu" class="form-control" maxlength="100" />
+                    </div>
+                </div>
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Sıralama</label>
@@ -143,6 +344,7 @@
                     </div>
                 </div>
             </div>
+
             <div class="modal-footer">
                 <button type="button" class="btn btn-ghost" onclick="closeModal('editModal')">İptal</button>
                 <button type="submit" class="btn btn-primary">💾 Güncelle</button>
@@ -151,7 +353,7 @@
     </div>
 </div>
 
-
+<!-- DELETE MODAL -->
 <div class="modal-overlay" id="deleteModal">
     <div class="modal confirm-modal">
         <div class="confirm-icon">🗑️</div>
@@ -170,7 +372,6 @@
         </form>
     </div>
 </div>
-
 
 <div class="toast-container" id="toastContainer"></div>
 

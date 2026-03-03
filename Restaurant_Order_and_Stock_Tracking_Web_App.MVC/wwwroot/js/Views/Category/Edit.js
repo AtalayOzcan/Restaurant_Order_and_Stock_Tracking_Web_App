@@ -1,25 +1,51 @@
-﻿
+﻿// ── Dil sekme geçişi ──────────────────────────────────────────
+function switchLangTab(lang, btn) {
+    document.querySelectorAll('.lang-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.lang-panel').forEach(p => p.style.display = 'none');
+    btn.classList.add('active');
+    document.getElementById('panel-' + lang).style.display = '';
+}
+
+// ── Form gönder ───────────────────────────────────────────────
 document.getElementById('editForm').addEventListener('submit', async e => {
     e.preventDefault();
-    const btn = e.submitter; btn.disabled = true;
+    const btn = e.submitter;
+    btn.disabled = true;
 
-    const body = new URLSearchParams({
-        id: document.getElementById('editId').value,
-        categoryName: document.getElementById('categoryName').value,
-        categorySortOrder: document.getElementById('sortOrder').value,
-        isActive: document.getElementById('isActive').checked,
-        __RequestVerificationToken: document.querySelector('input[name="__RequestVerificationToken"]').value
-    });
+    const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
 
-    const res = await fetch('/Category/Edit', { method: 'POST', body });
-    const data = await res.json();
-    btn.disabled = false;
+    const payload = {
+        id: parseInt(document.getElementById('editId').value),
+        categoryName: document.getElementById('categoryName').value.trim(),
+        nameEn: document.getElementById('nameEn').value.trim(),
+        nameAr: document.getElementById('nameAr').value.trim(),
+        nameRu: document.getElementById('nameRu').value.trim(),
+        categorySortOrder: parseInt(document.getElementById('sortOrder').value) || 0,
+        isActive: document.getElementById('isActive').checked
+    };
 
-    if (data.success) {
-        window.location.href = '/Category';
-    } else {
-        const box = document.getElementById('alertBox');
-        box.textContent = data.message;
-        box.style.display = 'block';
+    try {
+        const res = await fetch('/Category/Edit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': token
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        btn.disabled = false;
+
+        if (data.success) {
+            window.location.href = '/Category';
+        } else {
+            const box = document.getElementById('alertBox');
+            box.textContent = data.message;
+            box.style.display = 'block';
+        }
+    } catch {
+        btn.disabled = false;
+        document.getElementById('alertBox').textContent = 'Bağlantı hatası oluştu.';
+        document.getElementById('alertBox').style.display = 'block';
     }
 });

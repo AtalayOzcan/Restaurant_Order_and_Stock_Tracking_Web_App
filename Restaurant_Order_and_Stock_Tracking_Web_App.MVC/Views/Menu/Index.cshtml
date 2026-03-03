@@ -8,6 +8,85 @@
 
 @section Styles {
     <link href="~/css/Views/Menu/Index.css" rel="stylesheet" asp-append-version="true" />
+    <style>
+        .lang-tabs-wrapper {
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border, rgba(255,255,255,.1));
+        }
+
+        .lang-tabs {
+            display: flex;
+            gap: 0;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .lang-tab-btn {
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: .5rem 1rem;
+            font-family: 'DM Sans', sans-serif;
+            font-size: .78rem;
+            font-weight: 600;
+            letter-spacing: .08em;
+            color: var(--text-muted, rgba(255,255,255,.4));
+            cursor: pointer;
+            transition: color .18s, border-color .18s;
+            margin-bottom: -1px;
+        }
+
+            .lang-tab-btn.active,
+            .lang-tab-btn[aria-selected="true"] {
+                color: #F97316;
+                border-bottom-color: #F97316;
+            }
+
+            .lang-tab-btn:hover:not(.active) {
+                color: var(--text, rgba(255,255,255,.75));
+            }
+
+        [data-theme="light"] .lang-tab-btn {
+            color: #6b7280;
+        }
+
+            [data-theme="light"] .lang-tab-btn.active {
+                color: #F97316;
+                border-bottom-color: #F97316;
+            }
+
+        .lang-tab-content {
+            padding-top: .15rem;
+        }
+
+        .lang-flag {
+            font-size: .9rem;
+            margin-right: .2rem;
+        }
+
+        .required-star {
+            color: #ef4444;
+            font-weight: 700;
+        }
+
+        .optional-badge {
+            font-size: .68rem;
+            font-weight: 400;
+            opacity: .5;
+            letter-spacing: 0;
+            text-transform: none;
+            margin-left: .3rem;
+        }
+
+        .rtl-input {
+            font-family: 'Noto Sans Arabic', 'DM Sans', sans-serif;
+        }
+
+        #createModal .modal, #editModal .modal {
+            max-width: 520px;
+        }
+    </style>
 }
 
 <div class="page-header">
@@ -71,6 +150,23 @@
                         {
                             <div style="font-size:.78rem; opacity:.45; margin-top:.15rem;">@(item.Description.Length > 50 ? item.Description.Substring(0, 50) + "…" : item.Description)</div>
                         }
+                        @if (!string.IsNullOrWhiteSpace(item.NameEn) || !string.IsNullOrWhiteSpace(item.NameAr) || !string.IsNullOrWhiteSpace(item.NameRu))
+                        {
+                            <div style="font-size:.7rem; opacity:.35; margin-top:.1rem;">
+                                @if (!string.IsNullOrWhiteSpace(item.NameEn))
+                                {
+                                    <span>EN ✓</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(item.NameAr))
+                                {
+                                    <span style="margin-left:.3rem;">AR ✓</span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(item.NameRu))
+                                {
+                                    <span style="margin-left:.3rem;">RU ✓</span>
+                                }
+                            </div>
+                        }
                     </td>
                     <td><span class="pill pill-indigo">@item.Category?.CategoryName</span></td>
                     <td><strong>₺@item.MenuItemPrice.ToString("N2")</strong></td>
@@ -93,7 +189,6 @@
                         }
                         else
                         {
-
                             <span class="pill pill-red">✗ Yok</span>
                         }
                     </td>
@@ -109,6 +204,8 @@
         </tbody>
     </table>
 </div>
+
+<!-- CREATE MODAL -->
 <div class="modal-overlay" id="createModal">
     <div class="modal">
         <div class="modal-header">
@@ -118,14 +215,81 @@
         <form id="createForm">
             @Html.AntiForgeryToken()
 
-            <div class="form-group">
-                <label class="form-label">Ürün Adı *</label>
-                <input type="text" id="c_name" class="form-control" placeholder="örn. Türk Kahvesi" maxlength="200" required />
+            <div class="lang-tabs-wrapper">
+                <ul class="lang-tabs" role="tablist" id="createMenuLangTabs">
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn active" role="tab" aria-selected="true"
+                                data-target="cm-pane-tr" onclick="switchTab(this,'createMenuLangTabs')">
+                            <span class="lang-flag">🇹🇷</span> TR
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn" role="tab" aria-selected="false"
+                                data-target="cm-pane-en" onclick="switchTab(this,'createMenuLangTabs')">
+                            <span class="lang-flag">🇬🇧</span> EN
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn" role="tab" aria-selected="false"
+                                data-target="cm-pane-ar" onclick="switchTab(this,'createMenuLangTabs')">
+                            <span class="lang-flag">🇸🇦</span> AR
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn" role="tab" aria-selected="false"
+                                data-target="cm-pane-ru" onclick="switchTab(this,'createMenuLangTabs')">
+                            <span class="lang-flag">🇷🇺</span> RU
+                        </button>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="lang-tab-content">
+                <div id="cm-pane-tr" class="lang-pane">
+                    <div class="form-group">
+                        <label class="form-label">Ürün Adı <span class="required-star">*</span></label>
+                        <input type="text" id="c_name" class="form-control" placeholder="örn. Türk Kahvesi" maxlength="200" required />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Açıklama (TR)</label>
+                        <textarea id="c_description" class="form-control" rows="2" placeholder="Kısa açıklama (isteğe bağlı)"></textarea>
+                    </div>
+                </div>
+                <div id="cm-pane-en" class="lang-pane" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">Product Name <span class="optional-badge">(opsiyonel)</span></label>
+                        <input type="text" id="c_nameEn" class="form-control" placeholder="e.g. Turkish Coffee" maxlength="200" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description (EN) <span class="optional-badge">(opsiyonel)</span></label>
+                        <textarea id="c_descriptionEn" class="form-control" rows="2" placeholder="Short description in English"></textarea>
+                    </div>
+                </div>
+                <div id="cm-pane-ar" class="lang-pane" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">اسم المنتج <span class="optional-badge">(opsiyonel)</span></label>
+                        <input type="text" id="c_nameAr" class="form-control rtl-input" placeholder="مثال: القهوة التركية" maxlength="200" dir="rtl" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">الوصف (AR) <span class="optional-badge">(opsiyonel)</span></label>
+                        <textarea id="c_descriptionAr" class="form-control rtl-input" rows="2" placeholder="وصف قصير بالعربية" dir="rtl"></textarea>
+                    </div>
+                </div>
+                <div id="cm-pane-ru" class="lang-pane" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">Название продукта <span class="optional-badge">(opsiyonel)</span></label>
+                        <input type="text" id="c_nameRu" class="form-control" placeholder="например: Турецкий кофе" maxlength="200" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Описание (RU) <span class="optional-badge">(opsiyonel)</span></label>
+                        <textarea id="c_descriptionRu" class="form-control" rows="2" placeholder="Краткое описание на русском"></textarea>
+                    </div>
+                </div>
             </div>
 
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Kategori *</label>
+                    <label class="form-label">Kategori <span class="required-star">*</span></label>
                     <select id="c_categoryId" class="form-control" required>
                         <option value="">— Seçin —</option>
                         @foreach (var cat in categories)
@@ -135,14 +299,9 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Fiyat (₺) *</label>
-                    <input type="text" inputmode="decimal" id="c_price" name="menuItemPriceStr" class="form-control" placeholder="0.00" required />
+                    <label class="form-label">Fiyat (₺) <span class="required-star">*</span></label>
+                    <input type="text" inputmode="decimal" id="c_price" class="form-control" placeholder="0.00" required />
                 </div>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Açıklama</label>
-                <textarea id="c_description" class="form-control" rows="2" placeholder="Kısa açıklama (isteğe bağlı)"></textarea>
             </div>
 
             <div class="form-row">
@@ -180,6 +339,8 @@
         </form>
     </div>
 </div>
+
+<!-- EDIT MODAL -->
 <div class="modal-overlay" id="editModal">
     <div class="modal">
         <div class="modal-header">
@@ -190,14 +351,81 @@
             @Html.AntiForgeryToken()
             <input type="hidden" id="e_id" />
 
-            <div class="form-group">
-                <label class="form-label">Ürün Adı *</label>
-                <input type="text" id="e_name" class="form-control" maxlength="200" required />
+            <div class="lang-tabs-wrapper">
+                <ul class="lang-tabs" role="tablist" id="editMenuLangTabs">
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn active" role="tab" aria-selected="true"
+                                data-target="em-pane-tr" onclick="switchTab(this,'editMenuLangTabs')">
+                            <span class="lang-flag">🇹🇷</span> TR
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn" role="tab" aria-selected="false"
+                                data-target="em-pane-en" onclick="switchTab(this,'editMenuLangTabs')">
+                            <span class="lang-flag">🇬🇧</span> EN
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn" role="tab" aria-selected="false"
+                                data-target="em-pane-ar" onclick="switchTab(this,'editMenuLangTabs')">
+                            <span class="lang-flag">🇸🇦</span> AR
+                        </button>
+                    </li>
+                    <li role="presentation">
+                        <button type="button" class="lang-tab-btn" role="tab" aria-selected="false"
+                                data-target="em-pane-ru" onclick="switchTab(this,'editMenuLangTabs')">
+                            <span class="lang-flag">🇷🇺</span> RU
+                        </button>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="lang-tab-content">
+                <div id="em-pane-tr" class="lang-pane">
+                    <div class="form-group">
+                        <label class="form-label">Ürün Adı <span class="required-star">*</span></label>
+                        <input type="text" id="e_name" class="form-control" maxlength="200" required />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Açıklama (TR)</label>
+                        <textarea id="e_description" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div id="em-pane-en" class="lang-pane" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">Product Name <span class="optional-badge">(opsiyonel)</span></label>
+                        <input type="text" id="e_nameEn" class="form-control" maxlength="200" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description (EN) <span class="optional-badge">(opsiyonel)</span></label>
+                        <textarea id="e_descriptionEn" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+                <div id="em-pane-ar" class="lang-pane" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">اسم المنتج <span class="optional-badge">(opsiyonel)</span></label>
+                        <input type="text" id="e_nameAr" class="form-control rtl-input" maxlength="200" dir="rtl" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">الوصف (AR) <span class="optional-badge">(opsiyonel)</span></label>
+                        <textarea id="e_descriptionAr" class="form-control rtl-input" rows="2" dir="rtl"></textarea>
+                    </div>
+                </div>
+                <div id="em-pane-ru" class="lang-pane" style="display:none;">
+                    <div class="form-group">
+                        <label class="form-label">Название продукта <span class="optional-badge">(opsiyonel)</span></label>
+                        <input type="text" id="e_nameRu" class="form-control" maxlength="200" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Описание (RU) <span class="optional-badge">(opsiyonel)</span></label>
+                        <textarea id="e_descriptionRu" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
             </div>
 
             <div class="form-row">
                 <div class="form-group">
-                    <label class="form-label">Kategori *</label>
+                    <label class="form-label">Kategori <span class="required-star">*</span></label>
                     <select id="e_categoryId" class="form-control" required>
                         @foreach (var cat in categories)
                         {
@@ -206,14 +434,9 @@
                     </select>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Fiyat (₺) *</label>
-                    <input type="text" inputmode="decimal" id="e_price" name="menuItemPriceStr" class="form-control" required />
+                    <label class="form-label">Fiyat (₺) <span class="required-star">*</span></label>
+                    <input type="text" inputmode="decimal" id="e_price" class="form-control" required />
                 </div>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Açıklama</label>
-                <textarea id="e_description" class="form-control" rows="2"></textarea>
             </div>
 
             <div class="form-row">
@@ -252,7 +475,7 @@
     </div>
 </div>
 
-
+<!-- DELETE MODAL -->
 <div class="modal-overlay" id="deleteModal">
     <div class="modal confirm-modal">
         <div class="confirm-icon">🗑️</div>
@@ -277,4 +500,3 @@
 @section Scripts {
     <script src="~/js/Views/Menu/Index.js" asp-append-version="true"></script>
 }
-

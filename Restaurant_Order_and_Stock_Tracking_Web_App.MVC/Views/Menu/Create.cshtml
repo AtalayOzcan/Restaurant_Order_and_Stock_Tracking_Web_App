@@ -20,15 +20,67 @@
             @Html.AntiForgeryToken()
             <div id="alertBox" class="alert alert-error" style="display:none;"></div>
 
-            <div class="form-group">
-                <label class="form-label">Ürün Adı *</label>
-                <input type="text" id="menuItemName" class="form-control" maxlength="200" required />
+            @* ── Dil Sekmeleri ── *@
+            <div class="lang-tabs">
+                <button type="button" class="lang-tab active" onclick="switchLangTab('tr',this)">🇹🇷 Türkçe</button>
+                <button type="button" class="lang-tab" onclick="switchLangTab('en',this)">🇬🇧 English</button>
+                <button type="button" class="lang-tab" onclick="switchLangTab('ar',this)">🇸🇦 العربية</button>
+                <button type="button" class="lang-tab" onclick="switchLangTab('ru',this)">🇷🇺 Русский</button>
             </div>
 
-            <div class="form-row">
+            @* TR *@
+            <div class="lang-panel active" id="panel-tr">
+                <div class="form-group">
+                    <label class="form-label">Ürün Adı (TR) *</label>
+                    <input type="text" id="c_name" class="form-control" maxlength="200" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Açıklama (TR)</label>
+                    <textarea id="c_description" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+
+            @* EN *@
+            <div class="lang-panel" id="panel-en" style="display:none">
+                <div class="form-group">
+                    <label class="form-label">Product Name (EN)</label>
+                    <input type="text" id="c_nameEn" class="form-control" maxlength="200" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description (EN)</label>
+                    <textarea id="c_descriptionEn" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+
+            @* AR *@
+            <div class="lang-panel" id="panel-ar" style="display:none">
+                <div class="form-group">
+                    <label class="form-label">اسم المنتج (AR)</label>
+                    <input type="text" id="c_nameAr" class="form-control" dir="rtl" maxlength="200" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">الوصف (AR)</label>
+                    <textarea id="c_descriptionAr" class="form-control" dir="rtl" rows="2"></textarea>
+                </div>
+            </div>
+
+            @* RU *@
+            <div class="lang-panel" id="panel-ru" style="display:none">
+                <div class="form-group">
+                    <label class="form-label">Название (RU)</label>
+                    <input type="text" id="c_nameRu" class="form-control" maxlength="200" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Описание (RU)</label>
+                    <textarea id="c_descriptionRu" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+
+            @* ── Ortak Alanlar ── *@
+            <div class="form-row" style="margin-top:16px">
                 <div class="form-group">
                     <label class="form-label">Kategori *</label>
-                    <select id="categoryId" class="form-control" required>
+                    <select id="c_categoryId" class="form-control" required>
                         <option value="">— Seçin —</option>
                         @foreach (var cat in categories)
                         {
@@ -38,25 +90,20 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Fiyat (₺) *</label>
-                    <input type="number" id="menuItemPrice" class="form-control" min="0" step="0.01" required />
+                    <input type="number" id="c_price" class="form-control" min="0" step="0.01" required />
                 </div>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Açıklama</label>
-                <textarea id="description" class="form-control" rows="2"></textarea>
             </div>
 
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Stok Miktarı</label>
-                    <input type="number" id="stockQuantity" class="form-control" value="0" min="0" />
+                    <input type="number" id="c_stock" class="form-control" value="0" min="0" />
                 </div>
                 <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;">
                     <label class="form-label">Stok Takibi</label>
                     <div class="toggle-group">
                         <label class="toggle-switch">
-                            <input type="checkbox" id="trackStock" />
+                            <input type="checkbox" id="c_trackStock" />
                             <span class="toggle-slider"></span>
                         </label>
                         <span>Takip Et</span>
@@ -68,20 +115,46 @@
                 <label class="form-label">Satışa Açık</label>
                 <div class="toggle-group">
                     <label class="toggle-switch">
-                        <input type="checkbox" id="isAvailable" checked />
+                        <input type="checkbox" id="c_isAvailable" checked />
                         <span class="toggle-slider"></span>
                     </label>
                     <span>Mevcut</span>
                 </div>
             </div>
 
-            <div style="display:flex; justify-content:flex-end; gap:.6rem; margin-top:1.5rem;">
+            <div style="display:flex;justify-content:flex-end;gap:.6rem;margin-top:1.5rem;">
                 <a asp-action="Index" class="btn btn-ghost">İptal</a>
                 <button type="submit" class="btn btn-primary">💾 Kaydet</button>
             </div>
         </form>
     </div>
 </div>
+
+<style>
+    .lang-tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+    }
+
+    .lang-tab {
+        padding: 6px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--border,#e5e7eb);
+        background: var(--surface2,#f9fafb);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all .18s;
+    }
+
+        .lang-tab.active {
+            background: var(--accent,#f97316);
+            color: #fff;
+            border-color: var(--accent,#f97316);
+        }
+</style>
 
 @section Scripts {
     <script src="~/js/Views/Menu/Create.js" asp-append-version="true"></script>

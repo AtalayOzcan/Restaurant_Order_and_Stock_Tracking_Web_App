@@ -3,19 +3,16 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Hubs;
-using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models;
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 {
-    /// <summary>
-    /// Müşterilerin QR kod ile açtığı Fine-Dining menü ekranı.
-    /// Kimlik doğrulama gerektirmez — [AllowAnonymous] davranışı varsayılandır.
-    /// URL örneği: /QrMenu/Index/Masa-1
-    /// </summary>
     public class QrMenuController : Controller
     {
         private readonly RestaurantDbContext _context;
         private readonly IHubContext<RestaurantHub> _hub;
+
+        private static readonly HashSet<string> _validLangs =
+            new(StringComparer.OrdinalIgnoreCase) { "tr", "en", "ar", "ru" };
 
         public QrMenuController(RestaurantDbContext context, IHubContext<RestaurantHub> hub)
         {
@@ -23,7 +20,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             _hub = hub;
         }
 
-        // ── GET /QrMenu/Index/{tableName} ──────────────────────────────────────
+        // ── GET /QrMenu/Index/{tableName} ──────────────────────────────
         [HttpGet]
         [Route("QrMenu/Index/{tableName}")]
         public async Task<IActionResult> Index(string tableName)
@@ -35,6 +32,28 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             if (table == null)
                 return NotFound("Bu QR koda ait masa bulunamadı.");
+
+            // ── Dil seçimi: önce query string, sonra cookie, varsayılan TR ──
+            string lang = "tr";
+
+            if (!string.IsNullOrWhiteSpace(Request.Query["lang"]))
+            {
+                var qLang = Request.Query["lang"].ToString().ToLower();
+                if (_validLangs.Contains(qLang)) lang = qLang;
+            }
+            else if (Request.Cookies.TryGetValue("qrmenu_lang", out var cookieLang)
+                     && _validLangs.Contains(cookieLang?.ToLower() ?? ""))
+            {
+                lang = cookieLang!.ToLower();
+            }
+
+            // Cookie'yi tazeliyoruz (30 gün)
+            Response.Cookies.Append("qrmenu_lang", lang, new CookieOptions
+            {
+                Expires = DateTimeOffset.UtcNow.AddDays(30),
+                HttpOnly = false,    // JS okuyabilsin
+                SameSite = SameSiteMode.Lax
+            });
 
             var categories = await _context.Categories
                 .Where(c => c.IsActive)
@@ -55,11 +74,12 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             ViewData["Title"] = $"{table.TableName} — Menü";
             ViewData["TableName"] = table.TableName;
             ViewData["IsWaiterCalled"] = table.IsWaiterCalled;
+            ViewData["Lang"] = lang;   // ← View bunu okur
 
             return View(categories);
         }
 
-        // ── POST /QrMenu/CallWaiter ────────────────────────────────────────────
+        // ── POST /QrMenu/CallWaiter ────────────────────────────────────
         [HttpPost]
         [IgnoreAntiforgeryToken]
         [Route("QrMenu/CallWaiter")]
@@ -74,27 +94,23 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             if (table == null)
                 return NotFound(new { success = false, message = "Masa bulunamadı." });
 
-            // Zaten çağrıldıysa tekrar işlem yapma — sadece onayla
             if (table.IsWaiterCalled)
                 return Ok(new { success = true, alreadyCalled = true, message = "Garson zaten çağrıldı." });
 
             table.IsWaiterCalled = true;
-            table.WaiterCalledAt = DateTime.UtcNow;   // ← YENİ: SLA saatini kaydet
+            table.WaiterCalledAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            // SignalR: Tüm bağlı garson / admin ekranlarına anlık bildir
-            // calledAtUtc alanını da iletiyoruz — Tables/Index.js SLA timer için kullanır
             await _hub.Clients.All.SendAsync("WaiterCalled", new
             {
                 tableName = table.TableName,
-                calledAtUtc = table.WaiterCalledAt!.Value.ToString("o") // ISO 8601
+                calledAtUtc = table.WaiterCalledAt!.Value.ToString("o")
             });
 
             return Ok(new { success = true, alreadyCalled = false, message = "Garson çağrıldı." });
         }
     }
 
-    /// <summary>Müşteri tarafından gönderilen CallWaiter istek gövdesi.</summary>
     public class CallWaiterRequest
     {
         public string TableName { get; set; } = string.Empty;

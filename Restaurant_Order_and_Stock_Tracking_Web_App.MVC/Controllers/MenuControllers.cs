@@ -23,7 +23,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         {
             ViewData["Title"] = "Menü Ürünleri";
 
-            // ✅ IsDeleted filtresi — soft delete edilmişleri gösterme
             var menuItems = await _context.MenuItems
                 .Where(m => !m.IsDeleted)
                 .Include(m => m.Category)
@@ -70,15 +69,14 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             return View();
         }
+
         // ── POST: /Menu/Create  (AJAX JSON) ─────────────────────────
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Create([FromBody] MenuItemCreateDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto.MenuItemName))
                 return Json(new { success = false, message = "Ürün adı boş olamaz." });
 
-            // ✅ FIX #3: Virgül/nokta parse
             if (!decimal.TryParse(
                     dto.MenuItemPriceStr?.Replace(',', '.'),
                     NumberStyles.Any,
@@ -93,9 +91,15 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             var item = new MenuItem
             {
                 MenuItemName = dto.MenuItemName.Trim(),
+                NameEn = string.IsNullOrWhiteSpace(dto.NameEn) ? null : dto.NameEn.Trim(),
+                NameAr = string.IsNullOrWhiteSpace(dto.NameAr) ? null : dto.NameAr.Trim(),
+                NameRu = string.IsNullOrWhiteSpace(dto.NameRu) ? null : dto.NameRu.Trim(),
                 CategoryId = dto.CategoryId,
                 MenuItemPrice = menuItemPrice,
                 Description = dto.Description?.Trim() ?? string.Empty,
+                DescriptionEn = string.IsNullOrWhiteSpace(dto.DescriptionEn) ? null : dto.DescriptionEn.Trim(),
+                DescriptionAr = string.IsNullOrWhiteSpace(dto.DescriptionAr) ? null : dto.DescriptionAr.Trim(),
+                DescriptionRu = string.IsNullOrWhiteSpace(dto.DescriptionRu) ? null : dto.DescriptionRu.Trim(),
                 StockQuantity = dto.StockQuantity,
                 TrackStock = dto.TrackStock,
                 IsAvailable = dto.IsAvailable,
@@ -108,6 +112,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             return Json(new { success = true, message = "Ürün başarıyla eklendi." });
         }
+
         // ── GET: /Menu/Edit/5 ────────────────────────────────────────
         public async Task<IActionResult> Edit(int id)
         {
@@ -127,9 +132,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         }
 
         // ── POST: /Menu/Edit  (AJAX JSON) ────────────────────────────
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-          public async Task<IActionResult> Edit([FromBody] MenuItemEditDto dto)
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit([FromBody] MenuItemEditDto dto)
         {
             if (dto.Id == null)
                 return Json(new { success = false, message = "Geçersiz ürün ID." });
@@ -141,7 +145,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             if (string.IsNullOrWhiteSpace(dto.MenuItemName))
                 return Json(new { success = false, message = "Ürün adı boş olamaz." });
 
-            // ✅ FIX #3: Virgül/nokta parse
             if (!decimal.TryParse(
                     dto.MenuItemPriceStr?.Replace(',', '.'),
                     NumberStyles.Any,
@@ -154,9 +157,15 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 return Json(new { success = false, message = "Geçersiz kategori seçildi." });
 
             item.MenuItemName = dto.MenuItemName.Trim();
+            item.NameEn = string.IsNullOrWhiteSpace(dto.NameEn) ? null : dto.NameEn.Trim();
+            item.NameAr = string.IsNullOrWhiteSpace(dto.NameAr) ? null : dto.NameAr.Trim();
+            item.NameRu = string.IsNullOrWhiteSpace(dto.NameRu) ? null : dto.NameRu.Trim();
             item.CategoryId = dto.CategoryId;
             item.MenuItemPrice = menuItemPrice;
             item.Description = dto.Description?.Trim() ?? string.Empty;
+            item.DescriptionEn = string.IsNullOrWhiteSpace(dto.DescriptionEn) ? null : dto.DescriptionEn.Trim();
+            item.DescriptionAr = string.IsNullOrWhiteSpace(dto.DescriptionAr) ? null : dto.DescriptionAr.Trim();
+            item.DescriptionRu = string.IsNullOrWhiteSpace(dto.DescriptionRu) ? null : dto.DescriptionRu.Trim();
             item.StockQuantity = dto.StockQuantity;
             item.TrackStock = dto.TrackStock;
             item.IsAvailable = dto.IsAvailable;
@@ -164,11 +173,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             await _context.SaveChangesAsync();
             return Json(new { success = true, message = "Ürün güncellendi." });
         }
+
         // ── POST: /Menu/Delete  (AJAX JSON) ──────────────────────────
-        // ✅ FIX #2: Siparişlerde kullanıldıysa → soft delete (IsDeleted=true)
-        //            Hiç kullanılmadıysa → fiziksel sil
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Delete(int id)
         {
             var item = await _context.MenuItems.FindAsync(id);
@@ -180,20 +187,18 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             if (usedInOrders)
             {
-                // Geçmiş siparişler var → soft delete (görünmez yapar, silmez)
                 item.IsDeleted = true;
                 item.IsAvailable = false;
                 await _context.SaveChangesAsync();
                 return Json(new { success = true, message = "Ürün pasife alındı (geçmiş siparişlerde kullanılmış)." });
             }
 
-            // Hiç sipariş yok → fiziksel sil
             _context.MenuItems.Remove(item);
             await _context.SaveChangesAsync();
             return Json(new { success = true, message = "Ürün silindi." });
         }
 
-        // ── GET: /Menu/GetById/5  (Edit modal için) ──────────────────
+        // ── GET: /Menu/GetById/5  ────────────────────────────────────
         [HttpGet]
         public async Task<IActionResult> GetById(int id)
         {
@@ -205,10 +210,15 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 success = true,
                 menuItemId = m.MenuItemId,
                 menuItemName = m.MenuItemName,
+                nameEn = m.NameEn ?? "",
+                nameAr = m.NameAr ?? "",
+                nameRu = m.NameRu ?? "",
                 categoryId = m.CategoryId,
-                // ✅ FIX #3: JS'e gönderirken InvariantCulture noktalı format
                 menuItemPrice = m.MenuItemPrice.ToString("F2", CultureInfo.InvariantCulture),
-                description = m.Description,
+                description = m.Description ?? "",
+                descriptionEn = m.DescriptionEn ?? "",
+                descriptionAr = m.DescriptionAr ?? "",
+                descriptionRu = m.DescriptionRu ?? "",
                 stockQuantity = m.StockQuantity,
                 trackStock = m.TrackStock,
                 isAvailable = m.IsAvailable

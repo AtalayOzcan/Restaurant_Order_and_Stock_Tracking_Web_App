@@ -1,143 +1,153 @@
-﻿@*
-    Views/QrMenu/Index.cshtml  (v2 — Filtreleme + Okunabilirlik)
-    ─────────────────────────────────────────────────────────────────────
-    Model   : IEnumerable<Category>  (MenuItems navigation property Include() ile yüklü)
-    Layout  : null  — müşteri sayfası admin layout'unu kullanmaz
-    Auth    : [AllowAnonymous] — QrMenuController sınıfında [Authorize] yok
-
-    v2 Değişiklikleri:
-      • Nav'a "Tümü" butonu eklendi (her zaman en başta)
-      • JS filterCategory() → tıklanan kategori dışındaki section'lar gizlenir
-      • "Tümü" tıklandığında tüm section'lar tekrar gösterilir
-      • Scroll spy yalnızca "Tümü" modunda aktif; filtre modunda devre dışı
-    ─────────────────────────────────────────────────────────────────────
-*@
-@model IEnumerable<Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Category>
-
+﻿@model IEnumerable<Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Category>
 @{
     Layout = null;
-
     var tableName = (string)ViewData["TableName"]!;
     var isWaiterCalled = (bool)ViewData["IsWaiterCalled"]!;
-
+    var lang = (ViewData["Lang"] as string ?? "tr").ToLower();
+    var isRtl = lang == "ar";
     int itemCounter = 0;
-
     var romanNumerals = new[] { "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII" };
     int catIndex = 0;
+
+    string CatName(Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Category cat) => lang switch
+    {
+        "en" => !string.IsNullOrWhiteSpace(cat.NameEn) ? cat.NameEn : cat.CategoryName,
+        "ar" => !string.IsNullOrWhiteSpace(cat.NameAr) ? cat.NameAr : cat.CategoryName,
+        "ru" => !string.IsNullOrWhiteSpace(cat.NameRu) ? cat.NameRu : cat.CategoryName,
+        _ => cat.CategoryName
+    };
+
+    string ItemName(Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.MenuItem item) => lang switch
+    {
+        "en" => !string.IsNullOrWhiteSpace(item.NameEn) ? item.NameEn : item.MenuItemName,
+        "ar" => !string.IsNullOrWhiteSpace(item.NameAr) ? item.NameAr : item.MenuItemName,
+        "ru" => !string.IsNullOrWhiteSpace(item.NameRu) ? item.NameRu : item.MenuItemName,
+        _ => item.MenuItemName
+    };
+
+    string ItemDesc(Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.MenuItem item) => lang switch
+    {
+        "en" => !string.IsNullOrWhiteSpace(item.DescriptionEn) ? item.DescriptionEn : (item.Description ?? ""),
+        "ar" => !string.IsNullOrWhiteSpace(item.DescriptionAr) ? item.DescriptionAr : (item.Description ?? ""),
+        "ru" => !string.IsNullOrWhiteSpace(item.DescriptionRu) ? item.DescriptionRu : (item.Description ?? ""),
+        _ => item.Description ?? ""
+    };
+
+    var uiStrings = new Dictionary<string, Dictionary<string, string>>
+    {
+        ["digitalMenu"] = new() { ["tr"] = "Dijital Menü", ["en"] = "Digital Menu", ["ar"] = "القائمة الرقمية", ["ru"] = "Цифровое меню" },
+        ["chefNote"] = new() { ["tr"] = "Şefin Notu", ["en"] = "Chef's Note", ["ar"] = "ملاحظة الشيف", ["ru"] = "Заметка шефа" },
+        ["chefNoteText"] = new()
+        {
+            ["tr"] = "Tüm malzemelerimiz her sabah taze temin edilmektedir. Yemeklerimizi huzur içinde, sevdiklerinizle keyifle tüketmenizi dileriz.",
+            ["en"] = "All our ingredients are freshly sourced every morning. We hope you enjoy our food with your loved ones.",
+            ["ar"] = "جميع مكوناتنا طازجة يومياً. نتمنى لكم وجبة شهية مع أحبائكم.",
+            ["ru"] = "Все наши ингредиенты поставляются свежими каждое утро. Приятного аппетита!"
+        },
+        ["chefName"] = new() { ["tr"] = "— Şef Mehmet Öz", ["en"] = "— Chef Mehmet Öz", ["ar"] = "— الشيف محمد أوز", ["ru"] = "— Шеф Мехмет Оз" },
+        ["callWaiter"] = new() { ["tr"] = "Garson Çağır", ["en"] = "Call Waiter", ["ar"] = "نادِ النادل", ["ru"] = "Позвать официанта" },
+        ["waiterCalled"] = new() { ["tr"] = "Garson Çağrıldı", ["en"] = "Waiter Called", ["ar"] = "تم استدعاء النادل", ["ru"] = "Официант вызван" },
+        ["allItems"] = new() { ["tr"] = "Tümü", ["en"] = "All", ["ar"] = "الكل", ["ru"] = "Все" },
+        ["limitedStock"] = new() { ["tr"] = "Sınırlı Stok", ["en"] = "Limited Stock", ["ar"] = "مخزون محدود", ["ru"] = "Ограниченный запас" },
+        ["noProduct"] = new()
+        {
+            ["tr"] = "Şu anda aktif ürün bulunmamaktadır.",
+            ["en"] = "No active products available at the moment.",
+            ["ar"] = "لا توجد منتجات نشطة في الوقت الحالي.",
+            ["ru"] = "В настоящее время активных продуктов нет."
+        },
+        ["thanks"] = new() { ["tr"] = "Bizi tercih ettiğiniz için teşekkür ederiz.", ["en"] = "Thank you for choosing us.", ["ar"] = "شكراً لاختياركم لنا.", ["ru"] = "Спасибо, что выбрали нас." },
+        ["enjoy"] = new() { ["tr"] = "Afiyet Olsun", ["en"] = "Enjoy Your Meal", ["ar"] = "بالهناء والشفاء", ["ru"] = "Приятного аппетита" },
+        ["connError"] = new() { ["tr"] = "Bağlantı hatası. Lütfen tekrar deneyiniz.", ["en"] = "Connection error. Please try again.", ["ar"] = "خطأ في الاتصال. حاول مجدداً.", ["ru"] = "Ошибка подключения. Попробуйте снова." },
+        ["waiterMsg"] = new() { ["tr"] = "Garsonunuz en kısa sürede gelecek.", ["en"] = "Your waiter will be with you shortly.", ["ar"] = "سيأتي النادل إليك قريباً.", ["ru"] = "Официант скоро подойдёт к вам." },
+    };
+    string T(string key) => uiStrings.TryGetValue(key, out var d)
+        ? (d.TryGetValue(lang, out var v) ? v : d["tr"])
+        : key;
 }
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="@lang" @(isRtl? Html.Raw("dir=\"rtl\"") : Html.Raw(""))>
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#FAF9F6" />
-    <title>@tableName — Menü</title>
-
+    <title>@tableName — @T("digitalMenu")</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Montserrat:wght@300;400;500;600&display=swap"
-          rel="stylesheet" />
-
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    @if (lang == "ar")
+    {
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@300;400;500;600&display=swap" rel="stylesheet" />
+    }
     <link rel="stylesheet" href="~/css/Views/QrMenu/Index.css" asp-append-version="true" />
 </head>
-<body>
+<body class="@(isRtl ? "rtl" : "")">
     <div class="qr-page">
 
-        @* ════════════════════════════════════════════════════════
-       HEADER
-       ════════════════════════════════════════════════════════ *@
         <header class="qr-header">
-            <div class="header-eyebrow">✦ &nbsp; Dijital Menü &nbsp; ✦</div>
+            <nav class="lang-switcher" aria-label="Dil seçimi">
+                <button class="ls-item @(lang == "tr" ? "ls-active" : "")" onclick="setLang('tr')" aria-label="Türkçe">TR</button>
+                <span class="ls-dot" aria-hidden="true">•</span>
+                <button class="ls-item @(lang == "en" ? "ls-active" : "")" onclick="setLang('en')" aria-label="English">EN</button>
+                <span class="ls-dot" aria-hidden="true">•</span>
+                <button class="ls-item @(lang == "ar" ? "ls-active" : "")" onclick="setLang('ar')" aria-label="العربية">AR</button>
+                <span class="ls-dot" aria-hidden="true">•</span>
+                <button class="ls-item @(lang == "ru" ? "ls-active" : "")" onclick="setLang('ru')" aria-label="Русский">RU</button>
+            </nav>
+
+            <div class="header-eyebrow">✦ &nbsp; @T("digitalMenu") &nbsp; ✦</div>
             <h1 class="header-restaurant-name">Lezzet <em>Durağı</em></h1>
             <div class="header-table">@tableName</div>
         </header>
 
-        @* ════════════════════════════════════════════════════════
-       ŞEFİN NOTU
-       ════════════════════════════════════════════════════════ *@
-        <section class="chef-note-section" aria-label="Şefin Notu">
+        <section class="chef-note-section" aria-label="@T("chefNote")">
             <div class="chef-note-inner">
-                <div class="chef-note-label">Şefin Notu</div>
-                <p class="chef-note-quote">
-                    Tüm malzemelerimiz her sabah taze temin edilmektedir.
-                    Yemeklerimizi huzur içinde, sevdiklerinizle keyifle tüketmenizi dileriz.
-                </p>
-                <div class="chef-note-author">— Şef Mehmet Öz</div>
+                <div class="chef-note-label">@T("chefNote")</div>
+                <p class="chef-note-quote">@T("chefNoteText")</p>
+                <div class="chef-note-author">@T("chefName")</div>
             </div>
         </section>
 
-        @* ════════════════════════════════════════════════════════
-       GARSON ÇAĞIR
-       ════════════════════════════════════════════════════════ *@
         <div class="waiter-section">
-            <button class="btn-waiter"
-                    id="btnCallWaiter"
-                    onclick="callWaiter()"
-                    @(isWaiterCalled ? "disabled" : "")
-                    aria-label="Garson çağır">
+            <button class="btn-waiter" id="btnCallWaiter" onclick="callWaiter()"
+                    @(isWaiterCalled ? "disabled" : "") aria-label="@T("callWaiter")">
                 @if (isWaiterCalled)
                 {
                     <span class="btn-waiter-icon">✓</span>
-                    <span>Garson Çağrıldı</span>
+                    <span>@T("waiterCalled")</span>
                 }
                 else
                 {
                     <span class="btn-waiter-icon">◌</span>
-                    <span>Garson Çağır</span>
+                    <span>@T("callWaiter")</span>
                 }
             </button>
         </div>
 
-        @* ════════════════════════════════════════════════════════
-       KATEGORİ FİLTRE NAV — Sticky + Yatay Kaydırmalı
-       "Tümü" her zaman ilk sırada; sonra DB'den gelen kategoriler.
-       ════════════════════════════════════════════════════════ *@
         @if (Model.Any())
         {
             <nav class="cat-nav-wrap" id="catNavWrap" aria-label="Kategori filtresi">
                 <div class="cat-nav" id="catNav">
-
-                    @* ── "Tümü" — sabit ilk buton ── *@
-                    <button class="cat-nav-btn active"
-                            data-cat="all"
-                            onclick="filterCategory('all', this)">
-                        Tümü
-                    </button>
-
-                    @* ── Veritabanından gelen kategoriler — dinamik ── *@
+                    <button class="cat-nav-btn active" data-cat="all" onclick="filterCategory('all', this)">@T("allItems")</button>
                     @foreach (var cat in Model)
                     {
-                        <button class="cat-nav-btn"
-                                data-cat="@cat.CategoryId"
-                                onclick="filterCategory('@cat.CategoryId', this)">
-                            @cat.CategoryName
-                        </button>
+                        <button class="cat-nav-btn" data-cat="@cat.CategoryId" onclick="filterCategory('@cat.CategoryId', this)">@CatName(cat)</button>
                     }
-
                 </div>
             </nav>
         }
 
-        @* ════════════════════════════════════════════════════════
-       MENÜ — Kategorilere göre Dinamik Bölümler
-       Her section'a data-cat-id ekleniyor → JS filtrelemesi bu niteliğe bakar
-       ════════════════════════════════════════════════════════ *@
         @if (!Model.Any())
         {
-            <div class="menu-empty">
-                Şu anda aktif ürün bulunmamaktadır.
-            </div>
+            <div class="menu-empty">@T("noProduct")</div>
         }
         else
         {
             catIndex = 0;
-
             @foreach (var cat in Model)
             {
                 var animDelay = 0.35 + (catIndex * 0.08);
-                var romanLabel = catIndex < romanNumerals.Length
-                ? romanNumerals[catIndex]
-                : (catIndex + 1).ToString();
+                var romanLabel = catIndex < romanNumerals.Length ? romanNumerals[catIndex] : (catIndex + 1).ToString();
 
                 <section class="menu-section"
                          id="cat-section-@cat.CategoryId"
@@ -145,11 +155,10 @@
                          aria-labelledby="cat-title-@cat.CategoryId"
                          style="animation-delay: @animDelay.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)s">
 
-                    @* ── Kategori Başlık Bloğu ── *@
                     <div class="cat-header">
                         <div class="cat-divider-top"></div>
                         <span class="cat-roman">@romanLabel</span>
-                        <h2 class="cat-title" id="cat-title-@cat.CategoryId">@cat.CategoryName</h2>
+                        <h2 class="cat-title" id="cat-title-@cat.CategoryId">@CatName(cat)</h2>
                         <div class="cat-divider-bottom">
                             <div class="cat-divider-line left"></div>
                             <div class="cat-divider-diamond">◆ ◆ ◆</div>
@@ -157,173 +166,114 @@
                         </div>
                     </div>
 
-                    @* ── Ürün Listesi ── *@
                     <div class="menu-list" role="list">
                         @foreach (var item in cat.MenuItems)
                         {
                             itemCounter++;
                             var itemNo = "No. " + itemCounter.ToString().PadLeft(2, '0');
-
-                            bool isLowStock = item.TrackStock
-                            && item.StockQuantity > 0
-                            && item.StockQuantity <= item.AlertThreshold
-                            && item.AlertThreshold > 0;
+                            bool isLowStock = item.TrackStock && item.StockQuantity > 0
+                            && item.StockQuantity <= item.AlertThreshold && item.AlertThreshold > 0;
+                            var displayName = ItemName(item);
+                            var displayDesc = ItemDesc(item);
 
                             <div class="menu-item" role="listitem">
-
-                                @* Sütun 1: Numara *@
                                 <div class="item-number" aria-hidden="true">@itemNo</div>
-
-                                @* Sütun 2: İsim + Açıklama + Etiket *@
                                 <div class="item-info">
-                                    <div class="item-name">@item.MenuItemName</div>
-
-                                    @if (!string.IsNullOrWhiteSpace(item.Description))
+                                    <div class="item-name">@displayName</div>
+                                    @if (!string.IsNullOrWhiteSpace(displayDesc))
                                     {
-                                        <div class="item-desc">@item.Description</div>
+                                        <div class="item-desc">@displayDesc</div>
                                     }
-
                                     @if (isLowStock)
                                     {
-                                        <div class="item-tags">
-                                            <span class="item-tag">Sınırlı Stok</span>
-                                        </div>
+                                        <div class="item-tags"><span class="item-tag">@T("limitedStock")</span></div>
                                     }
                                 </div>
-
-                                @* Sütun 3: Fiyat *@
-                                <div class="item-price-col"
-                                     aria-label="Fiyat: @item.MenuItemPrice.ToString("N2") Türk Lirası">
+                                <div class="item-price-col" aria-label="Fiyat: @item.MenuItemPrice.ToString("N2") Türk Lirası">
                                     <div class="item-price">
                                         <span class="item-price-currency">₺</span>@item.MenuItemPrice.ToString("N0")
                                     </div>
                                 </div>
-
                             </div>
                         }
                     </div>
-
                 </section>
 
-                @* Section'lar arası görsel boşluk (filtre modunda JS tarafından gizlenir) *@
                 @if (catIndex < Model.Count() - 1)
                 {
                     <div class="section-gap" data-gap="true"></div>
                 }
-
                 catIndex++;
             }
         }
 
-        @* ════════════════════════════════════════════════════════
-       FOOTER
-       ════════════════════════════════════════════════════════ *@
         <footer class="qr-footer">
             <span class="footer-ornament">◆ &nbsp; ◆ &nbsp; ◆</span>
-            <p class="footer-text">Bizi tercih ettiğiniz için teşekkür ederiz.</p>
-            <span class="footer-sub">Afiyet Olsun</span>
+            <p class="footer-text">@T("thanks")</p>
+            <span class="footer-sub">@T("enjoy")</span>
         </footer>
-
     </div>
 
-    @* Toast Container *@
     <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
 
     <script>
-        /* ════════════════════════════════════════════════════════════════
-           KATEGORİ FİLTRELEME  (v2 — sayfa yenilenmeden gizle/göster)
-           ════════════════════════════════════════════════════════════════
+        function setLang(lang) {
+            document.cookie = `qrmenu_lang=${lang};path=/;max-age=${30 * 24 * 3600};samesite=lax`;
+            const url = new URL(window.location.href);
+            url.searchParams.set('lang', lang);
+            window.location.href = url.toString();
+        }
 
-           filterCategory(catId, clickedBtn)
-             'all'   → tüm .menu-section'lar gösterilir, scroll spy devreye girer
-             <id>    → yalnızca data-cat-id eşleşen section gösterilir; diğerleri
-                       display:none olur; section-gap'ler de gizlenir.
-        ════════════════════════════════════════════════════════════════ */
-
-        // Şu an hangi filtre aktif ('all' veya kategori ID string'i)
         let activeFilter = 'all';
 
         function filterCategory(catId, btn) {
-            // ── 1. Active buton güncelle ──────────────────────────────────
             document.querySelectorAll('.cat-nav-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-
-            // Active butonu nav içinde görünür yap (overflow-x scroll'unda)
             btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-
             activeFilter = catId;
 
             const sections = document.querySelectorAll('.menu-section');
             const gaps     = document.querySelectorAll('[data-gap]');
 
             if (catId === 'all') {
-                // ── "Tümü": hepsini göster ──────────────────────────────
                 sections.forEach(s => s.style.display = '');
                 gaps.forEach(g     => g.style.display = '');
-
             } else {
-                // ── Belirli kategori: eşleşeni göster, diğerlerini gizle ─
-                sections.forEach(s => {
-                    s.style.display = (s.dataset.catId === catId) ? '' : 'none';
-                });
-
-                // Bölüm arası gap'leri gizle (tek section'da anlamsız)
+                sections.forEach(s => { s.style.display = (s.dataset.catId === catId) ? '' : 'none'; });
                 gaps.forEach(g => g.style.display = 'none');
-
-                // Seçilen section'ın tepesine kaydır
                 const target = document.querySelector(`.menu-section[data-cat-id="${catId}"]`);
                 if (target) {
                     const navH = document.getElementById('catNavWrap')?.offsetHeight ?? 50;
-                    const top  = target.getBoundingClientRect().top + window.scrollY - navH - 12;
-                    window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+                    window.scrollTo({ top: Math.max(0, target.getBoundingClientRect().top + window.scrollY - navH - 12), behavior: 'smooth' });
                 }
             }
         }
 
-        /* ════════════════════════════════════════════════════════════════
-           SCROLL SPY — Yalnızca "Tümü" modunda çalışır.
-           Hangi section görünümdeyse ilgili nav butonu aktif olur.
-        ════════════════════════════════════════════════════════════════ */
         (function initScrollSpy() {
             const sections = document.querySelectorAll('.menu-section[id]');
             const navBtns  = document.querySelectorAll('.cat-nav-btn');
             if (!sections.length) return;
-
             const navH = document.getElementById('catNavWrap')?.offsetHeight ?? 50;
-
             const observer = new IntersectionObserver(entries => {
-                // Filtre modundaysa scroll spy'ı sustur
                 if (activeFilter !== 'all') return;
-
                 entries.forEach(entry => {
                     if (!entry.isIntersecting) return;
-
                     const id = entry.target.dataset.catId;
                     navBtns.forEach(b => {
                         const match = b.dataset.cat === id;
                         b.classList.toggle('active', match);
-                        if (match) {
-                            b.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-                        }
+                        if (match) b.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
                     });
                 });
-            }, {
-                // Section'ın üst kısmı nav'ın hemen altına girince tetikle
-                rootMargin: `-${navH + 8}px 0px -60% 0px`
-            });
-
+            }, { rootMargin: `-${navH + 8}px 0px -60% 0px` });
             sections.forEach(s => observer.observe(s));
         })();
 
-        /* ════════════════════════════════════════════════════════════════
-           GARSON ÇAĞIR
-        ════════════════════════════════════════════════════════════════ */
         const TABLE_NAME_JS = "@Html.Raw(tableName.Replace("\"", "\\\""))";
 
         async function callWaiter() {
             const btn = document.getElementById('btnCallWaiter');
             btn.disabled = true;
-
             try {
                 const res  = await fetch('/QrMenu/CallWaiter', {
                     method:  'POST',
@@ -331,37 +281,27 @@
                     body:    JSON.stringify({ TableName: TABLE_NAME_JS })
                 });
                 const data = await res.json();
-
                 if (data.success) {
-                    btn.innerHTML = '<span class="btn-waiter-icon">✓</span><span>Garson Çağrıldı</span>';
-                    showToast('Garsonunuz en kısa sürede gelecek.');
+                    btn.innerHTML = '<span class="btn-waiter-icon">✓</span><span>@T("waiterCalled")</span>';
+                    showToast('@T("waiterMsg")');
                 } else {
                     btn.disabled = false;
                 }
             } catch {
                 btn.disabled = false;
-                showToast('Bağlantı hatası. Lütfen tekrar deneyiniz.');
+                showToast('@T("connError")');
             }
         }
 
-        /* ════════════════════════════════════════════════════════════════
-           TOAST
-        ════════════════════════════════════════════════════════════════ */
         function showToast(msg) {
             const wrap = document.getElementById('toastWrap');
-            const t = document.createElement('div');
-            t.className = 'toast';
+            const t    = document.createElement('div');
+            t.className   = 'toast';
             t.textContent = msg;
             wrap.appendChild(t);
-
             requestAnimationFrame(() => requestAnimationFrame(() => t.classList.add('show')));
-
-            setTimeout(() => {
-                t.classList.remove('show');
-                setTimeout(() => t.remove(), 350);
-            }, 3200);
+            setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 350); }, 3200);
         }
     </script>
-
 </body>
 </html>

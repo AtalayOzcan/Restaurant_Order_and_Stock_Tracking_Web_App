@@ -1,16 +1,7 @@
-﻿/* ═══════════════════════════════════════════════════════════════════════
-   QR Menü — Minimalist Fine-Dining CSS  (v2 — Okunabilirlik Güncellemesi)
-   Dosya yolu : wwwroot/css/Views/QrMenu/Index.css
-   Yazı tipleri: Cormorant Garamond (başlık/serif) · Montserrat (açıklama/sans)
-   Renk paleti : Krem #FAF9F6 · Derin Siyah #1C1614 · Altın/Bronz #C5A059
-   ═══════════════════════════════════════════════════════════════════════ */
-
-/* ── CSS Custom Properties ──────────────────────────────────────────── */
-:root {
+﻿:root {
     --cream: #FAF9F6;
     --cream-2: #F3EFE8;
     --cream-3: #EDE8DF;
-    /* ── v2: Daha derin, sıcak siyah (#1C1614) ── */
     --ink: #1C1614;
     --ink-65: rgba(28, 22, 20, 0.65);
     --ink-40: rgba(28, 22, 20, 0.40);
@@ -20,6 +11,7 @@
     --gold-lt: #D4B57A;
     --gold-dk: #A8833D;
     --gold-glow: rgba(197, 160, 89, 0.16);
+    --accent: #F97316;
     --serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
     --sans: 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
     --radius-sm: 4px;
@@ -28,7 +20,6 @@
     --max-w: 680px;
 }
 
-/* ── Reset & Base ───────────────────────────────────────────────────── */
 *, *::before, *::after {
     box-sizing: border-box;
     margin: 0;
@@ -50,7 +41,10 @@ body {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23noise)' opacity='0.025'/%3E%3C/svg%3E");
 }
 
-/* ── Page Wrapper ───────────────────────────────────────────────────── */
+    body.rtl {
+        font-family: 'Noto Sans Arabic', 'Montserrat', 'Helvetica Neue', Arial, sans-serif;
+    }
+
 .qr-page {
     max-width: var(--max-w);
     margin: 0 auto;
@@ -58,10 +52,7 @@ body {
     position: relative;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   HEADER
-   ═══════════════════════════════════════════════════════════════════════ */
-
+/* ── HEADER ── */
 .qr-header {
     text-align: center;
     padding: calc(44px + env(safe-area-inset-top, 0px)) 28px 32px;
@@ -80,6 +71,71 @@ body {
         background: linear-gradient(to right, transparent 0%, var(--gold) 35%, var(--gold-lt) 50%, var(--gold) 65%, transparent 100%);
     }
 
+/* ── DİL SEÇİCİ ── */
+.lang-switcher {
+    position: absolute;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    right: 20px;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    z-index: 10;
+}
+
+body.rtl .lang-switcher {
+    right: auto;
+    left: 20px;
+}
+
+.ls-item {
+    background: transparent;
+    border: none;
+    padding: 4px 6px;
+    padding-bottom: 3px;
+    font-family: var(--sans);
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--ink-40);
+    cursor: pointer;
+    transition: color 0.2s ease;
+    border-bottom: 1px solid transparent;
+    line-height: 1;
+}
+
+    .ls-item:hover:not(.ls-active) {
+        color: var(--ink-65);
+    }
+
+    .ls-item.ls-active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+        font-weight: 600;
+    }
+
+.ls-dot {
+    font-size: 8px;
+    color: var(--ink-20);
+    padding: 0 1px;
+    user-select: none;
+    pointer-events: none;
+    line-height: 1;
+}
+
+@media (max-width: 360px) {
+    .ls-item {
+        font-size: 8px;
+        padding: 4px 4px;
+        letter-spacing: 1px;
+    }
+
+    .ls-dot {
+        font-size: 7px;
+    }
+}
+
+/* ── HEADER METİNLERİ ── */
 .header-eyebrow {
     font-family: var(--sans);
     font-size: 9px;
@@ -88,6 +144,7 @@ body {
     text-transform: uppercase;
     color: var(--gold);
     margin-bottom: 16px;
+    padding-top: 22px;
 }
 
 .header-restaurant-name {
@@ -124,10 +181,7 @@ body {
         color: var(--ink-20);
     }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   ŞEFİN NOTU
-   ═══════════════════════════════════════════════════════════════════════ */
-
+/* ── ŞEFİN NOTU ── */
 .chef-note-section {
     margin: 32px 28px;
     padding: 28px 28px 24px;
@@ -185,6 +239,18 @@ body {
         border-width: 0 0 1.5px 1.5px;
     }
 
+body.rtl .chef-note-inner::before {
+    right: auto;
+    left: -29px;
+    border-width: 1.5px 0 0 1.5px;
+}
+
+body.rtl .chef-note-inner::after {
+    left: auto;
+    right: -29px;
+    border-width: 0 1.5px 1.5px 0;
+}
+
 .chef-note-label {
     font-family: var(--sans);
     font-size: 9px;
@@ -199,10 +265,10 @@ body {
 .chef-note-quote {
     font-family: var(--serif);
     font-size: clamp(17px, 4.5vw, 20px);
-    font-weight: 400; /* v2: 300 → 400 */
+    font-weight: 400;
     font-style: italic;
-    line-height: 1.85; /* v2: daha geniş satır aralığı */
-    color: var(--ink-65); /* v2: yeni ink-65 değişkeni */
+    line-height: 1.85;
+    color: var(--ink-65);
     text-align: center;
     position: relative;
 }
@@ -219,6 +285,12 @@ body {
         pointer-events: none;
     }
 
+body.rtl .chef-note-quote::before {
+    left: auto;
+    right: -8px;
+    content: '\201D';
+}
+
 .chef-note-author {
     font-family: var(--sans);
     font-size: 10px;
@@ -230,10 +302,7 @@ body {
     margin-top: 16px;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   GARSON ÇAĞIR
-   ═══════════════════════════════════════════════════════════════════════ */
-
+/* ── GARSON ÇAĞIR ── */
 .waiter-section {
     padding: 8px 28px 20px;
     display: flex;
@@ -273,18 +342,14 @@ body {
         border-color: var(--gold);
         color: var(--gold);
         cursor: default;
-        opacity: 0.85;
+        opacity: .85;
     }
 
 .btn-waiter-icon {
     font-size: 14px;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   KATEGORİ FİLTRE NAV — Sticky + Yatay Kaydırmalı
-   (v2: "Tümü" butonu eklendi, filtreleme mantığıyla çalışır)
-   ═══════════════════════════════════════════════════════════════════════ */
-
+/* ── KATEGORİ NAV ── */
 .cat-nav-wrap {
     position: sticky;
     top: 0;
@@ -294,7 +359,6 @@ body {
     -webkit-backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--ink-10);
     padding: 0 28px;
-    /* Hafif gölge — diğer içerikten ayrışması için */
     box-shadow: 0 2px 12px rgba(28, 22, 20, 0.06);
 }
 
@@ -305,7 +369,6 @@ body {
     scrollbar-width: none;
     max-width: var(--max-w);
     margin: 0 auto;
-    /* Kenarlardan soluk kaybolma efekti */
     -webkit-mask-image: linear-gradient(to right, transparent 0, black 20px, black calc(100% - 20px), transparent 100%);
     mask-image: linear-gradient(to right, transparent 0, black 20px, black calc(100% - 20px), transparent 100%);
 }
@@ -314,13 +377,17 @@ body {
         display: none;
     }
 
+body.rtl .cat-nav {
+    -webkit-mask-image: linear-gradient(to left, transparent 0, black 20px, black calc(100% - 20px), transparent 100%);
+    mask-image: linear-gradient(to left, transparent 0, black 20px, black calc(100% - 20px), transparent 100%);
+}
+
 .cat-nav-btn {
     flex-shrink: 0;
     padding: 15px 0;
     margin-right: 26px;
     background: none;
     border: none;
-    /* Altın çizgi — aktif değilken şeffaf */
     border-bottom: 1.5px solid transparent;
     font-family: var(--sans);
     font-size: 9px;
@@ -332,14 +399,13 @@ body {
     transition: color 0.2s ease, border-color 0.2s ease;
     white-space: nowrap;
     position: relative;
-    bottom: -1px; /* border-bottom'u nav alt çizgisiyle örtüştür */
+    bottom: -1px;
 }
 
     .cat-nav-btn:last-child {
         margin-right: 0;
     }
 
-    /* ── AKTİF: altın rengi yazı + altın alt çizgi ── */
     .cat-nav-btn.active {
         color: var(--gold);
         border-bottom-color: var(--gold);
@@ -350,15 +416,20 @@ body {
         color: var(--ink-65);
     }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   MENÜ BÖLÜMÜ
-   ═══════════════════════════════════════════════════════════════════════ */
+body.rtl .cat-nav-btn {
+    margin-right: 0;
+    margin-left: 26px;
+}
 
+    body.rtl .cat-nav-btn:last-child {
+        margin-left: 0;
+    }
+
+/* ── MENÜ BÖLÜMÜ ── */
 .menu-section {
     padding: 44px 28px 0;
 }
 
-    /* JS filter: gizlenince display:none uygulanır, bu sınıf gerekmiyor */
     .menu-section.hidden {
         display: none;
     }
@@ -395,10 +466,6 @@ body {
     line-height: 1.15;
 }
 
-    .cat-title em {
-        font-style: italic;
-    }
-
 .cat-divider-bottom {
     display: flex;
     align-items: center;
@@ -419,14 +486,21 @@ body {
         background: linear-gradient(to left, transparent, var(--ink-20));
     }
 
+body.rtl .cat-divider-line.left {
+    background: linear-gradient(to left, transparent, var(--ink-20));
+}
+
+body.rtl .cat-divider-line.right {
+    background: linear-gradient(to right, transparent, var(--ink-20));
+}
+
 .cat-divider-diamond {
     color: var(--gold);
     font-size: 7px;
     letter-spacing: 5px;
 }
 
-/* ── Menu Item Row ───────────────────────────────────────────────────── */
-
+/* ── MENU ITEM ── */
 .menu-list {
     padding-top: 8px;
 }
@@ -446,7 +520,6 @@ body {
         border-top: 1px solid var(--ink-10);
     }
 
-    /* Hover: hafif krem vurgu */
     .menu-item::before {
         content: '';
         position: absolute;
@@ -462,7 +535,6 @@ body {
         opacity: 1;
     }
 
-/* Sütun 1 — Numara */
 .item-number {
     font-family: var(--serif);
     font-size: 12px;
@@ -477,32 +549,38 @@ body {
     z-index: 1;
 }
 
-/* Sütun 2 — İsim + Açıklama */
+body.rtl .item-number {
+    text-align: right;
+}
+
 .item-info {
     flex: 1;
     position: relative;
     z-index: 1;
 }
 
-/* v2: font-size artırıldı (en az 1.25rem = 20px), line-height açıldı */
 .item-name {
     font-family: var(--serif);
-    font-size: clamp(20px, 5.5vw, 26px); /* v2: 18px → 20px min */
-    font-weight: 600; /* v2: 500 → 600 (daha belirgin) */
+    font-size: clamp(20px, 5.5vw, 26px);
+    font-weight: 600;
     letter-spacing: -0.2px;
     color: var(--ink);
-    line-height: 1.35; /* v2: 1.2 → 1.35 */
+    line-height: 1.35;
     margin-bottom: 8px;
 }
 
-/* v2: font-weight 300→400, font-size 11px→13px, line-height 1.65→1.80 */
+body.rtl .item-name,
+body.rtl .item-desc {
+    text-align: right;
+}
+
 .item-desc {
     font-family: var(--sans);
-    font-size: 13px; /* v2: 11px → 13px */
-    font-weight: 400; /* v2: 300 → 400 */
+    font-size: 13px;
+    font-weight: 400;
     font-style: italic;
-    color: var(--ink-65); /* v2: yeni değişken — daha koyu */
-    line-height: 1.80; /* v2: 1.65 → 1.80 */
+    color: var(--ink-65);
+    line-height: 1.80;
     letter-spacing: 0.1px;
     max-width: 340px;
 }
@@ -512,6 +590,10 @@ body {
     gap: 6px;
     margin-top: 10px;
     flex-wrap: wrap;
+}
+
+body.rtl .item-tags {
+    justify-content: flex-end;
 }
 
 .item-tag {
@@ -527,13 +609,16 @@ body {
     background: transparent;
 }
 
-/* Sütun 3 — Fiyat */
 .item-price-col {
     text-align: right;
     padding-top: 4px;
     flex-shrink: 0;
     position: relative;
     z-index: 1;
+}
+
+body.rtl .item-price-col {
+    text-align: left;
 }
 
 .item-price-currency {
@@ -546,7 +631,6 @@ body {
     margin-right: 1px;
 }
 
-/* v2: fiyat boyutu da biraz büyütüldü */
 .item-price {
     font-family: var(--serif);
     font-size: clamp(20px, 5.5vw, 25px);
@@ -556,15 +640,11 @@ body {
     white-space: nowrap;
 }
 
-/* ── Bölüm Arası Boşluk ──────────────────────────────────────────────── */
 .section-gap {
     height: 24px;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   FOOTER
-   ═══════════════════════════════════════════════════════════════════════ */
-
+/* ── FOOTER ── */
 .qr-footer {
     text-align: center;
     padding: 44px 28px calc(28px + env(safe-area-inset-bottom, 0px));
@@ -610,10 +690,7 @@ body {
     color: var(--ink-20);
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   TOAST
-   ═══════════════════════════════════════════════════════════════════════ */
-
+/* ── TOAST ── */
 .toast-wrap {
     position: fixed;
     bottom: calc(28px + env(safe-area-inset-bottom, 0px));
@@ -625,6 +702,12 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 8px;
+}
+
+body.rtl .toast-wrap {
+    left: auto;
+    right: 50%;
+    transform: translateX(50%);
 }
 
 .toast {
@@ -649,10 +732,12 @@ body {
         transform: translateY(0);
     }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   BOŞ DURUM
-   ═══════════════════════════════════════════════════════════════════════ */
+body.rtl .toast {
+    border-left: none;
+    border-right: 2px solid var(--gold);
+}
 
+/* ── BOŞ DURUM ── */
 .menu-empty {
     text-align: center;
     padding: 60px 28px;
@@ -663,10 +748,7 @@ body {
     line-height: 1.7;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   RESPONSIVE
-   ═══════════════════════════════════════════════════════════════════════ */
-
+/* ── RESPONSIVE ── */
 @media (max-width: 420px) {
     .menu-item {
         gap: 0 14px;
@@ -680,7 +762,7 @@ body {
     .item-desc {
         font-size: 12px;
     }
-    /* küçük ekranda 1px küçük */
+
     .chef-note-section {
         margin: 24px 20px;
         padding: 24px 20px;
@@ -711,6 +793,15 @@ body {
     .menu-item::before {
         inset: 0 -20px;
     }
+
+    .lang-switcher {
+        right: 12px;
+    }
+
+    body.rtl .lang-switcher {
+        left: 12px;
+        right: auto;
+    }
 }
 
 @media (min-width: 680px) {
@@ -725,10 +816,7 @@ body {
     }
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   SAYFA GİRİŞ ANİMASYONLARI
-   ═══════════════════════════════════════════════════════════════════════ */
-
+/* ── ANİMASYONLAR ── */
 @keyframes fadeSlideUp {
     from {
         opacity: 0;

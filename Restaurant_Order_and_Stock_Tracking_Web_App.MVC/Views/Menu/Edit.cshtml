@@ -22,38 +22,79 @@
             <input type="hidden" id="menuItemId" value="@Model.MenuItemId" />
             <div id="alertBox" class="alert alert-error" style="display:none;"></div>
 
-            <div class="form-group">
-                <label class="form-label">Ürün Adı *</label>
-                <input type="text" id="menuItemName" class="form-control" value="@Model.MenuItemName" maxlength="200" required />
+            @* ── Dil Sekmeleri ── *@
+            <div class="lang-tabs">
+                <button type="button" class="lang-tab active" onclick="switchLangTab('tr',this)">🇹🇷 Türkçe</button>
+                <button type="button" class="lang-tab" onclick="switchLangTab('en',this)">🇬🇧 English</button>
+                <button type="button" class="lang-tab" onclick="switchLangTab('ar',this)">🇸🇦 العربية</button>
+                <button type="button" class="lang-tab" onclick="switchLangTab('ru',this)">🇷🇺 Русский</button>
             </div>
 
-            <div class="form-row">
+            @* TR *@
+            <div class="lang-panel active" id="panel-tr">
+                <div class="form-group">
+                    <label class="form-label">Ürün Adı (TR) *</label>
+                    <input type="text" id="menuItemName" class="form-control" value="@Model.MenuItemName" maxlength="200" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Açıklama (TR)</label>
+                    <textarea id="description" class="form-control" rows="2">@(Model.Description ?? "")</textarea>
+                </div>
+            </div>
+
+            @* EN *@
+            <div class="lang-panel" id="panel-en" style="display:none">
+                <div class="form-group">
+                    <label class="form-label">Product Name (EN)</label>
+                    <input type="text" id="nameEn" class="form-control" value="@(Model.NameEn ?? "")" maxlength="200" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Description (EN)</label>
+                    <textarea id="descriptionEn" class="form-control" rows="2">@(Model.DescriptionEn ?? "")</textarea>
+                </div>
+            </div>
+
+            @* AR *@
+            <div class="lang-panel" id="panel-ar" style="display:none">
+                <div class="form-group">
+                    <label class="form-label">اسم المنتج (AR)</label>
+                    <input type="text" id="nameAr" class="form-control" dir="rtl" value="@(Model.NameAr ?? "")" maxlength="200" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">الوصف (AR)</label>
+                    <textarea id="descriptionAr" class="form-control" dir="rtl" rows="2">@(Model.DescriptionAr ?? "")</textarea>
+                </div>
+            </div>
+
+            @* RU *@
+            <div class="lang-panel" id="panel-ru" style="display:none">
+                <div class="form-group">
+                    <label class="form-label">Название (RU)</label>
+                    <input type="text" id="nameRu" class="form-control" value="@(Model.NameRu ?? "")" maxlength="200" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Описание (RU)</label>
+                    <textarea id="descriptionRu" class="form-control" rows="2">@(Model.DescriptionRu ?? "")</textarea>
+                </div>
+            </div>
+
+            @* ── Ortak Alanlar ── *@
+            <div class="form-row" style="margin-top:16px">
                 <div class="form-group">
                     <label class="form-label">Kategori *</label>
                     <select id="categoryId" class="form-control" required>
                         @foreach (var cat in categories)
                         {
-                            // Şartı dışarıda bir değişkene bağlayarak hatayı engelliyoruz
-                            bool selected = (cat.CategoryId == Model?.CategoryId);
-
-                            <option value="@cat.CategoryId" selected="@selected">
-                                @cat.CategoryName
-                            </option>
-                        }
+                            bool selected = cat.CategoryId == Model?.CategoryId;
+                            <option value="@cat.CategoryId" selected="@selected">@cat.CategoryName</option>
                         }
                     </select>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Fiyat (₺) *</label>
-                    <input type="text" id="menuItemPrice" inputmode="decimal" class="form-control" value="@Model.MenuItemPrice" min="0"  required />
-              
-
+                    <input type="text" id="menuItemPrice" inputmode="decimal" class="form-control"
+                           value="@Model.MenuItemPrice" min="0" required />
                 </div>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Açıklama</label>
-                <textarea id="description" class="form-control" rows="2">@Model.Description</textarea>
             </div>
 
             <div class="form-row">
@@ -84,7 +125,7 @@
                 </div>
             </div>
 
-            <div style="display:flex; justify-content:flex-end; gap:.6rem; margin-top:1.5rem;">
+            <div style="display:flex;justify-content:flex-end;gap:.6rem;margin-top:1.5rem;">
                 <a asp-action="Index" class="btn btn-ghost">İptal</a>
                 <button type="submit" class="btn btn-primary">💾 Güncelle</button>
             </div>
@@ -92,7 +133,32 @@
     </div>
 </div>
 
+<style>
+    .lang-tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+    }
+
+    .lang-tab {
+        padding: 6px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--border,#e5e7eb);
+        background: var(--surface2,#f9fafb);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all .18s;
+    }
+
+        .lang-tab.active {
+            background: var(--accent,#f97316);
+            color: #fff;
+            border-color: var(--accent,#f97316);
+        }
+</style>
+
 @section Scripts {
     <script src="~/js/Views/Menu/Edit.js" asp-append-version="true"></script>
 }
-
