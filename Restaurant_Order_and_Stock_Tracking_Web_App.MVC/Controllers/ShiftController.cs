@@ -11,6 +11,7 @@ using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Dtos.Shift;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Hubs;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.ViewModels.Shift;
+using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Services;
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 {
@@ -20,15 +21,18 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         private readonly RestaurantDbContext _db;
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly IHubContext<RestaurantHub> _hub;
+        private readonly ITenantService _tenantService; // [MT]
 
         public ShiftController(
             RestaurantDbContext db,
             UserManager<ApplicationUser> userManager,
-            IHubContext<RestaurantHub> hub)
+            IHubContext<RestaurantHub> hub,
+            ITenantService tenantService)  // [MT]
         {
             _db = db;
             _userManager = userManager;
             _hub = hub;
+            _tenantService = tenantService; // [MT]
         }
 
         // ── GET /Shift ────────────────────────────────────────────────────────
@@ -89,7 +93,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 DifferenceThreshold = dto.DifferenceThreshold > 0 ? dto.DifferenceThreshold : 100m,
                 Notes = dto.Notes,
                 IsClosed = false,
-                IsLocked = false
+                IsLocked = false,
+                TenantId = _tenantService.TenantId!  // [MT] izolasyon anahtarı
             };
 
             _db.ShiftLogs.Add(shift);
@@ -205,7 +210,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             // ── SignalR: fark eşiği aşıldıysa uyarı gönder ───────────────────
             if (Math.Abs(difference) > shift.DifferenceThreshold)
             {
-                await _hub.Clients.All.SendAsync("ShiftDifferenceAlert", new
+                await _hub.Clients.Group(_tenantService.TenantId ?? "").SendAsync("ShiftDifferenceAlert", new // NEW EKLENDİ
                 {
                     shiftId = shift.ShiftLogId,
                     difference = shift.Difference,
@@ -597,7 +602,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             decimal other = allPayments.Where(p => p.PaymentsMethod == 3).Sum(p => p.PaymentsAmount);
 
             // İptal & zayi kalemleri — tüm siparişler (açık dahil)
-            var cancelledItems = await _db.OrderItems
+            var cancelledItemsQuery = await _db.OrderItems // BURASI DÜZELTİLDİ
                 .Include(oi => oi.Order)
                 .Include(oi => oi.MenuItem)
                 .Where(oi => oi.CancelledQuantity > 0
@@ -605,10 +610,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                           && oi.Order.OrderOpenedAt <= closedAt)
                 .ToListAsync();
 
-            int cancelledCount = cancelledItems.Sum(oi => oi.CancelledQuantity);
+            int cancelledCount = cancelledItemsQuery.Sum(oi => oi.CancelledQuantity); // BURASI DÜZELTİLDİ
 
             // FIX: OrderItemUnitPrice 0 ise MenuItem.MenuItemPrice kullan
-            decimal wasteAmount = cancelledItems
+            decimal wasteAmount = cancelledItemsQuery // BURASI DÜZELTİLDİ
                 .Where(oi => oi.IsWasted == true)
                 .Sum(oi =>
                 {
