@@ -1,0 +1,235 @@
+﻿@model List<Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.ShiftLog>
+@{
+    ViewData["Title"] = "Z-Raporu";
+    var activeShift = ViewBag.ActiveShift as Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.ShiftLog;
+    int currentPage = (int)(ViewBag.CurrentPage ?? 1);
+    int totalPages = (int)(ViewBag.TotalPages ?? 1);
+}
+
+@section Styles {
+    <link href="~/css/Views/Shift/Index.css" rel="stylesheet" asp-append-version="true" />
+}
+
+<div class="z-header">
+    <div>
+        <h1>📋 Z-Raporu</h1>
+        <div class="sub">Kasa vardiyası kayıtları ve günlük Z raporları &nbsp;·&nbsp; Toplam @Model.Count kayıt</div>
+    </div>
+    <div class="z-actions">
+        @if (activeShift == null)
+        {
+            <a asp-action="Open" class="btn-z btn-z-success">
+                <svg style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.5" viewBox="0 0 24 24">
+                    <path d="M12 5v14M5 12h14" />
+                </svg>
+                Yeni Vardiya Aç
+            </a>
+        }
+        else
+        {
+            <span class="btn-z btn-z-ghost" style="cursor:not-allowed;opacity:.45" title="Açık vardiya var">
+                Yeni Vardiya Aç
+            </span>
+        }
+    </div>
+</div>
+
+@if (TempData["Warning"] != null)
+{
+    <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:10px 16px;font-size:13px;color:#f59e0b;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+        <span>⚠️</span><span>@TempData["Warning"]</span>
+    </div>
+}
+@if (TempData["Error"] != null)
+{
+    <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:10px 16px;font-size:13px;color:#ef4444;margin-bottom:14px;display:flex;align-items:center;gap:8px">
+        <span>❌</span><span>@TempData["Error"]</span>
+    </div>
+}
+
+@* Aktif vardiya banner *@
+@if (activeShift != null)
+{
+    <div class="active-shift-banner">
+        <div style="display:flex;align-items:center;gap:14px">
+            <div class="banner-dot"></div>
+            <div class="banner-info">
+                <strong>Vardiya #@activeShift.ShiftLogId şu an açık</strong>
+                <span>
+                    Açan: @(activeShift.OpenedByUser?.FullName ?? activeShift.OpenedByUser?.UserName)
+                    &nbsp;·&nbsp; @activeShift.OpenedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                </span>
+            </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span class="timer-chip" id="shiftTimer">--</span>
+            <a asp-action="Detail" asp-route-id="@activeShift.ShiftLogId"
+               class="btn-z btn-z-ghost" style="font-size:12px;padding:6px 12px">Detay</a>
+            <a asp-action="Close" asp-route-id="@activeShift.ShiftLogId"
+               class="btn-z btn-z-danger" style="font-size:12px;padding:6px 12px">Kapat</a>
+        </div>
+    </div>
+}
+
+@* Vardiya Listesi *@
+<div class="shift-list-card">
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Açılış</th>
+                <th>Kapanış</th>
+                <th>Açan</th>
+                <th style="text-align:right">Toplam Satış</th>
+                <th style="text-align:right">Nakit</th>
+                <th style="text-align:right">Kart</th>
+                <th style="text-align:right">Kasa Farkı</th>
+                <th>Durum</th>
+                <th style="text-align:right">İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (!Model.Any())
+            {
+                <tr>
+                    <td colspan="10">
+                        <div class="z-empty">
+                            <div class="z-empty-icon">📭</div>
+                            Henüz vardiya kaydı yok. "Yeni Vardiya Aç" butonu ile başlayın.
+                        </div>
+                    </td>
+                </tr>
+            }
+            @foreach (var s in Model)
+            {
+                bool over = s.IsClosed && Math.Abs(s.Difference) > s.DifferenceThreshold;
+                <tr>
+                    <td style="font-weight:700;color:var(--text-muted);font-size:12px">#@s.ShiftLogId</td>
+                    <td>
+                        <div style="font-weight:600;font-size:13px">@s.OpenedAt.ToLocalTime().ToString("dd.MM.yyyy")</div>
+                        <div style="font-size:11px;color:var(--text-muted)">@s.OpenedAt.ToLocalTime().ToString("HH:mm")</div>
+                    </td>
+                    <td>
+                        @if (s.ClosedAt.HasValue)
+                        {
+                            <div style="font-weight:600;font-size:13px">@s.ClosedAt.Value.ToLocalTime().ToString("dd.MM.yyyy")</div>
+                            <div style="font-size:11px;color:var(--text-muted)">@s.ClosedAt.Value.ToLocalTime().ToString("HH:mm")</div>
+                        }
+                        else
+                        {
+
+                            <span style="color:#10b981;font-size:12px;font-weight:600">Açık</span>
+                        }
+                    </td>
+                    <td style="font-size:12px;color:var(--text-muted)">
+                        @(s.OpenedByUser?.FullName ?? s.OpenedByUser?.UserName ?? "—")
+                    </td>
+                    <td style="text-align:right;font-weight:700">₺@s.TotalSales.ToString("N2")</td>
+                    <td style="text-align:right;color:var(--text-muted);font-size:12px">₺@s.TotalCash.ToString("N2")</td>
+                    <td style="text-align:right;color:var(--text-muted);font-size:12px">₺@s.TotalCard.ToString("N2")</td>
+                    <td style="text-align:right">
+                        @if (s.IsClosed)
+                        {
+                            <span class="@(over ? "diff-neg" : "diff-pos")">
+                                @(s.Difference >= 0 ? "+" : "")₺@s.Difference.ToString("N2")
+                                @if (over)
+                                {
+                                    <span title="Eşik aşıldı"> ⚠️</span>
+                                }
+                            </span>
+                        }
+                        else
+                        {
+
+                            <span style="color:var(--text-muted);font-size:12px">—</span>
+                        }
+                    </td>
+                    <td>
+                        @if (!s.IsClosed)
+                        {
+                            <span class="pill pill-green">🟢 Açık</span>
+                        }
+                        else if (s.IsLocked)
+                        {
+
+                            <span class="pill pill-lock">🔒 Kilitli</span>
+                        }
+                        else
+                        {
+
+                            <span class="pill pill-gray">Kapalı</span>
+                        }
+                    </td>
+                    <td style="text-align:right">
+                        <div style="display:flex;gap:5px;justify-content:flex-end">
+                            <a asp-action="Detail" asp-route-id="@s.ShiftLogId"
+                               class="btn-z btn-z-ghost" style="font-size:11px;padding:5px 10px">Rapor</a>
+                            @if (s.IsClosed)
+                            {
+                                <button class="btn-z btn-z-pdf" style="font-size:11px;padding:5px 10px"
+                                        onclick="downloadPdf(@s.ShiftLogId, this)">
+                                    <svg style="width:13px;height:13px;fill:currentColor" viewBox="0 0 24 24">
+                                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                                    </svg>
+                                    PDF
+                                </button>
+                            }
+                            @if (!s.IsClosed)
+                            {
+                                <a asp-action="Close" asp-route-id="@s.ShiftLogId"
+                                   class="btn-z btn-z-danger" style="font-size:11px;padding:5px 10px">Kapat</a>
+                            }
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (totalPages > 1)
+    {
+        <div class="z-pagination">
+            <a href="?page=@(currentPage - 1)" class="z-page-btn @(currentPage <= 1 ? "disabled" : "")">‹</a>
+            @for (int i = 1; i <= totalPages; i++)
+            {
+                <a href="?page=@i" class="z-page-btn @(i == currentPage ? "active" : "")">@i</a>
+            }
+            <a href="?page=@(currentPage + 1)" class="z-page-btn @(currentPage >= totalPages ? "disabled" : "")">›</a>
+        </div>
+    }
+</div>
+
+@section Scripts {
+    <script>
+        // Canlı sayaç
+        (function () {
+            const el = document.getElementById('shiftTimer');
+            if (!el) return;
+            const openedAt = new Date('@(activeShift?.OpenedAt.ToString("o") ?? "")');
+            function tick() {
+                const sec = Math.floor((Date.now() - openedAt) / 1000);
+                const h = Math.floor(sec / 3600),
+                      m = Math.floor((sec % 3600) / 60),
+                      s = sec % 60;
+                el.textContent = `${h}s ${String(m).padStart(2,'0')}d ${String(s).padStart(2,'0')}sn`;
+            }
+            tick(); setInterval(tick, 1000);
+        })();
+
+        // PDF İndir — listeden tek tıkla
+        async function downloadPdf(shiftId, btn) {
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<svg style="width:13px;height:13px;fill:currentColor;animation:spin 1s linear infinite" viewBox="0 0 24 24"><path d="M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z"/></svg>`;
+
+            const link = document.createElement('a');
+            link.href     = `/Shift/GeneratePdf/${shiftId}`;
+            link.download = `z_raporu_vardiya_${shiftId}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            setTimeout(() => { btn.disabled = false; btn.innerHTML = orig; }, 4000);
+        }
+    </script>
+}

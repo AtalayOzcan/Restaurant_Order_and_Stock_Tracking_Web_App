@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
@@ -11,9 +12,11 @@ using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
 {
     [DbContext(typeof(RestaurantDbContext))]
-    partial class RestaurantDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260303195355_AddShiftLog")]
+    partial class AddShiftLog
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -209,10 +212,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
 
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
 
@@ -228,8 +227,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                     b.HasIndex("NormalizedUserName")
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
-
-                    b.HasIndex("TenantId");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -266,16 +263,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                     b.Property<string>("NameRu")
                         .HasColumnType("text");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.HasKey("CategoryId");
 
-                    b.HasIndex("TenantId", "CategoryName")
+                    b.HasIndex("CategoryName")
                         .IsUnique()
-                        .HasDatabaseName("uq_categories_tenant_name");
+                        .HasDatabaseName("uq_categories_name");
 
                     b.ToTable("categories", (string)null);
                 });
@@ -359,11 +351,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<bool>("TrackStock")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -372,8 +359,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                     b.HasKey("MenuItemId");
 
                     b.HasIndex("CategoryId");
-
-                    b.HasIndex("TenantId");
 
                     b.ToTable("menu_items", (string)null);
                 });
@@ -418,16 +403,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                     b.Property<int>("TableId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.HasKey("OrderId");
 
                     b.HasIndex("TableId");
-
-                    b.HasIndex("TenantId");
 
                     b.ToTable("orders", (string)null);
                 });
@@ -556,50 +534,86 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                         .HasColumnType("text");
 
                     b.Property<decimal>("ClosingBalance")
-                        .HasColumnType("numeric");
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m);
 
                     b.Property<decimal>("Difference")
-                        .HasColumnType("numeric");
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m);
 
                     b.Property<decimal>("DifferenceThreshold")
-                        .HasColumnType("numeric");
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(100m);
 
                     b.Property<bool>("IsClosed")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<bool>("IsLocked")
-                        .HasColumnType("boolean");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("Notes")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("OpenedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
 
                     b.Property<string>("OpenedByUserId")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<decimal>("OpeningBalance")
-                        .HasColumnType("numeric");
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m);
 
                     b.Property<decimal>("TotalCard")
-                        .HasColumnType("numeric");
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m);
 
                     b.Property<decimal>("TotalCash")
-                        .HasColumnType("numeric");
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m);
 
                     b.Property<decimal>("TotalDiscount")
-                        .HasColumnType("numeric");
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m);
 
                     b.Property<decimal>("TotalOther")
-                        .HasColumnType("numeric");
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m);
 
                     b.Property<decimal>("TotalSales")
-                        .HasColumnType("numeric");
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m);
 
                     b.Property<decimal>("TotalWaste")
-                        .HasColumnType("numeric");
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasDefaultValue(0m);
 
                     b.HasKey("ShiftLogId");
 
@@ -607,7 +621,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
 
                     b.HasIndex("OpenedByUserId");
 
-                    b.ToTable("ShiftLogs");
+                    b.ToTable("shift_logs", (string)null);
                 });
 
             modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.StockLog", b =>
@@ -704,146 +718,12 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
-                    b.Property<string>("TenantId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<DateTime?>("WaiterCalledAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("TableId");
 
-                    b.HasIndex("TenantId");
-
                     b.ToTable("tables", (string)null);
-                });
-
-            modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Tenant", b =>
-                {
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasDefaultValueSql("NOW()");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("PlanType")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasDefaultValue("trial");
-
-                    b.Property<int>("RestaurantType")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Subdomain")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime?>("TrialEndsAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("TenantId");
-
-                    b.HasIndex("Subdomain")
-                        .IsUnique()
-                        .HasDatabaseName("uq_tenants_subdomain");
-
-                    b.ToTable("tenants", (string)null);
-                });
-
-            modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.TenantConfig", b =>
-                {
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("CurrencyCode")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasMaxLength(3)
-                        .HasColumnType("character varying(3)")
-                        .HasDefaultValue("TRY");
-
-                    b.Property<bool>("EnableCourseManagement")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("EnableDiscounts")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("EnableKitchenDisplay")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("EnableLoyaltyProgram")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("EnableMultiBranch")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("EnableReservations")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true);
-
-                    b.Property<bool>("EnableSelfOrderQr")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("EnableSplitBill")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<bool>("EnableTableMerge")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(false);
-
-                    b.Property<string>("LogoPath")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("PrimaryColor")
-                        .HasMaxLength(7)
-                        .HasColumnType("character varying(7)");
-
-                    b.Property<string>("RestaurantDisplayName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<decimal?>("TaxRate")
-                        .HasPrecision(5, 2)
-                        .HasColumnType("numeric(5,2)");
-
-                    b.HasKey("TenantId");
-
-                    b.ToTable("tenant_configs", (string)null);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -897,27 +777,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.ApplicationUser", b =>
-                {
-                    b.HasOne("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Tenant", "Tenant")
-                        .WithMany("Users")
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Tenant");
-                });
-
-            modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Category", b =>
-                {
-                    b.HasOne("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Tenant");
-                });
-
             modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.MenuItem", b =>
                 {
                     b.HasOne("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Category", "Category")
@@ -926,15 +785,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.Navigation("Category");
-
-                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Order", b =>
@@ -945,15 +796,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.Navigation("Table");
-
-                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.OrderItem", b =>
@@ -990,12 +833,13 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                 {
                     b.HasOne("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.ApplicationUser", "ClosedByUser")
                         .WithMany()
-                        .HasForeignKey("ClosedByUserId");
+                        .HasForeignKey("ClosedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.ApplicationUser", "OpenedByUser")
                         .WithMany()
                         .HasForeignKey("OpenedByUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("ClosedByUser");
@@ -1014,28 +858,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
                     b.Navigation("MenuItem");
                 });
 
-            modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Table", b =>
-                {
-                    b.HasOne("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Tenant", "Tenant")
-                        .WithMany()
-                        .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Tenant");
-                });
-
-            modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.TenantConfig", b =>
-                {
-                    b.HasOne("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Tenant", "Tenant")
-                        .WithOne("Config")
-                        .HasForeignKey("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.TenantConfig", "TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Tenant");
-                });
-
             modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Category", b =>
                 {
                     b.Navigation("MenuItems");
@@ -1051,13 +873,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Migrations
             modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Table", b =>
                 {
                     b.Navigation("Orders");
-                });
-
-            modelBuilder.Entity("Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models.Tenant", b =>
-                {
-                    b.Navigation("Config");
-
-                    b.Navigation("Users");
                 });
 #pragma warning restore 612, 618
         }

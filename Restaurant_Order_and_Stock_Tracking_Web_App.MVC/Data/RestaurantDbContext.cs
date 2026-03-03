@@ -36,6 +36,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
         public DbSet<OrderItem> OrderItems { get; set; }
         public DbSet<Payment> Payments { get; set; }
         public DbSet<StockLog> StockLogs { get; set; }
+        public DbSet<ShiftLog> ShiftLogs { get; set; } // Kasa vardiyası kayıtları
 
         // ── Yeni SaaS DbSet'leri ─────────────────────────────────────────────
         public DbSet<Tenant> Tenants { get; set; }

@@ -1,0 +1,333 @@
+﻿@model Restaurant_Order_and_Stock_Tracking_Web_App.MVC.ViewModels.Shift.ShiftDetailViewModel
+@{
+    ViewData["Title"] = $"Z-Raporu #{Model.ShiftLog.ShiftLogId}";
+    var s = Model.ShiftLog;
+    var duration = (s.ClosedAt ?? DateTime.UtcNow) - s.OpenedAt;
+    bool over = s.IsClosed && Math.Abs(s.Difference) > s.DifferenceThreshold;
+    decimal totalPmt = Model.TotalCash + Model.TotalCreditCard + Model.TotalDebitCard + Model.TotalOther;
+    string diffClass = over ? "diff-warn" : "diff-ok";
+}
+
+@section Styles {
+    <link href="~/css/Views/Shift/Index.css" rel="stylesheet" asp-append-version="true" />
+}
+
+@* ── Başlık ──────────────────────────────────────────────────────────── *@
+<div class="z-header">
+    <div>
+        <h1>📋 Z-Raporu #@s.ShiftLogId</h1>
+        <div class="sub">
+            @s.OpenedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+            → @(s.ClosedAt.HasValue? s.ClosedAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm") : "Devam ediyor")
+            &nbsp;·&nbsp; @((int)duration.TotalHours)s @duration.Minutes&#39;dk
+        </div>
+    </div>
+    <div class="z-actions">
+        @if (s.IsClosed)
+        {
+            <button id="btnPdf" class="btn-z btn-z-pdf" onclick="downloadPdf(@s.ShiftLogId)">
+                <svg style="width:15px;height:15px;fill:currentColor" viewBox="0 0 24 24"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z" /></svg>
+                PDF İndir
+            </button>
+        }
+        <button id="btnToggleLock" class="btn-z @(s.IsLocked ? "btn-z-success" : "btn-z-warn")" data-id="@s.ShiftLogId">
+            @(s.IsLocked ? "🔒 Kilidi Aç" : "🔓 Kilitle")
+        </button>
+        @if (!s.IsClosed)
+        {
+            <a asp-action="Close" asp-route-id="@s.ShiftLogId" class="btn-z btn-z-danger">⏹ Vardiyayı Kapat</a>
+        }
+        <a asp-action="Index" class="btn-z btn-z-ghost">← Liste</a>
+    </div>
+</div>
+
+@if (s.IsLocked)
+{
+    <div class="locked-banner">🔒 Bu vardiya kilitlenmiştir — düzenleme kapalı.</div>
+}
+
+@* ═══════════════════════════════════════════════════════════════════════
+   KPI GRID — 4 kart: Satış | Nakit | Kart | KASA FARKI (2 kolon)
+   ═══════════════════════════════════════════════════════════════════════ *@
+<div class="z-kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+
+    <div class="z-kpi-card c-accent">
+        <div class="z-kpi-icon">💰</div>
+        <div class="z-kpi-label">Toplam Satış</div>
+        <div class="z-kpi-value">₺@s.TotalSales.ToString("N2")</div>
+        <div class="z-kpi-meta">Ödenen siparişler</div>
+    </div>
+
+    <div class="z-kpi-card c-green">
+        <div class="z-kpi-icon">💵</div>
+        <div class="z-kpi-label">Nakit Tahsilat</div>
+        <div class="z-kpi-value">₺@s.TotalCash.ToString("N2")</div>
+        <div class="z-kpi-meta">Nakit ödemeler</div>
+    </div>
+
+    <div class="z-kpi-card c-blue">
+        <div class="z-kpi-icon">💳</div>
+        <div class="z-kpi-label">Kart Tahsilat</div>
+        <div class="z-kpi-value">₺@s.TotalCard.ToString("N2")</div>
+        <div class="z-kpi-meta">Kredi + Banka kartı</div>
+    </div>
+
+    @* Kasa Farkı — geniş kart *@
+    <div class="z-kpi-card @(over ? "c-red" : "c-green")"
+         style="background:@(over ? "rgba(239,68,68,.07)" : "rgba(16,185,129,.07)");border-color:@(over ? "rgba(239,68,68,.3)" : "rgba(16,185,129,.3)")">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div>
+                <div class="z-kpi-label">🏧 Kasa Farkı</div>
+                <div class="diff-hero @diffClass" style="font-size:28px;margin-top:4px">
+                    @(s.Difference >= 0 ? "+" : "")₺@s.Difference.ToString("N2")
+                </div>
+                <span class="diff-badge @(over ? "warn" : "ok")" style="margin-top:6px">
+                    @(over ? "⚠️ Eşik aşıldı" : "✓ Normal")
+                </span>
+            </div>
+            <div style="text-align:right;opacity:.7">
+                <div style="font-size:10px;color:var(--text-muted);margin-bottom:2px">Eşik</div>
+                <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700">₺@s.DifferenceThreshold.ToString("N0")</div>
+                <div style="font-size:10px;color:var(--text-muted);margin-top:6px">
+                    Açılış: ₺@s.OpeningBalance.ToString("N2")<br />
+                    Kapanış: ₺@s.ClosingBalance.ToString("N2")
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+@* ── Ödeme Dağılımı + Top 5 ──────────────────────────────────────────── *@
+<div class="z-row" style="margin-bottom:20px">
+    <div class="z-card">
+        <div class="z-card-title">💳 Ödeme Dağılımı</div>
+        @{
+            var pmts = new[]
+            {
+                ("💵 Nakit",        Model.TotalCash,       "#10b981"),
+                ("💳 Kredi Kartı",  Model.TotalCreditCard, "#6366f1"),
+                ("🏦 Banka Kartı",  Model.TotalDebitCard,  "#3b82f6"),
+                ("🎫 Diğer",        Model.TotalOther,      "#f59e0b"),
+                };
+        }
+        @foreach (var (lbl, amt, clr) in pmts)
+        {
+            double pct = totalPmt > 0 ? (double)(amt / totalPmt * 100) : 0;
+            <div class="pmt-row">
+                <div class="pmt-row-head">
+                    <span class="pmt-label">@lbl</span>
+                    <span class="pmt-val">₺@amt.ToString("N2") <span style="color:var(--text-muted)">(@pct.ToString("F1")%)</span></span>
+                </div>
+                <div class="pmt-bar-bg">
+                    <div class="pmt-bar-fill" style="width:@pct.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)%;background:@clr"></div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="z-card">
+        <div class="z-card-title">🏆 Top 5 Ürün</div>
+        @if (!Model.TopProducts.Any())
+        {
+            <div class="z-empty" style="padding:20px"><div class="z-empty-icon">📭</div>Bu vardiyada satış kaydı yok</div>
+        }
+        else
+        {
+            <table class="z-table">
+                <thead><tr><th>#</th><th>Ürün</th><th class="num">Adet</th><th class="num">Tutar</th></tr></thead>
+                <tbody>
+                    @for (int i = 0; i < Model.TopProducts.Count; i++)
+                    {
+                        var p = Model.TopProducts[i];
+                        <tr>
+                            <td><span class="rank-badge r@(i + 1)">@(i + 1)</span></td>
+                            <td style="font-weight:500">@p.ProductName</td>
+                            <td class="num">@p.Quantity</td>
+                            <td class="num">₺@p.TotalAmount.ToString("N2")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@* ── Kategori Grafiği + Garson ────────────────────────────────────────── *@
+<div class="z-row" style="margin-bottom:20px">
+    <div class="z-card">
+        <div class="z-card-title">🏷️ Kategori Dağılımı</div>
+        @if (!Model.CategorySales.Any())
+        {
+            <div class="z-empty" style="padding:20px"><div class="z-empty-icon">📭</div>Veri yok</div>
+        }
+        else
+        {
+            <div class="chart-container"><canvas id="categoryChart"></canvas></div>
+        }
+    </div>
+
+    <div class="z-card">
+        <div class="z-card-title">👤 Garson Satışları</div>
+        @if (!Model.WaiterSales.Any())
+        {
+            <div class="z-empty" style="padding:20px"><div class="z-empty-icon">📭</div>Veri yok</div>
+        }
+        else
+        {
+            <table class="z-table">
+                <thead><tr><th>Garson</th><th class="num">Sipariş</th><th class="num">Toplam</th><th class="num">Ort.</th></tr></thead>
+                <tbody>
+                    @foreach (var w in Model.WaiterSales)
+                    {
+                        <tr>
+                            <td style="font-weight:500">@w.WaiterName</td>
+                            <td class="num">@w.OrderCount</td>
+                            <td class="num">₺@w.TotalAmount.ToString("N2")</td>
+                            <td class="num" style="color:var(--text-muted)">₺@w.AverageBasket.ToString("N2")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+</div>
+
+@* ── İptal/Zayi + İndirim + Vardiya Bilgisi ──────────────────────────── *@
+<div class="z-row-3" style="margin-bottom:20px">
+    <div class="z-card">
+        <div class="z-card-title">🗑️ İptal & Zayi</div>
+        <div style="display:flex;gap:10px">
+            <div style="flex:1;background:var(--surface2);border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:600;margin-bottom:4px">İptal Kalem</div>
+                <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:#f59e0b">@Model.CancelledItemCount</div>
+            </div>
+            <div style="flex:1;background:var(--surface2);border-radius:10px;padding:14px;text-align:center">
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:600;margin-bottom:4px">Zayi Tutar</div>
+                <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:#ef4444">₺@Model.WasteAmount.ToString("N2")</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="z-card">
+        <div class="z-card-title">🎁 İndirim</div>
+        <div style="background:var(--surface2);border-radius:10px;padding:14px;text-align:center">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:600;margin-bottom:4px">Toplam İndirim</div>
+            <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:#3b82f6">₺@s.TotalDiscount.ToString("N2")</div>
+        </div>
+    </div>
+
+    <div class="z-card">
+        <div class="z-card-title">⏱️ Vardiya Bilgisi</div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:12px">
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
+                <span style="color:var(--text-muted)">Açan</span>
+                <span style="font-weight:600">@(s.OpenedByUser?.FullName ?? s.OpenedByUser?.UserName ?? "—")</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
+                <span style="color:var(--text-muted)">Kapatan</span>
+                <span style="font-weight:600">@(s.ClosedByUser?.FullName ?? s.ClosedByUser?.UserName ?? "—")</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border)">
+                <span style="color:var(--text-muted)">Süre</span>
+                <span style="font-weight:600">@((int)duration.TotalHours)s @duration.Minutes&#39;dk</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;padding:4px 0">
+                <span style="color:var(--text-muted)">Durum</span>
+                @if (!s.IsClosed)
+                {
+                    <span class="pill pill-green">🟢 Açık</span>
+                }
+                else if (s.IsLocked)
+                {
+
+                    <span class="pill pill-lock">🔒 Kilitli</span>
+                }
+                else
+                {
+
+                    <span class="pill pill-gray">Kapalı</span>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script>
+        // Kategori grafiği
+        const catLabels = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.CategorySales.Select(c => c.CategoryName)));
+        const catData   = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.CategorySales.Select(c => (double)c.TotalAmount)));
+
+        if (catLabels.length > 0) {
+            const isDark    = document.documentElement.getAttribute('data-theme') !== 'light';
+            const gridColor = isDark ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.06)';
+            const textColor = isDark ? '#687080' : '#8A95A3';
+            Chart.defaults.font.family = "'DM Sans', sans-serif";
+            Chart.defaults.font.size   = 11;
+            Chart.defaults.color       = textColor;
+
+            new Chart(document.getElementById('categoryChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: catLabels,
+                    datasets: [{
+                        label: 'Satış (₺)',
+                        data:  catData,
+                        backgroundColor: ['#F97316','#10b981','#6366f1','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#14b8a6'],
+                        borderRadius: 6,
+                        borderSkipped: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: isDark ? '#1E242C' : '#fff',
+                            borderColor: isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.08)',
+                            borderWidth: 1,
+                            titleColor: isDark ? '#EEF0F3' : '#141A22',
+                            bodyColor: textColor,
+                            padding: 10,
+                            callbacks: { label: ctx => ' ₺' + ctx.parsed.y.toLocaleString('tr-TR',{minimumFractionDigits:2}) }
+                        }
+                    },
+                    scales: {
+                        x: { ticks:{color:textColor}, grid:{color:gridColor}, border:{display:false} },
+                        y: {
+                            ticks:{color:textColor, callback: v=>'₺'+v.toLocaleString('tr-TR')},
+                            grid:{color:gridColor}, border:{display:false}
+                        }
+                    }
+                }
+            });
+        }
+
+        // Kilitle/Kilidi Aç
+        document.getElementById('btnToggleLock')?.addEventListener('click', async function () {
+            const res = await fetch(`/Shift/ToggleLock/${this.dataset.id}`, { method: 'POST' });
+            const d   = await res.json();
+            if (d.success) location.reload();
+        });
+
+        // PDF İndir
+        async function downloadPdf(shiftId) {
+            const btn = document.getElementById('btnPdf');
+            btn.disabled = true;
+            btn.innerHTML = `<svg style="width:15px;height:15px;fill:currentColor;animation:spin 1s linear infinite" viewBox="0 0 24 24"><path d="M12 4V2A10 10 0 0 0 2 12h2a8 8 0 0 1 8-8z"/></svg> Hazırlanıyor…`;
+            const link = document.createElement('a');
+            link.href     = `/Shift/GeneratePdf/${shiftId}`;
+            link.download = `z_raporu_vardiya_${shiftId}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = `<svg style="width:15px;height:15px;fill:currentColor" viewBox="0 0 24 24"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z"/></svg> PDF İndir`;
+            }, 3500);
+        }
+    </script>
+}
