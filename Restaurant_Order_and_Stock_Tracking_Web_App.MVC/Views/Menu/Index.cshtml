@@ -9,11 +9,11 @@
 @section Styles {
     <link href="~/css/Views/Menu/Index.css" rel="stylesheet" asp-append-version="true" />
     <style>
+        /* ── Dil Sekmeleri ─────────────────────────────────────────── */
         .lang-tabs-wrapper {
             margin-bottom: 1rem;
             border-bottom: 1px solid var(--border, rgba(255,255,255,.1));
         }
-
         .lang-tabs {
             display: flex;
             gap: 0;
@@ -21,7 +21,6 @@
             margin: 0;
             padding: 0;
         }
-
         .lang-tab-btn {
             background: none;
             border: none;
@@ -36,40 +35,19 @@
             transition: color .18s, border-color .18s;
             margin-bottom: -1px;
         }
-
-            .lang-tab-btn.active,
-            .lang-tab-btn[aria-selected="true"] {
-                color: #F97316;
-                border-bottom-color: #F97316;
-            }
-
-            .lang-tab-btn:hover:not(.active) {
-                color: var(--text, rgba(255,255,255,.75));
-            }
-
-        [data-theme="light"] .lang-tab-btn {
-            color: #6b7280;
+        .lang-tab-btn.active,
+        .lang-tab-btn[aria-selected="true"] {
+            color: #F97316;
+            border-bottom-color: #F97316;
         }
-
-            [data-theme="light"] .lang-tab-btn.active {
-                color: #F97316;
-                border-bottom-color: #F97316;
-            }
-
-        .lang-tab-content {
-            padding-top: .15rem;
+        .lang-tab-btn:hover:not(.active) {
+            color: var(--text, rgba(255,255,255,.75));
         }
-
-        .lang-flag {
-            font-size: .9rem;
-            margin-right: .2rem;
-        }
-
-        .required-star {
-            color: #ef4444;
-            font-weight: 700;
-        }
-
+        [data-theme="light"] .lang-tab-btn { color: #6b7280; }
+        [data-theme="light"] .lang-tab-btn.active { color: #F97316; border-bottom-color: #F97316; }
+        .lang-tab-content { padding-top: .15rem; }
+        .lang-flag { font-size: .9rem; margin-right: .2rem; }
+        .required-star { color: #ef4444; font-weight: 700; }
         .optional-badge {
             font-size: .68rem;
             font-weight: 400;
@@ -78,8 +56,8 @@
             text-transform: none;
             margin-left: .3rem;
         }
-    <style>
-        /* ── Görsel upload zone (modal içi) ── */
+
+        /* ── Görsel Upload Zone ────────────────────────────────────── */
         .img-upload-zone {
             border: 2px dashed rgba(255,255,255,.13);
             border-radius: 10px;
@@ -90,16 +68,8 @@
             transition: border-color .2s, background .2s;
             min-height: 64px;
         }
-
-        [data-theme="light"] .img-upload-zone {
-            border-color: #d1d5db;
-        }
-
-        .img-upload-zone:hover {
-            border-color: #6366f1;
-            background: rgba(99,102,241,.04);
-        }
-
+        [data-theme="light"] .img-upload-zone { border-color: #d1d5db; }
+        .img-upload-zone:hover { border-color: #6366f1; background: rgba(99,102,241,.04); }
         .img-upload-zone input[type="file"] {
             position: absolute;
             inset: 0;
@@ -108,64 +78,28 @@
             width: 100%;
             height: 100%;
         }
-
-        .img-upload-hint {
-            font-size: .8rem;
-            opacity: .5;
-            pointer-events: none;
+        .img-upload-hint { font-size: .8rem; opacity: .5; pointer-events: none; }
+        .img-upload-preview { display: none; margin-top: .6rem; }
+        .img-upload-preview img {
+            max-height: 110px;
+            border-radius: 8px;
+            object-fit: cover;
+            border: 1px solid rgba(255,255,255,.1);
+            display: block;
+            margin: 0 auto;
         }
+        [data-theme="light"] .img-upload-preview img { border-color: #e5e7eb; }
+        .img-upload-preview-name { font-size: .74rem; opacity: .45; margin-top: .3rem; }
 
-        .img-upload-preview {
-            display: none;
-            margin-top: .6rem;
-            position: relative;
+        /* ── Mevcut Görsel (Edit modalı) ───────────────────────────── */
+        .img-current-wrap { margin-bottom: .5rem; text-align: center; }
+        .img-current-wrap img {
+            max-height: 100px;
+            border-radius: 8px;
+            object-fit: cover;
+            border: 1px solid rgba(255,255,255,.1);
         }
-
-            .img-upload-preview img {
-                max-height: 110px;
-                border-radius: 8px;
-                object-fit: cover;
-                border: 1px solid rgba(255,255,255,.1);
-                display: block;
-                margin: 0 auto;
-            }
-
-        [data-theme="light"] .img-upload-preview img {
-            border-color: #e5e7eb;
-        }
-
-        .img-upload-preview-name {
-            font-size: .74rem;
-            opacity: .45;
-            margin-top: .3rem;
-        }
-
-        .rtl-input {
-            font-family: 'Noto Sans Arabic', 'DM Sans', sans-serif;
-        }
-
-        #createModal .modal, #editModal .modal {
-            max-width: 520px;
-        }
-    </style>
-}
-
-        .img-current-wrap {
-            margin-bottom: .5rem;
-            text-align: center;
-        }
-
-            .img-current-wrap img {
-                max-height: 100px;
-                border-radius: 8px;
-                object-fit: cover;
-                border: 1px solid rgba(255,255,255,.1);
-            }
-
-        [data-theme="light"] .img-current-wrap img {
-            border-color: #e5e7eb;
-        }
-
+        [data-theme="light"] .img-current-wrap img { border-color: #e5e7eb; }
         .img-remove-btn {
             display: inline-block;
             margin-top: .3rem;
@@ -177,23 +111,18 @@
             border: 1px solid rgba(239,68,68,.3);
             color: #ef4444;
         }
-        /* thumbnail in table */
+
+        /* ── Tablo Thumbnail ───────────────────────────────────────── */
         .item-thumb {
-            width: 36px;
-            height: 36px;
+            width: 36px; height: 36px;
             border-radius: 6px;
             object-fit: cover;
             border: 1px solid rgba(255,255,255,.1);
             flex-shrink: 0;
         }
-
-        [data-theme="light"] .item-thumb {
-            border-color: #e5e7eb;
-        }
-
+        [data-theme="light"] .item-thumb { border-color: #e5e7eb; }
         .item-thumb-placeholder {
-            width: 36px;
-            height: 36px;
+            width: 36px; height: 36px;
             border-radius: 6px;
             flex-shrink: 0;
             background: rgba(255,255,255,.05);
@@ -203,16 +132,11 @@
             font-size: 16px;
             opacity: .4;
         }
+        [data-theme="light"] .item-thumb-placeholder { background: #f3f4f6; }
+        .item-name-cell { display: flex; align-items: center; gap: .6rem; }
 
-        [data-theme="light"] .item-thumb-placeholder {
-            background: #f3f4f6;
-        }
-
-        .item-name-cell {
-            display: flex;
-            align-items: center;
-            gap: .6rem;
-        }
+        /* Modal genişliği */
+        #createModal .modal, #editModal .modal { max-width: 520px; }
     </style>
 }
 
@@ -270,28 +194,6 @@
                 <tr data-cat="@item.CategoryId" data-status="@(item.IsAvailable ? 1 : 0)" data-name="@item.MenuItemName.ToLower()">
                     <td style="opacity:.4; font-size:.8rem;">@item.MenuItemId</td>
                     <td>
-                        <div style="font-weight:600;">@item.MenuItemName</div>
-                        @if (!string.IsNullOrEmpty(item.Description))
-                        {
-                            <div style="font-size:.78rem; opacity:.45; margin-top:.15rem;">@(item.Description.Length > 50 ? item.Description.Substring(0, 50) + "…" : item.Description)</div>
-                        }
-                        @if (!string.IsNullOrWhiteSpace(item.NameEn) || !string.IsNullOrWhiteSpace(item.NameAr) || !string.IsNullOrWhiteSpace(item.NameRu))
-                        {
-                            <div style="font-size:.7rem; opacity:.35; margin-top:.1rem;">
-                                @if (!string.IsNullOrWhiteSpace(item.NameEn))
-                                {
-                                    <span>EN ✓</span>
-                                }
-                                @if (!string.IsNullOrWhiteSpace(item.NameAr))
-                                {
-                                    <span style="margin-left:.3rem;">AR ✓</span>
-                                }
-                                @if (!string.IsNullOrWhiteSpace(item.NameRu))
-                                {
-                                    <span style="margin-left:.3rem;">RU ✓</span>
-                                }
-                            </div>
-                        }
                         <div class="item-name-cell">
                             @if (!string.IsNullOrEmpty(item.ImagePath))
                             {
@@ -305,7 +207,9 @@
                                 <div style="font-weight:600;">@item.MenuItemName</div>
                                 @if (!string.IsNullOrEmpty(item.Description))
                                 {
-                                    <div style="font-size:.78rem; opacity:.45; margin-top:.1rem;">@(item.Description.Length > 48 ? item.Description.Substring(0, 48) + "…" : item.Description)</div>
+                                    <div style="font-size:.78rem; opacity:.45; margin-top:.1rem;">
+                                        @(item.Description.Length > 48 ? item.Description.Substring(0, 48) + "…" : item.Description)
+                                    </div>
                                 }
                             </div>
                         </div>
@@ -347,12 +251,11 @@
     </table>
 </div>
 
-<!-- CREATE MODAL -->
-
-
-<!-- ═══════════════════════════════════════════
+@* ═══════════════════════════════════════════════════════════════
      CREATE MODAL
-═══════════════════════════════════════════ -->
+     Dil sekmeleri: çok dilli ad + kısa açıklama
+     Ortak alanlar: kategori, fiyat, detaylı açıklama, görsel, stok
+═══════════════════════════════════════════════════════════════ *@
 <div class="modal-overlay" id="createModal">
     <div class="modal">
         <div class="modal-header">
@@ -362,6 +265,7 @@
         <form id="createForm" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
 
+            @* Çok dilli: Ad + Kısa Açıklama *@
             <div class="lang-tabs-wrapper">
                 <ul class="lang-tabs" role="tablist" id="createMenuLangTabs">
                     <li role="presentation">
@@ -390,59 +294,61 @@
                     </li>
                 </ul>
             </div>
-
             <div class="lang-tab-content">
                 <div id="cm-pane-tr" class="lang-pane">
                     <div class="form-group">
                         <label class="form-label">Ürün Adı <span class="required-star">*</span></label>
-                        <input type="text" id="c_name" class="form-control" placeholder="örn. Türk Kahvesi" maxlength="200" required />
+                        <input type="text" id="c_name" name="menuItemName" class="form-control"
+                               placeholder="örn. Türk Kahvesi" maxlength="200" required />
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Açıklama (TR)</label>
-                        <textarea id="c_description" class="form-control" rows="2" placeholder="Kısa açıklama (isteğe bağlı)"></textarea>
+                        <label class="form-label">Kısa Açıklama (TR)</label>
+                        <textarea id="c_description" name="description" class="form-control" rows="2"
+                                  placeholder="Kısa açıklama (isteğe bağlı)"></textarea>
                     </div>
                 </div>
                 <div id="cm-pane-en" class="lang-pane" style="display:none;">
                     <div class="form-group">
                         <label class="form-label">Product Name <span class="optional-badge">(opsiyonel)</span></label>
-                        <input type="text" id="c_nameEn" class="form-control" placeholder="e.g. Turkish Coffee" maxlength="200" />
+                        <input type="text" id="c_nameEn" name="nameEn" class="form-control"
+                               placeholder="e.g. Turkish Coffee" maxlength="200" />
                     </div>
                     <div class="form-group">
                         <label class="form-label">Description (EN) <span class="optional-badge">(opsiyonel)</span></label>
-                        <textarea id="c_descriptionEn" class="form-control" rows="2" placeholder="Short description in English"></textarea>
+                        <textarea id="c_descriptionEn" name="descriptionEn" class="form-control" rows="2"
+                                  placeholder="Short description in English"></textarea>
                     </div>
                 </div>
                 <div id="cm-pane-ar" class="lang-pane" style="display:none;">
                     <div class="form-group">
                         <label class="form-label">اسم المنتج <span class="optional-badge">(opsiyonel)</span></label>
-                        <input type="text" id="c_nameAr" class="form-control rtl-input" placeholder="مثال: القهوة التركية" maxlength="200" dir="rtl" />
+                        <input type="text" id="c_nameAr" name="nameAr" class="form-control rtl-input"
+                               placeholder="مثال: القهوة التركية" maxlength="200" dir="rtl" />
                     </div>
                     <div class="form-group">
                         <label class="form-label">الوصف (AR) <span class="optional-badge">(opsiyonel)</span></label>
-                        <textarea id="c_descriptionAr" class="form-control rtl-input" rows="2" placeholder="وصف قصير بالعربية" dir="rtl"></textarea>
+                        <textarea id="c_descriptionAr" name="descriptionAr" class="form-control rtl-input" rows="2"
+                                  placeholder="وصف قصير بالعربية" dir="rtl"></textarea>
                     </div>
                 </div>
                 <div id="cm-pane-ru" class="lang-pane" style="display:none;">
                     <div class="form-group">
                         <label class="form-label">Название продукта <span class="optional-badge">(opsiyonel)</span></label>
-                        <input type="text" id="c_nameRu" class="form-control" placeholder="например: Турецкий кофе" maxlength="200" />
+                        <input type="text" id="c_nameRu" name="nameRu" class="form-control"
+                               placeholder="например: Турецкий кофе" maxlength="200" />
                     </div>
                     <div class="form-group">
                         <label class="form-label">Описание (RU) <span class="optional-badge">(opsiyonel)</span></label>
-                        <textarea id="c_descriptionRu" class="form-control" rows="2" placeholder="Краткое описание на русском"></textarea>
+                        <textarea id="c_descriptionRu" name="descriptionRu" class="form-control" rows="2"
+                                  placeholder="Краткое описание на русском"></textarea>
                     </div>
                 </div>
             </div>
-            <div class="form-group">
-                <label class="form-label">Ürün Adı *</label>
-                <input type="text" id="c_name" name="menuItemName" class="form-control" placeholder="örn. Türk Kahvesi" maxlength="200" required />
-            </div>
 
+            @* Kategori + Fiyat *@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Kategori <span class="required-star">*</span></label>
-                    <select id="c_categoryId" class="form-control" required>
-                    <label class="form-label">Kategori *</label>
                     <select id="c_categoryId" name="categoryId" class="form-control" required>
                         <option value="">— Seçin —</option>
                         @foreach (var cat in categories)
@@ -453,25 +359,27 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Fiyat (₺) <span class="required-star">*</span></label>
-                    <input type="text" inputmode="decimal" id="c_price" class="form-control" placeholder="0.00" required />
-                </div>
-                    <label class="form-label">Fiyat (₺) *</label>
-                    <input type="text" inputmode="decimal" id="c_price" name="menuItemPriceStr" class="form-control" placeholder="0.00" required />
+                    <input type="text" inputmode="decimal" id="c_price" name="menuItemPriceStr"
+                           class="form-control" placeholder="0.00" required />
                 </div>
             </div>
 
+            @* Detaylı Açıklama (QR Menü'de görünür) *@
             <div class="form-group">
-                <label class="form-label">Kısa Açıklama</label>
-                <textarea id="c_description" name="description" class="form-control" rows="2" placeholder="Menü listesinde görünür"></textarea>
+                <label class="form-label">
+                    Detaylı Açıklama
+                    <span style="opacity:.45;font-size:.75rem;">(QR Menü detay sayfasında görünür)</span>
+                </label>
+                <textarea id="c_detailedDescription" name="detailedDescription" class="form-control" rows="3"
+                          placeholder="Malzemeler, pişirme yöntemi, sunum önerisi…"></textarea>
             </div>
 
+            @* Görsel Upload *@
             <div class="form-group">
-                <label class="form-label">Detaylı Açıklama <span style="opacity:.45;font-size:.75rem;">(QR Menü detay sayfasında görünür)</span></label>
-                <textarea id="c_detailedDescription" name="detailedDescription" class="form-control" rows="3" placeholder="Malzemeler, pişirme yöntemi, sunum önerisi…"></textarea>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Ürün Fotoğrafı <span style="opacity:.45;font-size:.75rem;">maks. 5 MB · JPG PNG WEBP</span></label>
+                <label class="form-label">
+                    Ürün Fotoğrafı
+                    <span style="opacity:.45;font-size:.75rem;">maks. 5 MB · JPG PNG WEBP</span>
+                </label>
                 <div class="img-upload-zone" id="c_uploadZone">
                     <input type="file" id="c_imageFile" name="imageFile" accept=".jpg,.jpeg,.png,.webp,.gif" />
                     <div class="img-upload-hint">🖼️ &nbsp;Tıkla veya sürükle</div>
@@ -482,6 +390,7 @@
                 </div>
             </div>
 
+            @* Stok *@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Stok Miktarı</label>
@@ -518,11 +427,9 @@
     </div>
 </div>
 
-<!-- EDIT MODAL -->
-
-<!-- ═══════════════════════════════════════════
+@* ═══════════════════════════════════════════════════════════════
      EDIT MODAL
-═══════════════════════════════════════════ -->
+═══════════════════════════════════════════════════════════════ *@
 <div class="modal-overlay" id="editModal">
     <div class="modal">
         <div class="modal-header">
@@ -534,6 +441,7 @@
             <input type="hidden" id="e_id" name="id" />
             <input type="hidden" id="e_removeImage" name="removeImage" value="false" />
 
+            @* Çok dilli: Ad + Kısa Açıklama *@
             <div class="lang-tabs-wrapper">
                 <ul class="lang-tabs" role="tablist" id="editMenuLangTabs">
                     <li role="presentation">
@@ -562,59 +470,55 @@
                     </li>
                 </ul>
             </div>
-
             <div class="lang-tab-content">
                 <div id="em-pane-tr" class="lang-pane">
                     <div class="form-group">
                         <label class="form-label">Ürün Adı <span class="required-star">*</span></label>
-                        <input type="text" id="e_name" class="form-control" maxlength="200" required />
+                        <input type="text" id="e_name" name="menuItemName" class="form-control"
+                               maxlength="200" required />
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Açıklama (TR)</label>
-                        <textarea id="e_description" class="form-control" rows="2"></textarea>
+                        <label class="form-label">Kısa Açıklama (TR)</label>
+                        <textarea id="e_description" name="description" class="form-control" rows="2"></textarea>
                     </div>
                 </div>
                 <div id="em-pane-en" class="lang-pane" style="display:none;">
                     <div class="form-group">
                         <label class="form-label">Product Name <span class="optional-badge">(opsiyonel)</span></label>
-                        <input type="text" id="e_nameEn" class="form-control" maxlength="200" />
+                        <input type="text" id="e_nameEn" name="nameEn" class="form-control" maxlength="200" />
                     </div>
                     <div class="form-group">
                         <label class="form-label">Description (EN) <span class="optional-badge">(opsiyonel)</span></label>
-                        <textarea id="e_descriptionEn" class="form-control" rows="2"></textarea>
+                        <textarea id="e_descriptionEn" name="descriptionEn" class="form-control" rows="2"></textarea>
                     </div>
                 </div>
                 <div id="em-pane-ar" class="lang-pane" style="display:none;">
                     <div class="form-group">
                         <label class="form-label">اسم المنتج <span class="optional-badge">(opsiyonel)</span></label>
-                        <input type="text" id="e_nameAr" class="form-control rtl-input" maxlength="200" dir="rtl" />
+                        <input type="text" id="e_nameAr" name="nameAr" class="form-control rtl-input"
+                               maxlength="200" dir="rtl" />
                     </div>
                     <div class="form-group">
                         <label class="form-label">الوصف (AR) <span class="optional-badge">(opsiyonel)</span></label>
-                        <textarea id="e_descriptionAr" class="form-control rtl-input" rows="2" dir="rtl"></textarea>
+                        <textarea id="e_descriptionAr" name="descriptionAr" class="form-control rtl-input" rows="2" dir="rtl"></textarea>
                     </div>
                 </div>
                 <div id="em-pane-ru" class="lang-pane" style="display:none;">
                     <div class="form-group">
                         <label class="form-label">Название продукта <span class="optional-badge">(opsiyonel)</span></label>
-                        <input type="text" id="e_nameRu" class="form-control" maxlength="200" />
+                        <input type="text" id="e_nameRu" name="nameRu" class="form-control" maxlength="200" />
                     </div>
                     <div class="form-group">
                         <label class="form-label">Описание (RU) <span class="optional-badge">(opsiyonel)</span></label>
-                        <textarea id="e_descriptionRu" class="form-control" rows="2"></textarea>
+                        <textarea id="e_descriptionRu" name="descriptionRu" class="form-control" rows="2"></textarea>
                     </div>
                 </div>
             </div>
-            <div class="form-group">
-                <label class="form-label">Ürün Adı *</label>
-                <input type="text" id="e_name" name="menuItemName" class="form-control" maxlength="200" required />
-            </div>
 
+            @* Kategori + Fiyat *@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Kategori <span class="required-star">*</span></label>
-                    <select id="e_categoryId" class="form-control" required>
-                    <label class="form-label">Kategori *</label>
                     <select id="e_categoryId" name="categoryId" class="form-control" required>
                         @foreach (var cat in categories)
                         {
@@ -624,22 +528,27 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Fiyat (₺) <span class="required-star">*</span></label>
-                    <input type="text" inputmode="decimal" id="e_price" class="form-control" required />
+                    <input type="text" inputmode="decimal" id="e_price" name="menuItemPriceStr"
+                           class="form-control" required />
                 </div>
             </div>
 
+            @* Detaylı Açıklama *@
             <div class="form-group">
-                <label class="form-label">Kısa Açıklama</label>
-                <textarea id="e_description" name="description" class="form-control" rows="2"></textarea>
+                <label class="form-label">
+                    Detaylı Açıklama
+                    <span style="opacity:.45;font-size:.75rem;">(QR Menü detay sayfasında görünür)</span>
+                </label>
+                <textarea id="e_detailedDescription" name="detailedDescription" class="form-control" rows="3"
+                          placeholder="Malzemeler, pişirme yöntemi, sunum önerisi…"></textarea>
             </div>
 
+            @* Görsel: Mevcut + Upload *@
             <div class="form-group">
-                <label class="form-label">Detaylı Açıklama <span style="opacity:.45;font-size:.75rem;">(QR Menü detay sayfasında görünür)</span></label>
-                <textarea id="e_detailedDescription" name="detailedDescription" class="form-control" rows="3" placeholder="Malzemeler, pişirme yöntemi, sunum önerisi…"></textarea>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Ürün Fotoğrafı <span style="opacity:.45;font-size:.75rem;">maks. 5 MB · JPG PNG WEBP</span></label>
+                <label class="form-label">
+                    Ürün Fotoğrafı
+                    <span style="opacity:.45;font-size:.75rem;">maks. 5 MB · JPG PNG WEBP</span>
+                </label>
                 <div id="e_currentImgWrap" class="img-current-wrap" style="display:none;">
                     <img id="e_currentImg" src="" alt="Mevcut görsel" />
                     <div>
@@ -656,6 +565,7 @@
                 </div>
             </div>
 
+            @* Stok *@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Stok Miktarı</label>
@@ -692,10 +602,7 @@
     </div>
 </div>
 
-<!-- DELETE MODAL -->
-<!-- ═══════════════════════════════════════════
-     DELETE MODAL
-═══════════════════════════════════════════ -->
+@* DELETE MODAL *@
 <div class="modal-overlay" id="deleteModal">
     <div class="modal confirm-modal">
         <div class="confirm-icon">🗑️</div>
@@ -715,10 +622,8 @@
     </div>
 </div>
 
-
 <div class="toast-container" id="toastContainer"></div>
 
 @section Scripts {
     <script src="~/js/Views/Menu/Index.js" asp-append-version="true"></script>
-}
 }
