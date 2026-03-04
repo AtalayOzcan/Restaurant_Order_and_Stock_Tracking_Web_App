@@ -37,6 +37,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 .Where(m => !m.IsDeleted)
                 .Include(m => m.Category)
                 .OrderBy(m => m.Category.CategorySortOrder)
+                .ThenBy(m => m.DisplayOrder)
                 .ThenBy(m => m.MenuItemName)
                 .ToListAsync();
 
@@ -119,6 +120,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 StockQuantity = dto.StockQuantity,
                 TrackStock = dto.TrackStock,
                 IsAvailable = dto.IsAvailable,
+                DisplayOrder = dto.DisplayOrder,
                 IsDeleted = false,
                 ImagePath = imagePath,
                 MenuItemCreatedTime = DateTime.UtcNow,
@@ -193,6 +195,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             item.StockQuantity = dto.StockQuantity;
             item.TrackStock = dto.TrackStock;
             item.IsAvailable = dto.IsAvailable;
+            item.DisplayOrder = dto.DisplayOrder;
 
             await _context.SaveChangesAsync();
             return Json(new { success = true, message = "Ürün başarıyla güncellendi." });
@@ -248,6 +251,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 stockQuantity = m.StockQuantity,
                 trackStock = m.TrackStock,
                 isAvailable = m.IsAvailable,
+                displayOrder = m.DisplayOrder,
                 imagePath = m.ImagePath
             });
         }

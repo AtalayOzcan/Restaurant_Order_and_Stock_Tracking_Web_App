@@ -61,8 +61,13 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             // Bugünkü ödemeler
             var todayPayments = await _context.Payments
                 .Where(p => p.PaymentsPaidAt >= fromUtc && p.PaymentsPaidAt < toUtc)
-                .Select(p => new { p.PaymentsAmount })
+                .Select(p => new { p.PaymentsAmount, p.PaymentsMethod })
                 .ToListAsync();
+
+            // ── Sprint 1: Nakit ve Kart Cirosu ──────────────────────────────────────
+            var todayCashRevenue = todayPayments.Where(p => p.PaymentsMethod == 0).Sum(p => p.PaymentsAmount);
+            var todayCardRevenue = todayPayments.Where(p => p.PaymentsMethod == 1 || p.PaymentsMethod == 2).Sum(p => p.PaymentsAmount);
+            // ─────────────────────────────────────────────────────────────────────────
 
             // Bugünkü en çok satan ürün + top 5
             var todayItems = await _context.OrderItems
@@ -150,6 +155,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             {
                 TodayGrossSales = todayPaidOrders.Sum(o => o.OrderTotalAmount),
                 TodayNetCollected = todayPayments.Sum(p => p.PaymentsAmount),
+                TodayCashRevenue = todayCashRevenue,
+                TodayCardRevenue = todayCardRevenue,
                 OpenOrderCount = await _context.Orders.CountAsync(o => o.OrderStatus == OrderStatus.Open),
                 TopSellingItemToday = topProducts.FirstOrDefault()?.ProductName ?? "—",
                 CriticalStockCount = await _context.MenuItems.CountAsync(m =>
@@ -470,7 +477,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 .Where(o => statuses.Contains(o.OrderStatus)
                          && o.OrderClosedAt >= fromUtc
                          && o.OrderClosedAt < toUtc)
-                .Select(o => new { o.OrderTotalAmount, o.OrderClosedAt })
+                .Select(o => new { o.OrderTotalAmount, o.OrderClosedAt, o.DiscountAmount })
                 .ToListAsync();
 
             var payments = await _context.Payments
@@ -492,6 +499,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 // ── FIX: Widget toplamları — filtre değiştiğinde 4 kart da güncellenir ──
                 var totalGross = orders.Sum(o => o.OrderTotalAmount);
                 var totalCollected = payments.Sum(p => p.PaymentsAmount);
+                // ── Sprint 1: "Fark" yerine "Toplam İndirim" ──────────────────────────
+                var totalDiscount = orders.Sum(o => o.DiscountAmount);
                 return Json(new
                 {
                     labels,
@@ -499,7 +508,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                     netData,
                     totalGross,
                     totalCollected,
-                    difference = totalGross - totalCollected,
+                    totalDiscount,
                     orderCount = orders.Count
                 });
             }
@@ -528,6 +537,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 // ── FIX: Widget toplamları ──
                 var totalGross = orders.Sum(o => o.OrderTotalAmount);
                 var totalCollected = payments.Sum(p => p.PaymentsAmount);
+                // ── Sprint 1: "Fark" yerine "Toplam İndirim" ──────────────────────────
+                var totalDiscount = orders.Sum(o => o.DiscountAmount);
                 return Json(new
                 {
                     labels,
@@ -535,7 +546,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                     netData,
                     totalGross,
                     totalCollected,
-                    difference = totalGross - totalCollected,
+                    totalDiscount,
                     orderCount = orders.Count
                 });
             }
@@ -959,7 +970,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 .Where(o => statuses.Contains(o.OrderStatus)
                          && o.OrderClosedAt >= fromUtc
                          && o.OrderClosedAt < toUtc)
-                .Select(o => new { o.OrderId, o.OrderTotalAmount, o.OrderStatus, o.OrderClosedAt })
+                .Select(o => new { o.OrderId, o.OrderTotalAmount, o.OrderStatus, o.OrderClosedAt, o.DiscountAmount })
                 .ToListAsync();
 
             var orderIds = orders.Select(o => o.OrderId).ToList();
@@ -996,6 +1007,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             vm.GrossSales = orders.Sum(o => o.OrderTotalAmount);
             vm.NetCollected = totalPayments;
+            // ── Sprint 1: Toplam İndirim — Order.DiscountAmount toplamı ──────────
+            vm.TotalDiscount = orders.Sum(o => o.DiscountAmount);
+            // ─────────────────────────────────────────────────────────────────────
             vm.TotalOrderCount = orders.Count;
             vm.CancelledOrderCount = orders.Count(o => o.OrderStatus == OrderStatus.Cancelled);
             vm.PaymentBreakdown = payments.Select(p => new PaymentMethodDto

@@ -28,6 +28,9 @@ public class MenuItemCreateDto
     public bool TrackStock { get; set; }
     public bool IsAvailable { get; set; }
 
+    /// <summary>Menü listesinde gösterim sırası (1, 2, 3...). Küçük değer üstte görünür.</summary>
+    public int DisplayOrder { get; set; } = 0;
+
     /// <summary>Ürün görseli — multipart/form-data ile yüklenir.</summary>
     public IFormFile? ImageFile { get; set; }
 }

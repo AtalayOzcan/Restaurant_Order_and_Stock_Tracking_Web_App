@@ -14,6 +14,7 @@
             margin-bottom: 1rem;
             border-bottom: 1px solid var(--border, rgba(255,255,255,.1));
         }
+
         .lang-tabs {
             display: flex;
             gap: 0;
@@ -21,6 +22,7 @@
             margin: 0;
             padding: 0;
         }
+
         .lang-tab-btn {
             background: none;
             border: none;
@@ -35,19 +37,40 @@
             transition: color .18s, border-color .18s;
             margin-bottom: -1px;
         }
-        .lang-tab-btn.active,
-        .lang-tab-btn[aria-selected="true"] {
-            color: #F97316;
-            border-bottom-color: #F97316;
+
+            .lang-tab-btn.active,
+            .lang-tab-btn[aria-selected="true"] {
+                color: #F97316;
+                border-bottom-color: #F97316;
+            }
+
+            .lang-tab-btn:hover:not(.active) {
+                color: var(--text, rgba(255,255,255,.75));
+            }
+
+        [data-theme="light"] .lang-tab-btn {
+            color: #6b7280;
         }
-        .lang-tab-btn:hover:not(.active) {
-            color: var(--text, rgba(255,255,255,.75));
+
+            [data-theme="light"] .lang-tab-btn.active {
+                color: #F97316;
+                border-bottom-color: #F97316;
+            }
+
+        .lang-tab-content {
+            padding-top: .15rem;
         }
-        [data-theme="light"] .lang-tab-btn { color: #6b7280; }
-        [data-theme="light"] .lang-tab-btn.active { color: #F97316; border-bottom-color: #F97316; }
-        .lang-tab-content { padding-top: .15rem; }
-        .lang-flag { font-size: .9rem; margin-right: .2rem; }
-        .required-star { color: #ef4444; font-weight: 700; }
+
+        .lang-flag {
+            font-size: .9rem;
+            margin-right: .2rem;
+        }
+
+        .required-star {
+            color: #ef4444;
+            font-weight: 700;
+        }
+
         .optional-badge {
             font-size: .68rem;
             font-weight: 400;
@@ -68,8 +91,16 @@
             transition: border-color .2s, background .2s;
             min-height: 64px;
         }
-        [data-theme="light"] .img-upload-zone { border-color: #d1d5db; }
-        .img-upload-zone:hover { border-color: #6366f1; background: rgba(99,102,241,.04); }
+
+        [data-theme="light"] .img-upload-zone {
+            border-color: #d1d5db;
+        }
+
+        .img-upload-zone:hover {
+            border-color: #6366f1;
+            background: rgba(99,102,241,.04);
+        }
+
         .img-upload-zone input[type="file"] {
             position: absolute;
             inset: 0;
@@ -78,28 +109,54 @@
             width: 100%;
             height: 100%;
         }
-        .img-upload-hint { font-size: .8rem; opacity: .5; pointer-events: none; }
-        .img-upload-preview { display: none; margin-top: .6rem; }
-        .img-upload-preview img {
-            max-height: 110px;
-            border-radius: 8px;
-            object-fit: cover;
-            border: 1px solid rgba(255,255,255,.1);
-            display: block;
-            margin: 0 auto;
+
+        .img-upload-hint {
+            font-size: .8rem;
+            opacity: .5;
+            pointer-events: none;
         }
-        [data-theme="light"] .img-upload-preview img { border-color: #e5e7eb; }
-        .img-upload-preview-name { font-size: .74rem; opacity: .45; margin-top: .3rem; }
+
+        .img-upload-preview {
+            display: none;
+            margin-top: .6rem;
+        }
+
+            .img-upload-preview img {
+                max-height: 110px;
+                border-radius: 8px;
+                object-fit: cover;
+                border: 1px solid rgba(255,255,255,.1);
+                display: block;
+                margin: 0 auto;
+            }
+
+        [data-theme="light"] .img-upload-preview img {
+            border-color: #e5e7eb;
+        }
+
+        .img-upload-preview-name {
+            font-size: .74rem;
+            opacity: .45;
+            margin-top: .3rem;
+        }
 
         /* ── Mevcut Görsel (Edit modalı) ───────────────────────────── */
-        .img-current-wrap { margin-bottom: .5rem; text-align: center; }
-        .img-current-wrap img {
-            max-height: 100px;
-            border-radius: 8px;
-            object-fit: cover;
-            border: 1px solid rgba(255,255,255,.1);
+        .img-current-wrap {
+            margin-bottom: .5rem;
+            text-align: center;
         }
-        [data-theme="light"] .img-current-wrap img { border-color: #e5e7eb; }
+
+            .img-current-wrap img {
+                max-height: 100px;
+                border-radius: 8px;
+                object-fit: cover;
+                border: 1px solid rgba(255,255,255,.1);
+            }
+
+        [data-theme="light"] .img-current-wrap img {
+            border-color: #e5e7eb;
+        }
+
         .img-remove-btn {
             display: inline-block;
             margin-top: .3rem;
@@ -114,15 +171,21 @@
 
         /* ── Tablo Thumbnail ───────────────────────────────────────── */
         .item-thumb {
-            width: 36px; height: 36px;
+            width: 36px;
+            height: 36px;
             border-radius: 6px;
             object-fit: cover;
             border: 1px solid rgba(255,255,255,.1);
             flex-shrink: 0;
         }
-        [data-theme="light"] .item-thumb { border-color: #e5e7eb; }
+
+        [data-theme="light"] .item-thumb {
+            border-color: #e5e7eb;
+        }
+
         .item-thumb-placeholder {
-            width: 36px; height: 36px;
+            width: 36px;
+            height: 36px;
             border-radius: 6px;
             flex-shrink: 0;
             background: rgba(255,255,255,.05);
@@ -132,11 +195,21 @@
             font-size: 16px;
             opacity: .4;
         }
-        [data-theme="light"] .item-thumb-placeholder { background: #f3f4f6; }
-        .item-name-cell { display: flex; align-items: center; gap: .6rem; }
+
+        [data-theme="light"] .item-thumb-placeholder {
+            background: #f3f4f6;
+        }
+
+        .item-name-cell {
+            display: flex;
+            align-items: center;
+            gap: .6rem;
+        }
 
         /* Modal genişliği */
-        #createModal .modal, #editModal .modal { max-width: 520px; }
+        #createModal .modal, #editModal .modal {
+            max-width: 520px;
+        }
     </style>
 }
 
@@ -169,6 +242,7 @@
         <thead>
             <tr>
                 <th>#</th>
+                <th>Sıra</th>
                 <th>Ürün</th>
                 <th>Kategori</th>
                 <th>Fiyat</th>
@@ -193,6 +267,11 @@
             {
                 <tr data-cat="@item.CategoryId" data-status="@(item.IsAvailable ? 1 : 0)" data-name="@item.MenuItemName.ToLower()">
                     <td style="opacity:.4; font-size:.8rem;">@item.MenuItemId</td>
+                    <td>
+                        <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;background:rgba(249,115,22,.12);color:#f97316;font-size:.78rem;font-weight:700;">
+                            @item.DisplayOrder
+                        </span>
+                    </td>
                     <td>
                         <div class="item-name-cell">
                             @if (!string.IsNullOrEmpty(item.ImagePath))
@@ -419,6 +498,15 @@
                 </div>
             </div>
 
+            <div class="form-group">
+                <label class="form-label">
+                    Gösterim Sırası
+                    <span style="opacity:.45;font-size:.75rem;">(küçük sayı = menüde üstte)</span>
+                </label>
+                <input type="number" id="c_displayOrder" name="displayOrder"
+                       class="form-control" value="0" min="0" style="max-width:140px;" />
+            </div>
+
             <div class="modal-footer">
                 <button type="button" class="btn btn-ghost" onclick="closeModal('createModal')">İptal</button>
                 <button type="submit" class="btn btn-primary">💾 Kaydet</button>
@@ -592,6 +680,15 @@
                     </label>
                     <span class="toggle-label-text">Mevcut</span>
                 </div>
+            </div>
+
+             <div class="form-group">
+                <label class="form-label">
+                    Gösterim Sırası
+                    <span style="opacity:.45;font-size:.75rem;">(küçük sayı = menüde üstte)</span>
+                </label>
+                <input type="number" id="e_displayOrder" name="displayOrder"
+                       class="form-control" value="0" min="0" style="max-width:140px;" />
             </div>
 
             <div class="modal-footer">

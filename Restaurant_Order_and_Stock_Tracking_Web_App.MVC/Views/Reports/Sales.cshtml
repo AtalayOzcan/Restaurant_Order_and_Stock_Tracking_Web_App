@@ -47,8 +47,8 @@
         <div class="sum-label">Tahsil Edilen</div>
     </div>
     <div class="sum-card">
-        <div class="sum-val" id="sv-diff">₺@((Model.GrossSales - Model.NetCollected).ToString("N2"))</div>
-        <div class="sum-label">Fark</div>
+        <div class="sum-val" id="sv-discount">₺@Model.TotalDiscount.ToString("N2")</div>
+        <div class="sum-label">Toplam İndirim</div>
     </div>
     <div class="sum-card">
         <div class="sum-val" id="sv-count">@Model.TotalOrderCount</div>

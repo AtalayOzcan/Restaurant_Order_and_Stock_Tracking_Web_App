@@ -1,5 +1,4 @@
-﻿
-// ── Dil Sekmesi ─────────────────────────────────────────────────────
+﻿// ── Dil Sekmesi ─────────────────────────────────────────────────────
 window.switchTab = function (clickedBtn, tablistId) {
     const tablist = document.getElementById(tablistId);
     if (!tablist) return;
@@ -130,6 +129,7 @@ document.getElementById('createForm')?.addEventListener('submit', async e => {
     fd.append('stockQuantity', document.getElementById('c_stock').value);
     fd.append('trackStock', document.getElementById('c_trackStock').checked ? 'true' : 'false');
     fd.append('isAvailable', document.getElementById('c_isAvailable').checked ? 'true' : 'false');
+    fd.append('displayOrder', document.getElementById('c_displayOrder').value || '0');
 
     const imgFile = document.getElementById('c_imageFile');
     if (imgFile?.files[0]) fd.append('imageFile', imgFile.files[0]);
@@ -188,6 +188,7 @@ async function openEditModal(id) {
         document.getElementById('e_trackStock').checked = data.trackStock;
         document.getElementById('e_isAvailable').checked = data.isAvailable;
         document.getElementById('e_categoryId').value = data.categoryId;
+        document.getElementById('e_displayOrder').value = data.displayOrder ?? 0;
 
         // Çok dilli alanlar
         document.getElementById('e_name').value = data.menuItemName ?? '';
@@ -249,6 +250,7 @@ document.getElementById('editForm')?.addEventListener('submit', async e => {
     fd.append('stockQuantity', document.getElementById('e_stock').value);
     fd.append('trackStock', document.getElementById('e_trackStock').checked ? 'true' : 'false');
     fd.append('isAvailable', document.getElementById('e_isAvailable').checked ? 'true' : 'false');
+    fd.append('displayOrder', document.getElementById('e_displayOrder').value || '0');
     fd.append('removeImage', document.getElementById('e_removeImage').value);
 
     const imgFile = document.getElementById('e_imageFile');

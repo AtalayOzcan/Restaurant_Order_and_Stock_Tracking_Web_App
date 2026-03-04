@@ -18,29 +18,92 @@
             transition: border-color .2s, background .2s;
             position: relative;
         }
-        [data-theme="light"] .image-upload-zone { border-color: #d1d5db; }
-        .image-upload-zone:hover { border-color: #6366f1; background: rgba(99,102,241,.04); }
+
+        [data-theme="light"] .image-upload-zone {
+            border-color: #d1d5db;
+        }
+
+        .image-upload-zone:hover {
+            border-color: #6366f1;
+            background: rgba(99,102,241,.04);
+        }
+
         .image-upload-zone input[type="file"] {
-            position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
         }
-        .image-upload-icon { font-size: 2rem; margin-bottom: .5rem; opacity: .5; }
-        .image-upload-label { font-size: .85rem; opacity: .6; }
-        .current-image-wrap { margin-bottom: .75rem; }
-        .current-image-wrap img {
-            max-height: 180px; border-radius: 10px; object-fit: cover;
-            border: 1px solid rgba(255,255,255,.12); display: block; margin: 0 auto;
+
+        .image-upload-icon {
+            font-size: 2rem;
+            margin-bottom: .5rem;
+            opacity: .5;
         }
-        [data-theme="light"] .current-image-wrap img { border-color: #e5e7eb; }
-        .image-actions { display: flex; gap: .5rem; justify-content: center; margin-top: .6rem; flex-wrap: wrap; }
+
+        .image-upload-label {
+            font-size: .85rem;
+            opacity: .6;
+        }
+
+        .current-image-wrap {
+            margin-bottom: .75rem;
+        }
+
+            .current-image-wrap img {
+                max-height: 180px;
+                border-radius: 10px;
+                object-fit: cover;
+                border: 1px solid rgba(255,255,255,.12);
+                display: block;
+                margin: 0 auto;
+            }
+
+        [data-theme="light"] .current-image-wrap img {
+            border-color: #e5e7eb;
+        }
+
+        .image-actions {
+            display: flex;
+            gap: .5rem;
+            justify-content: center;
+            margin-top: .6rem;
+            flex-wrap: wrap;
+        }
+
         .btn-remove-img {
-            font-size: .78rem; padding: .3rem .8rem; border-radius: 6px; cursor: pointer;
-            background: rgba(239,68,68,.15); border: 1px solid rgba(239,68,68,.3); color: #ef4444;
+            font-size: .78rem;
+            padding: .3rem .8rem;
+            border-radius: 6px;
+            cursor: pointer;
+            background: rgba(239,68,68,.15);
+            border: 1px solid rgba(239,68,68,.3);
+            color: #ef4444;
             transition: background .15s;
         }
-        .btn-remove-img:hover { background: rgba(239,68,68,.25); }
-        .image-preview-wrap { margin-top: .75rem; display: none; }
-        .image-preview-wrap img { max-height: 160px; border-radius: 8px; object-fit: cover; }
-        .image-preview-name { font-size: .78rem; opacity: .55; margin-top: .4rem; }
+
+            .btn-remove-img:hover {
+                background: rgba(239,68,68,.25);
+            }
+
+        .image-preview-wrap {
+            margin-top: .75rem;
+            display: none;
+        }
+
+            .image-preview-wrap img {
+                max-height: 160px;
+                border-radius: 8px;
+                object-fit: cover;
+            }
+
+        .image-preview-name {
+            font-size: .78rem;
+            opacity: .55;
+            margin-top: .4rem;
+        }
     </style>
 }
 
@@ -187,6 +250,15 @@
                         <span>Takip Et</span>
                     </div>
                 </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">
+                    Gösterim Sırası
+                    <span style="opacity:.5;font-size:.82em;">(menüde sıralama için, küçük sayı = üstte)</span>
+                </label>
+                <input type="number" id="displayOrder" name="displayOrder" class="form-control"
+                       value="@Model.DisplayOrder" min="0" style="max-width:160px" />
             </div>
 
             <div class="form-group">

@@ -34,6 +34,19 @@ public class Order
     public DateTime OrderOpenedAt { get; set; }
     public DateTime? OrderClosedAt { get; set; }
 
+    // ── Sprint 1: İndirim Alanları ────────────────────────────────────────────
+    /// <summary>
+    /// İlk ödeme anında hesaplanan ve kaydedilen gerçek TL indirim tutarı.
+    /// Raporlarda "Toplam İndirim" olarak kullanılır.
+    /// </summary>
+    public decimal DiscountAmount { get; set; } = 0m;
+
+    /// <summary>
+    /// İndirimin nedeni / açıklaması (örn: "VIP Müşteri", "%10 Personel").
+    /// İsteğe bağlı; frontend'den OrderPaymentDto.DiscountReason ile gelir.
+    /// </summary>
+    public string? DiscountReason { get; set; }
+
     public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
     public virtual ICollection<Payment> Payments { get; set; } = new List<Payment>();
 }

@@ -101,12 +101,13 @@
     function updateSummaryCards(data) {
         const gross = document.getElementById('sv-gross');
         const net = document.getElementById('sv-net');
-        const diff = document.getElementById('sv-diff');
+        // Sprint 1: "Fark" kartı kaldırıldı → "Toplam İndirim" geldi
+        const discount = document.getElementById('sv-discount');
         const count = document.getElementById('sv-count');
 
         if (gross) gross.textContent = formatCurrency(data.totalGross ?? 0);
         if (net) net.textContent = formatCurrency(data.totalCollected ?? 0);
-        if (diff) diff.textContent = formatCurrency(data.difference ?? 0);
+        if (discount) discount.textContent = formatCurrency(data.totalDiscount ?? 0);
         if (count) count.textContent = data.orderCount ?? 0;
     }
 

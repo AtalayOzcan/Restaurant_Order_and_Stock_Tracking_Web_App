@@ -507,10 +507,10 @@ body.rtl .cat-divider-line.right {
 
 .menu-item {
     display: grid;
-    grid-template-columns: auto 56px 1fr auto;
-    gap: 0 20px;
+    grid-template-columns: 80px 1fr auto;
+    gap: 0 16px;
     align-items: start;
-    padding: 22px 0;
+    padding: 18px 0;
     border-bottom: 1px solid var(--ink-10);
     cursor: default;
     position: relative;
@@ -580,9 +580,15 @@ body.rtl .item-desc {
     font-weight: 400;
     font-style: italic;
     color: var(--ink-65);
-    line-height: 1.80;
+    line-height: 1.65;
     letter-spacing: 0.1px;
     max-width: 340px;
+    /* ── Line-clamp: max 2 satır ── */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .item-tags {
@@ -608,11 +614,39 @@ body.rtl .item-tags {
     border-radius: 2px;
     background: transparent;
 }
-.item-thumb{
-
-    height:50px;
-    width:50px;
+/* ── Görsel Sütunu Kapsayıcı ── */
+.item-thumb-col {
+    width: 80px;
+    flex-shrink: 0;
+    align-self: flex-start;
 }
+
+.item-thumb {
+    display: block;
+    width: 80px;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 8px;
+    background: var(--cream-2);
+    /* Bozuk piksel geçişlerini önle */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+}
+
+/* Fotoğraf yoksa placeholder */
+.item-thumb-ph {
+    width: 80px;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--cream-2);
+    border-radius: 8px;
+    font-size: 28px;
+    opacity: .55;
+}
+
+/* ── Açıklama: max 2 satır, sonra … ── */
 /* Sütun 3 — Fiyat */
 .item-price-col {
     text-align: right;

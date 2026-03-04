@@ -11,6 +11,14 @@
         /// <summary>Brüt ciro ile tahsilat arasındaki fark</summary>
         public decimal TodayDifference => TodayGrossSales - TodayNetCollected;
 
+        // ── Sprint 1: Nakit / Kart Ciro KPI'ları ─────────────────────────────
+        /// <summary>Bugünkü nakit tahsilat (PaymentsMethod == 0)</summary>
+        public decimal TodayCashRevenue { get; set; }
+
+        /// <summary>Bugünkü kart tahsilat (PaymentsMethod == 1 veya 2)</summary>
+        public decimal TodayCardRevenue { get; set; }
+        // ─────────────────────────────────────────────────────────────────────
+
         /// <summary>Şu an açık (open) adisyon sayısı</summary>
         public int OpenOrderCount { get; set; }
 

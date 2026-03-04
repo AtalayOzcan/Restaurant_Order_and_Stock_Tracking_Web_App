@@ -79,7 +79,6 @@
     </div>
 
     <div class="card">
-        <%-- enctype="multipart/form-data" — dosya yüklemesi için zorunlu --%>
         <form id="createForm" enctype="multipart/form-data">
             @Html.AntiForgeryToken()
             <div id="alertBox" class="alert alert-error" style="display:none;"></div>
@@ -197,6 +196,15 @@
                         <span>Takip Et</span>
                     </div>
                 </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">
+                    Gösterim Sırası
+                    <span style="opacity:.5;font-size:.82em;">(menüde sıralama için, küçük sayı = üstte)</span>
+                </label>
+                <input type="number" id="c_displayOrder" name="displayOrder" class="form-control"
+                       value="0" min="0" style="max-width:160px" />
             </div>
 
             <div class="form-group">

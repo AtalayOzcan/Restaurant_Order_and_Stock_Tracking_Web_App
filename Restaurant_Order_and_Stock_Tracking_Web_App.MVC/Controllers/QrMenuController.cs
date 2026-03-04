@@ -64,7 +64,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                         !m.IsDeleted &&
                         (m.IsAvailable || (m.TrackStock && m.StockQuantity > 0))
                     )
-                    .OrderBy(m => m.MenuItemCreatedTime)
+                    .OrderBy(m => m.DisplayOrder)
+                    .ThenBy(m => m.MenuItemName)
                 )
                 .ToListAsync();
 
@@ -100,7 +101,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             var sibling = await _context.MenuItems
                 .Where(m => !m.IsDeleted && m.CategoryId == item.CategoryId
                     && (m.IsAvailable || (m.TrackStock && m.StockQuantity > 0)))
-                .OrderBy(m => m.MenuItemCreatedTime)
+                .OrderBy(m => m.DisplayOrder)
+                .ThenBy(m => m.MenuItemName)
                 .Select(m => new { m.MenuItemId, m.MenuItemName })
                 .ToListAsync();
 

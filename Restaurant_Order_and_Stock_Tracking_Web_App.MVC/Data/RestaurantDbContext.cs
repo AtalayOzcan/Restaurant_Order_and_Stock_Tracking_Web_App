@@ -205,6 +205,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.Property(m => m.IsAvailable).HasDefaultValue(true).IsRequired();
                 entity.Property(m => m.Description).HasColumnType("text");
                 entity.Property(m => m.MenuItemCreatedTime).HasDefaultValueSql("NOW()").IsRequired();
+                // ── Sprint 1: Gösterim sırası ────────────────────────────────────────
+                entity.Property(m => m.DisplayOrder).HasDefaultValue(0).IsRequired();
                 entity.HasOne(c => c.Category)
                     .WithMany(m => m.MenuItems)
                     .HasForeignKey(c => c.CategoryId)
@@ -240,6 +242,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.Property(o => o.OrderNote).HasColumnType("text");
                 entity.Property(o => o.OrderTotalAmount).HasPrecision(12, 2).HasDefaultValue(0).IsRequired();
                 entity.Property(o => o.OrderOpenedAt).HasDefaultValueSql("NOW()").IsRequired();
+                // ── Sprint 1: İndirim alanları ──────────────────────────────────────
+                entity.Property(o => o.DiscountAmount).HasPrecision(12, 2).HasDefaultValue(0m);
+                entity.Property(o => o.DiscountReason).HasColumnType("text");
                 entity.HasOne(t => t.Table)
                     .WithMany(o => o.Orders)
                     .HasForeignKey(o => o.TableId)

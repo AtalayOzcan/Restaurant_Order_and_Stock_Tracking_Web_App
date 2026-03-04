@@ -58,6 +58,13 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models
         /// <summary>wwwroot göreli yolu, ör: /images/menu/abc123.jpg</summary>
         public string? ImagePath { get; set; }
 
+        /// <summary>
+        /// Menü listesinde patronun belirlediği gösterim sırası.
+        /// Küçük değer → üstte görünür. Varsayılan: 0.
+        /// Sorgu: .OrderBy(m => m.DisplayOrder).ThenBy(m => m.MenuItemName)
+        /// </summary>
+        public int DisplayOrder { get; set; } = 0;
+
         public DateTime MenuItemCreatedTime { get; set; }
     }
 }

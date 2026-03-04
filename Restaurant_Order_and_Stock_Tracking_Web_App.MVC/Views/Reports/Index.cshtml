@@ -28,6 +28,18 @@
         <div class="kpi-value">₺@Model.TodayNetCollected.ToString("N2")</div>
         <div class="kpi-label">Bugünkü Tahsilat</div>
     </a>
+    <!-- Sprint 1: Nakit Ciro KPI ──────────────────────────────────────────── -->
+    <a class="kpi-card kpi-teal" href="/Reports/Sales?preset=today">
+        <div class="kpi-icon">💵</div>
+        <div class="kpi-value">₺@Model.TodayCashRevenue.ToString("N2")</div>
+        <div class="kpi-label">Nakit Ciro</div>
+    </a>
+    <!-- Sprint 1: Kart Ciro KPI ───────────────────────────────────────────── -->
+    <a class="kpi-card kpi-indigo" href="/Reports/Sales?preset=today">
+        <div class="kpi-icon">💳</div>
+        <div class="kpi-value">₺@Model.TodayCardRevenue.ToString("N2")</div>
+        <div class="kpi-label">Kart Ciro</div>
+    </a>
     <a class="kpi-card @(Model.OpenOrderCount > 0 ? "kpi-amber" : "")" href="/Orders">
         <div class="kpi-icon">🧾</div>
         <div class="kpi-value">@Model.OpenOrderCount</div>

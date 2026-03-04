@@ -457,6 +457,17 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                     PaymentsNote = string.IsNullOrWhiteSpace(dto.PayerName) ? "" : dto.PayerName.Trim()
                 });
 
+                // ── Sprint 1: İndirim — yalnızca İLK ÖDEME anında Order'a yaz ───────
+                // alreadyPaid == 0 → bu ilk ödeme; discountAmount > 0 → gerçek indirim var
+                if (alreadyPaid == 0 && discountAmount > 0)
+                {
+                    order.DiscountAmount = discountAmount;
+                    order.DiscountReason = string.IsNullOrWhiteSpace(dto.DiscountReason)
+                        ? null
+                        : dto.DiscountReason.Trim();
+                }
+                // ─────────────────────────────────────────────────────────────────────
+
                 bool hasItemSel = dto.PaidItems != null && dto.PaidItems.Any();
                 if (hasItemSel)
                 {

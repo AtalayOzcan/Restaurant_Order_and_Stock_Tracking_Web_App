@@ -25,6 +25,12 @@ public class OrderPaymentDto
     // frontend'den göndermek zorunda değilsiniz.
     public decimal DiscountAmount { get; set; } = 0;
 
+    /// <summary>
+    /// İndirim nedeni / açıklaması.
+    /// Yalnızca ilk ödeme anında Order.DiscountReason'a yazılır.
+    /// </summary>
+    public string? DiscountReason { get; set; }
+
     public List<PaidItemSelectionDto>? PaidItems { get; set; }
 }
 
