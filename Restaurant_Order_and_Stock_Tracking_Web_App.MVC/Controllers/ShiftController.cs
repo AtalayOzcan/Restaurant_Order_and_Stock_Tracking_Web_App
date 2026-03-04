@@ -168,23 +168,38 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             decimal paidTotal = allPayments.Sum(p => p.PaymentsAmount);
             decimal totalDiscount = Math.Max(0, totalSales - paidTotal);
 
-            // Zayi: IsWasted=true olan iptal kalemleri — CancelledQuantity * OrderItemUnitPrice
-            var wastedItems = await _db.OrderItems
-                .Include(oi => oi.Order)
-                .Where(oi => oi.IsWasted == true
-                          && oi.CancelledQuantity > 0
-                          && oi.Order.OrderOpenedAt >= shift.OpenedAt
-                          && oi.Order.OrderOpenedAt <= closedAt)
+            // ── [v4 — StockLog Mimarisi] Zayi & Stok İade ────────────────────────
+            // SORUN (v1-v3): OrderItem.IsWasted tek satır; aynı kalem önce zayi
+            //   sonra stok iadesi yapılırsa IsWasted=false eziliyor → zayi tutarı ₺0.
+            //
+            // ÇÖZÜM: StockLog her iptal işlemini ayrı satırda tutar:
+            //   • Zayi     → SourceType="SiparişKaynaklı", MovementType="Çıkış"
+            //   • Stokİade → SourceType=null, Note LIKE "İptal iadesi%", MovementType="Giriş"
+            //   Zaman filtresi: StockLog.CreatedAt (işlem anı) → vardiya aralığına göre.
+
+            // 1) Zayi (gerçek finansal kayıp)
+            var wasteStockLogs = await _db.StockLogs
+                .Include(sl => sl.MenuItem)
+                .Where(sl => sl.SourceType == "SiparişKaynaklı"
+                          && sl.CreatedAt >= shift.OpenedAt
+                          && sl.CreatedAt <= closedAt)
                 .ToListAsync();
 
-            // FIX: OrderItemUnitPrice sıfırsa MenuItem'dan fiyatı çek
-            decimal totalWaste = wastedItems.Sum(oi =>
+            int totalWasteCount = wasteStockLogs.Sum(sl => Math.Abs(sl.QuantityChange));
+            decimal totalWaste = wasteStockLogs.Sum(sl =>
             {
-                decimal price = oi.OrderItemUnitPrice > 0
-                    ? oi.OrderItemUnitPrice
-                    : (oi.MenuItem?.MenuItemPrice ?? 0);
-                return oi.CancelledQuantity * price;
+                decimal price = sl.UnitPrice ?? sl.MenuItem?.MenuItemPrice ?? 0m;
+                return Math.Abs(sl.QuantityChange) * price;
             });
+
+            // 2) Stok İade (mali kayıp yok — sadece adeti rapor et)
+            int totalStockReturnCount = await _db.StockLogs
+                .Where(sl => sl.SourceType == null
+                          && sl.MovementType == "Giriş"
+                          && sl.Note != null && sl.Note.StartsWith("İptal iadesi")
+                          && sl.CreatedAt >= shift.OpenedAt
+                          && sl.CreatedAt <= closedAt)
+                .SumAsync(sl => (int?)sl.QuantityChange) ?? 0;
 
             // Kasa farkı: ClosingBalance - (OpeningBalance + TotalCash)
             decimal difference = dto.ClosingBalance - (shift.OpeningBalance + totalCash);
@@ -262,22 +277,28 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             decimal paidTotal = allPayments.Sum(p => p.PaymentsAmount);
             decimal totalDiscount = Math.Max(0, totalSales - paidTotal);
 
-            var wastedItems = await _db.OrderItems
-                .Include(oi => oi.Order)
-                .Include(oi => oi.MenuItem)
-                .Where(oi => oi.IsWasted == true
-                          && oi.CancelledQuantity > 0
-                          && oi.Order.OrderOpenedAt >= shift.OpenedAt
-                          && oi.Order.OrderOpenedAt <= now)
+            // ── [v4 — StockLog Mimarisi] Zayi & Stok İade (PreviewTotals) ─────────
+            var wasteStockLogs = await _db.StockLogs
+                .Include(sl => sl.MenuItem)
+                .Where(sl => sl.SourceType == "SiparişKaynaklı"
+                          && sl.CreatedAt >= shift.OpenedAt
+                          && sl.CreatedAt <= now)
                 .ToListAsync();
 
-            decimal totalWaste = wastedItems.Sum(oi =>
+            int totalWasteCount = wasteStockLogs.Sum(sl => Math.Abs(sl.QuantityChange));
+            decimal totalWaste = wasteStockLogs.Sum(sl =>
             {
-                decimal price = oi.OrderItemUnitPrice > 0
-                    ? oi.OrderItemUnitPrice
-                    : (oi.MenuItem?.MenuItemPrice ?? 0);
-                return oi.CancelledQuantity * price;
+                decimal price = sl.UnitPrice ?? sl.MenuItem?.MenuItemPrice ?? 0m;
+                return Math.Abs(sl.QuantityChange) * price;
             });
+
+            int totalStockReturnCount = await _db.StockLogs
+                .Where(sl => sl.SourceType == null
+                          && sl.MovementType == "Giriş"
+                          && sl.Note != null && sl.Note.StartsWith("İptal iadesi")
+                          && sl.CreatedAt >= shift.OpenedAt
+                          && sl.CreatedAt <= now)
+                .SumAsync(sl => (int?)sl.QuantityChange) ?? 0;
 
             return Ok(new
             {
@@ -287,6 +308,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 totalOther,
                 totalDiscount,
                 totalWaste,
+                totalWasteCount,
+                totalStockReturnCount,
                 openingBalance = shift.OpeningBalance,
                 differenceThreshold = shift.DifferenceThreshold
             });
@@ -467,7 +490,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                             row.RelativeItem().Border(0.5f).BorderColor(borderClr).Padding(8).AlignCenter().Column(c =>
                             {
                                 c.Item().Text("İptal Edilen Kalem").FontSize(7).FontColor(mutedClr).Bold();
-                                c.Item().Text(vm.CancelledItemCount.ToString()).FontSize(14).Bold().FontColor("#f59e0b");
+                                c.Item().Text($"{vm.WasteCount} zayi / {vm.StockReturnCount} iade").FontSize(12).Bold().FontColor("#f59e0b");
                             });
                             row.ConstantItem(16);
                             row.RelativeItem().Border(0.5f).BorderColor(borderClr).Padding(8).AlignCenter().Column(c =>
@@ -602,27 +625,34 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             decimal debitCard = allPayments.Where(p => p.PaymentsMethod == 2).Sum(p => p.PaymentsAmount);
             decimal other = allPayments.Where(p => p.PaymentsMethod == 3).Sum(p => p.PaymentsAmount);
 
-            // İptal & zayi kalemleri — tüm siparişler (açık dahil)
-            var cancelledItemsQuery = await _db.OrderItems
-                .Include(oi => oi.Order)
-                .Include(oi => oi.MenuItem)
-                .Where(oi => oi.CancelledQuantity > 0
-                          && oi.Order.OrderOpenedAt >= shift.OpenedAt
-                          && oi.Order.OrderOpenedAt <= closedAt)
+            // ── [v4 — StockLog Mimarisi] BuildDetailViewModel Zayi & Stok İade ────
+            // OrderItem.IsWasted ezilme problemi: aynı kalem hem zayi hem iade edilince
+            // IsWasted son işleme göre eziliyor → zayi tutarı ₺0 görünüyor.
+            // ÇÖZÜM: Her iptal işlemi StockLog'a ayrı satır olarak yazılıyor:
+            //   • Zayi     → SourceType="SiparişKaynaklı", MovementType="Çıkış"
+            //   • Stok İade→ SourceType=null, Note LIKE "İptal iadesi%", MovementType="Giriş"
+
+            var wasteStockLogs = await _db.StockLogs
+                .Include(sl => sl.MenuItem)
+                .Where(sl => sl.SourceType == "SiparişKaynaklı"
+                          && sl.CreatedAt >= shift.OpenedAt
+                          && sl.CreatedAt <= closedAt)
                 .ToListAsync();
 
-            int cancelledCount = cancelledItemsQuery.Sum(oi => oi.CancelledQuantity);
+            int wasteCount = wasteStockLogs.Sum(sl => Math.Abs(sl.QuantityChange));
+            decimal wasteAmount = wasteStockLogs.Sum(sl =>
+            {
+                decimal price = sl.UnitPrice ?? sl.MenuItem?.MenuItemPrice ?? 0m;
+                return Math.Abs(sl.QuantityChange) * price;
+            });
 
-            // FIX: OrderItemUnitPrice 0 ise MenuItem.MenuItemPrice kullan
-            decimal wasteAmount = cancelledItemsQuery
-                .Where(oi => oi.IsWasted == true)
-                .Sum(oi =>
-                {
-                    decimal price = oi.OrderItemUnitPrice > 0
-                        ? oi.OrderItemUnitPrice
-                        : (oi.MenuItem?.MenuItemPrice ?? 0);
-                    return oi.CancelledQuantity * price;
-                });
+            int stockReturnCount = await _db.StockLogs
+                .Where(sl => sl.SourceType == null
+                          && sl.MovementType == "Giriş"
+                          && sl.Note != null && sl.Note.StartsWith("İptal iadesi")
+                          && sl.CreatedAt >= shift.OpenedAt
+                          && sl.CreatedAt <= closedAt)
+                .SumAsync(sl => (int?)sl.QuantityChange) ?? 0;
 
             // Garson bazlı satış
             var waiterSales = paidOrders
@@ -671,8 +701,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 TotalCreditCard = creditCard,
                 TotalDebitCard = debitCard,
                 TotalOther = other,
-                CancelledItemCount = cancelledCount,
-                WasteAmount = wasteAmount,
+                WasteCount = wasteCount,          // zayi adedi   (StockLog kaynaklı)
+                WasteAmount = wasteAmount,          // zayi tutarı  (StockLog kaynaklı)
+                StockReturnCount = stockReturnCount,     // stok iade adedi (mali kayıp yok)
                 WaiterSales = waiterSales,
                 TopProducts = topProducts,
                 CategorySales = categorySales

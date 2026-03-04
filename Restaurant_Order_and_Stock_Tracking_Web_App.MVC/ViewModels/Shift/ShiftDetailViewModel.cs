@@ -7,13 +7,31 @@
 
         // ── Ödeme dağılımı ────────────────────────────────────────────
         public decimal TotalCash { get; set; }
-        public decimal TotalCreditCard { get; set; }    // PaymentsMethod == 1
-        public decimal TotalDebitCard { get; set; }     // PaymentsMethod == 2
-        public decimal TotalOther { get; set; }         // PaymentsMethod == 3
+        public decimal TotalCreditCard { get; set; }   // PaymentsMethod == 1
+        public decimal TotalDebitCard { get; set; }   // PaymentsMethod == 2
+        public decimal TotalOther { get; set; }   // PaymentsMethod == 3
 
-        // ── İptal & zayi ──────────────────────────────────────────────
-        public int CancelledItemCount { get; set; }
+        // ── Zayi / Fire (StockLog'dan okunur — IsWasted ezilme problemi yok) ─
+        /// <summary>
+        /// İptal edilip YAKILAN (IsWasted=true) adet.
+        /// Kaynak: StockLog.SourceType == "SiparişKaynaklı".
+        /// Gerçek finansal kayıp.
+        /// </summary>
+        public int WasteCount { get; set; }
+
+        /// <summary>
+        /// İptal edilip yakılan kalemlerin finansal tutarı.
+        /// Kaynak: StockLog.QuantityChange * UnitPrice.
+        /// </summary>
         public decimal WasteAmount { get; set; }
+
+        // ── Stok İade (StockLog'dan okunur) ──────────────────────────
+        /// <summary>
+        /// İptal edilip STOĞA İADE edilen adet (IsWasted=false).
+        /// Kaynak: StockLog Note "İptal iadesi" olan Giriş hareketleri.
+        /// Mali kayıp DEĞİLDİR.
+        /// </summary>
+        public int StockReturnCount { get; set; }
 
         // ── Garson bazlı satış ────────────────────────────────────────
         public List<WaiterSalesRow> WaiterSales { get; set; } = new();
