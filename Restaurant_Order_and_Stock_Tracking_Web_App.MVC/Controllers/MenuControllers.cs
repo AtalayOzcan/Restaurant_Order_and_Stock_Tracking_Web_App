@@ -153,7 +153,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit([FromForm] MenuItemEditDto dto)
         {
-            var item = await _context.MenuItems.FindAsync(dto.Id);
+            var item = await _context.MenuItems.FirstOrDefaultAsync(m => m.MenuItemId == dto.Id); // [G-01] FindAsync → FirstOrDefaultAsync
             if (item == null)
                 return Json(new { success = false, message = "Ürün bulunamadı." });
 
@@ -207,7 +207,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Delete(int id)
         {
-            var item = await _context.MenuItems.FindAsync(id);
+            var item = await _context.MenuItems.FirstOrDefaultAsync(m => m.MenuItemId == id); // [G-01] FindAsync → FirstOrDefaultAsync
             if (item == null) return Json(new { success = false, message = "Ürün bulunamadı." });
 
             bool usedInOrders = await _context.OrderItems.AnyAsync(oi => oi.MenuItemId == id);
@@ -230,7 +230,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         [HttpGet]
         public async Task<IActionResult> GetById(int id)
         {
-            var m = await _context.MenuItems.FindAsync(id);
+            var m = await _context.MenuItems.FirstOrDefaultAsync(m => m.MenuItemId == id); // [G-01] FindAsync → FirstOrDefaultAsync
             if (m == null) return Json(new { success = false });
 
             return Json(new

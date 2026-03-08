@@ -23,7 +23,7 @@ using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Hubs;
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 {
-    [Authorize(Roles = "Admin,Kitchen")]
+    [AllowAnonymous]
     public class KitchenController : Controller
     {
         private readonly RestaurantDbContext _db;
@@ -44,9 +44,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 .Where(o => o.OrderStatus == OrderStatus.Open)
                 .Include(o => o.Table)
                 .Include(o => o.OrderItems
-                    .Where(oi => oi.OrderItemStatus == OrderItemStatus.Pending
-                              || oi.OrderItemStatus == OrderItemStatus.Preparing
-                              || oi.OrderItemStatus == OrderItemStatus.Ready))
+                    .Where(oi => oi.OrderItemStatus == OrderItemStatus.Pending || oi.OrderItemStatus == OrderItemStatus.Preparing))
                     .ThenInclude(oi => oi.MenuItem)
                 .OrderBy(o => o.OrderOpenedAt)
                 .ToListAsync();
@@ -56,33 +54,15 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         }
 
         // ─────────────────────────────────────────────────────────────
-        // GET /Kitchen/GetOrderCardPartial?orderId=42
-        // SignalR NewOrderItem/OrderUpdated tetiklenince JS bu endpoint'i
-        // çağırır; güncel kart HTML'ini PartialView olarak döner.
+        // POST /Kitchen/UpdateStatus
         // ─────────────────────────────────────────────────────────────
-        [HttpGet]
-        public async Task<IActionResult> GetOrderCardPartial(int orderId)
-        {
-            var order = await _db.Orders
-                .Where(o => o.OrderId == orderId && o.OrderStatus == OrderStatus.Open)
-                .Include(o => o.Table)
-                .Include(o => o.OrderItems
-                    .Where(oi => oi.OrderItemStatus == OrderItemStatus.Pending
-                              || oi.OrderItemStatus == OrderItemStatus.Preparing
-                              || oi.OrderItemStatus == OrderItemStatus.Ready))
-                    .ThenInclude(oi => oi.MenuItem)
-                .FirstOrDefaultAsync();
-
-            // Adisyon artık kapalıysa ya da mutfak kalemi kalmadıysa boş döner;
-            // JS tarafı kartı DOM'dan kaldırır.
-            if (order == null || !order.OrderItems.Any())
-                return Content(string.Empty);
-
-            return PartialView("_OrderCard", order);
-        }
-
-        // ─────────────────────────────────────────────────────────────
+        // [G-05] CSRF koruması eklendi. AllowAnonymous olsa dahi antiforgery
+        //        middleware token varlığını doğrular — SameSite=Strict'e ek
+        //        olarak çapraz-origin form/fetch saldırılarını engeller.
+        //        JS tarafı fetch() içinde 'RequestVerificationToken' header'ı
+        //        göndermeli (bkz. Display.cshtml <meta name="csrf-token">).
         [HttpPost]
+        [ValidateAntiForgeryToken]   // [G-05]
         public async Task<IActionResult> UpdateStatus([FromBody] KdsStatusUpdateDto dto)
         {
             if (dto is null)
@@ -101,8 +81,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 return BadRequest(new { message = $"Geçersiz durum değeri: '{dto.NewStatus}'" });
 
             bool gecerli = (item.OrderItemStatus == OrderItemStatus.Pending && parsedNew == OrderItemStatus.Preparing)
-                        || (item.OrderItemStatus == OrderItemStatus.Preparing && parsedNew == OrderItemStatus.Ready)
-                        || (item.OrderItemStatus == OrderItemStatus.Ready && parsedNew == OrderItemStatus.Served);
+                        || (item.OrderItemStatus == OrderItemStatus.Preparing && parsedNew == OrderItemStatus.Ready);
 
             if (!gecerli)
                 return BadRequest(new
@@ -112,20 +91,21 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             var tableName = item.Order?.Table?.TableName ?? $"Adisyon #{item.OrderId}";
             var menuItemName = item.MenuItem?.MenuItemName ?? "Ürün";
-            var tenantId = item.Order?.TenantId ?? "";
 
-            // ── [SPRINT-4] Ready statüsü artık DB'de Ready olarak kalır.
-            // Garson siparişi fiziksel olarak götürüp "Servis Edildi" diyene kadar
-            // (sayfayı yenilese bile) masa kartındaki 'Hazır' rozeti görünür.
-            // Eskisi: Ready gelince direkt Served yapılıyordu → rozet kayboluyordu.
-            item.OrderItemStatus = parsedNew; // Ready → Ready, Preparing → Preparing
+            // ── [SIG] TenantId DB nesnesinden oku ──────────────────────────
+            // KitchenController [AllowAnonymous] → ITenantService.TenantId null döner.
+            // Order.TenantId (FAZ 1 ADIM 2'de eklendi) doğrudan kullanılır.
+            var tenantId = item.Order?.TenantId ?? "";
+            // ──────────────────────────────────────────────────────────────
+
+            // Ready gelirse KDS "served" olarak işaretler (garson teslim etti)
+            item.OrderItemStatus = parsedNew == OrderItemStatus.Ready ? OrderItemStatus.Served : parsedNew;
             await _db.SaveChangesAsync();
 
-            // KDS kart yenilemesi
+            // ── [SIG] Clients.All → Clients.Group(tenantId) ───────────────
             await _hub.Clients.Group(tenantId).SendAsync("OrderItemStatusChanged", new
             {
                 orderItemId = item.OrderItemId,
-                orderId = item.OrderId,
                 newStatus = dto.NewStatus,
                 tableName,
                 menuItemName
@@ -133,47 +113,16 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             if (parsedNew == OrderItemStatus.Ready)
             {
-                // Garson ekranındaki masa kartına kalıcı 'Hazır' rozeti için
-                await _hub.Clients.Group(tenantId).SendAsync("OrderReady", new
+                await _hub.Clients.Group(tenantId).SendAsync("OrderReadyForPickup", new
                 {
+                    orderItemId = item.OrderItemId,
                     orderId = item.OrderId,
-                    tableId = item.Order?.Table?.TableId ?? 0,
                     tableName,
                     menuItemName,
-                    readyAt = DateTime.Now.ToString("HH:mm")
+                    readyAt = DateTime.Now.ToString("HH:mm:ss")
                 });
             }
-            else if (parsedNew == OrderItemStatus.Served)
-            {
-                // Ready rozeti kaldırılsın — hâlâ Ready kalem var mı?
-                bool stillHasReady = await _db.OrderItems.AnyAsync(oi =>
-                    oi.OrderId == item.OrderId &&
-                    oi.OrderItemStatus == OrderItemStatus.Ready &&
-                    oi.OrderItemId != item.OrderItemId);
-
-                if (!stillHasReady)
-                {
-                    await _hub.Clients.Group(tenantId).SendAsync("OrderServed", new
-                    {
-                        orderId = item.OrderId,
-                        tableId = item.Order?.Table?.TableId ?? 0,
-                        tableName
-                    });
-                }
-
-                // KDS'te artık Pending/Preparing/Ready kalem kaldı mı?
-                bool hasKitchenItems = await _db.OrderItems.AnyAsync(oi =>
-                    oi.OrderId == item.OrderId &&
-                    oi.OrderItemId != item.OrderItemId &&
-                    (oi.OrderItemStatus == OrderItemStatus.Pending ||
-                     oi.OrderItemStatus == OrderItemStatus.Preparing ||
-                     oi.OrderItemStatus == OrderItemStatus.Ready));
-
-                if (!hasKitchenItems)
-                    await _hub.Clients.Group(tenantId).SendAsync("RemoveOrderCard", new { orderId = item.OrderId });
-                else
-                    await _hub.Clients.Group(tenantId).SendAsync("OrderUpdated", new { orderId = item.OrderId });
-            }
+            // ──────────────────────────────────────────────────────────────
 
             return Ok(new { success = true, tableName, menuItemName });
         }

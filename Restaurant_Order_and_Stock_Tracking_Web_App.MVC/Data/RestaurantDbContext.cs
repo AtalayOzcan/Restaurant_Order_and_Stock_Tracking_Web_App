@@ -66,7 +66,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
             // ════════════════════════════════════════════════════════════════
             var orderStatusConverter = new ValueConverter<OrderStatus, string>(
                 enumVal => enumVal.ToString().ToLowerInvariant(),          // C# → DB
-                dbStr => Enum.Parse<OrderStatus>(dbStr, true)              // DB → C# (ignoreCase isimlendirmesi kaldırıldı)
+                dbStr => Enum.Parse<OrderStatus>(dbStr, true)              // DB → C# 
             );
 
             // ════════════════════════════════════════════════════════════════
@@ -81,7 +81,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
             // ════════════════════════════════════════════════════════════════
             var orderItemStatusConverter = new ValueConverter<OrderItemStatus, string>(
                 enumVal => enumVal.ToString().ToLowerInvariant(),
-                dbStr => Enum.Parse<OrderItemStatus>(dbStr, true)          // (ignoreCase isimlendirmesi kaldırıldı)
+                dbStr => Enum.Parse<OrderItemStatus>(dbStr, true)
             );
 
             // ════════════════════════════════════════════════════════════════
@@ -205,8 +205,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.Property(m => m.IsAvailable).HasDefaultValue(true).IsRequired();
                 entity.Property(m => m.Description).HasColumnType("text");
                 entity.Property(m => m.MenuItemCreatedTime).HasDefaultValueSql("NOW()").IsRequired();
-                // ── Sprint 1: Gösterim sırası ────────────────────────────────────────
-                entity.Property(m => m.DisplayOrder).HasDefaultValue(0).IsRequired();
                 entity.HasOne(c => c.Category)
                     .WithMany(m => m.MenuItems)
                     .HasForeignKey(c => c.CategoryId)
@@ -229,22 +227,17 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.ToTable("orders");
                 entity.HasKey(o => o.OrderId);
 
-                // [ENUM-CONV-1] OrderStatus enum → "open"/"paid"/"cancelled" string
-                // HasDefaultValue burada DB default değerini belirtir; converter bunu
-                // enum'a çevirmez (seed değeri doğrudan DB'ye yazılır).
+                // DÜZELTME: HasDefaultValueSql("open") kaldırıldı, Enum eklendi
                 entity.Property(o => o.OrderStatus)
                     .HasConversion(orderStatusConverter)
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'open'")
+                    .HasDefaultValue(OrderStatus.Open)
                     .IsRequired();
 
                 entity.Property(o => o.OrderOpenedBy).HasMaxLength(100);
                 entity.Property(o => o.OrderNote).HasColumnType("text");
                 entity.Property(o => o.OrderTotalAmount).HasPrecision(12, 2).HasDefaultValue(0).IsRequired();
                 entity.Property(o => o.OrderOpenedAt).HasDefaultValueSql("NOW()").IsRequired();
-                // ── Sprint 1: İndirim alanları ──────────────────────────────────────
-                entity.Property(o => o.DiscountAmount).HasPrecision(12, 2).HasDefaultValue(0m);
-                entity.Property(o => o.DiscountReason).HasColumnType("text");
                 entity.HasOne(t => t.Table)
                     .WithMany(o => o.Orders)
                     .HasForeignKey(o => o.TableId)
@@ -273,11 +266,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.Property(o => o.OrderItemLineTotal).HasPrecision(12, 2).IsRequired();
                 entity.Property(o => o.OrderItemNote).HasColumnType("text");
 
-                // [ENUM-CONV-2] OrderItemStatus enum → "pending"/"preparing"/... string
+                // DÜZELTME: HasDefaultValueSql("pending") kaldırıldı, Enum eklendi
                 entity.Property(o => o.OrderItemStatus)
                     .HasConversion(orderItemStatusConverter)
                     .HasMaxLength(20)
-                    .HasDefaultValueSql("'pending'")
+                    .HasDefaultValue(OrderItemStatus.Pending)
                     .IsRequired();
 
                 entity.Property(o => o.OrderItemAddedAt).HasDefaultValueSql("NOW()").IsRequired();
@@ -330,13 +323,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
             //  StockLog
             //  [WARN-3 DÜZELTME] MenuItem üzerinden Global Query Filter
             //  [RESTRICT] OnDelete: Cascade → Restrict
-            //
-            //  GEREKÇE: Ürün silindiğinde stok geçmişi (StockLog) kayıtları
-            //  SİLİNMEMELİ. Bu kayıtlar mali ve audit amaçlı tutulur.
-            //  Cascade ile tüm stok geçmişi kayboluyordu — kritik veri kaybı.
-            //
-            //  YENİ DAVRANIM: MenuItem.IsDeleted = true (soft-delete) yapılır,
-            //  fiziksel silme yapılmaz. StockLog'lar korunur.
             // ════════════════════════════════════════════════════════════════
             modelBuilder.Entity<StockLog>(entity =>
             {
@@ -348,6 +334,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.Property(s => s.NewStock).IsRequired();
                 entity.Property(s => s.Note).HasColumnType("text");
                 entity.Property(s => s.CreatedAt).HasDefaultValueSql("NOW()").IsRequired();
+
+                // DÜZELTME: Nokta ile bırakılan yer Enum ile dolduruldu
+                entity.Property(s => s.MovementCategory).HasDefaultValue(MovementCategory.Manual);
+
                 entity.Property(s => s.SourceType).HasMaxLength(30);
                 entity.Property(s => s.OrderId);
                 entity.Property(s => s.UnitPrice).HasColumnType("numeric(18,2)");

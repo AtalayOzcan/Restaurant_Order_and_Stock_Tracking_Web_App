@@ -1,4 +1,6 @@
-﻿namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models
+﻿using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Shared.Common;
+
+namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models
 {
     /// <summary>
     /// Stok hareket geçmişi tablosu.
@@ -46,5 +48,14 @@
         /// Stok kaynaklı    → MenuItem.MenuItemPrice (kayıt anındaki satış fiyatı)
         /// </summary>
         public decimal? UnitPrice { get; set; }
+
+        // ── [F-02] Hareket Kategorisi — Note.StartsWith fragility yerine type-safe enum ──
+
+        /// <summary>
+        /// Hangi süreçten kaynaklandığını tanımlar.
+        /// DB'ye integer (0/1/2/3) olarak saklanır.
+        /// EF Core konfigürasyonunda default = 0 (Manual).
+        /// </summary>
+        public MovementCategory MovementCategory { get; set; } = MovementCategory.Manual;
     }
 }

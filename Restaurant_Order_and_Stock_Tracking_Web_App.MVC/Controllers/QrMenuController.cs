@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;    // [G-06]
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
@@ -64,8 +65,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                         !m.IsDeleted &&
                         (m.IsAvailable || (m.TrackStock && m.StockQuantity > 0))
                     )
-                    .OrderBy(m => m.DisplayOrder)
-                    .ThenBy(m => m.MenuItemName)
+                    .OrderBy(m => m.MenuItemCreatedTime)
                 )
                 .ToListAsync();
 
@@ -101,8 +101,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             var sibling = await _context.MenuItems
                 .Where(m => !m.IsDeleted && m.CategoryId == item.CategoryId
                     && (m.IsAvailable || (m.TrackStock && m.StockQuantity > 0)))
-                .OrderBy(m => m.DisplayOrder)
-                .ThenBy(m => m.MenuItemName)
+                .OrderBy(m => m.MenuItemCreatedTime)
                 .Select(m => new { m.MenuItemId, m.MenuItemName })
                 .ToListAsync();
 
@@ -121,8 +120,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         /// Payload: { "TableName": "Masa 1" }
         /// SignalR ile tüm bağlı admin/garson ekranlarına anlık bildirim gönderir.
         /// </summary>
+        // [G-06] WaiterCallPolicy: 60 sn içinde maks 2 istek/IP — spam koruması
+        //        Fazlası → 429 Too Many Requests (Program.cs OnRejected JSON yanıtı)
         [HttpPost]
         [IgnoreAntiforgeryToken]
+        [EnableRateLimiting("WaiterCallPolicy")]   // [G-06]
         [Route("QrMenu/CallWaiter")]
         public async Task<IActionResult> CallWaiter([FromBody] CallWaiterRequest request)
         {

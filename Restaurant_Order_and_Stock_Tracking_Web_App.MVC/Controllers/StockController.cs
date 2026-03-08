@@ -104,7 +104,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateStock([FromBody] StockUpdateDto dto)
         {
-            var item = await _context.MenuItems.FindAsync(dto.MenuItemId);
+            var item = await _context.MenuItems.FirstOrDefaultAsync(m => m.MenuItemId == dto.MenuItemId); // [G-01]
             if (item == null)
                 return Json(new { success = false, message = "Ürün bulunamadı." });
 
@@ -207,7 +207,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         [HttpGet]
         public async Task<IActionResult> GetHistory(int id)
         {
-            var item = await _context.MenuItems.FindAsync(id);
+            var item = await _context.MenuItems.FirstOrDefaultAsync(m => m.MenuItemId == id); // [G-01]
             if (item == null)
                 return Json(new { success = false, message = "Ürün bulunamadı." });
 
@@ -239,7 +239,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> ToggleTrack([FromBody] StockToggleTrackDto dto)
         {
-            var item = await _context.MenuItems.FindAsync(dto.MenuItemId);
+            var item = await _context.MenuItems.FirstOrDefaultAsync(m => m.MenuItemId == dto.MenuItemId); // [G-01]
             if (item == null)
                 return Json(new { success = false, message = "Ürün bulunamadı." });
 

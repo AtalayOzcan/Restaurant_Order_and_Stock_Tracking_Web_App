@@ -115,7 +115,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Reserve([FromBody] TableReserveDto dto)
         {
-            var table = await _db.Tables.FindAsync(dto.TableId);
+            var table = await _db.Tables.FirstOrDefaultAsync(t => t.TableId == dto.TableId); // [G-01]
             if (table == null)
                 return Json(new { success = false, message = "Masa bulunamadı." });
             if (table.TableStatus != 0)
@@ -155,7 +155,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> CancelReserve([FromBody] TableReserveDto dto)
         {
-            var table = await _db.Tables.FindAsync(dto.TableId);
+            var table = await _db.Tables.FirstOrDefaultAsync(t => t.TableId == dto.TableId); // [G-01]
             if (table == null)
                 return Json(new { success = false, message = "Masa bulunamadı." });
             if (table.TableStatus != 2)
@@ -180,7 +180,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Delete([FromBody] TableDeleteDto dto)
         {
-            var table = await _db.Tables.FindAsync(dto.TableId);
+            var table = await _db.Tables.FirstOrDefaultAsync(t => t.TableId == dto.TableId); // [G-01]
             if (table == null)
                 return Json(new { success = false, message = "Masa bulunamadı." });
             if (table.TableStatus == 1)
@@ -214,7 +214,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             if (sourceOrder == null)
                 return Json(new { success = false, message = "Kaynak masada açık adisyon bulunamadı." });
 
-            var targetTable = await _db.Tables.FindAsync(dto.TargetTableId);
+            var targetTable = await _db.Tables.FirstOrDefaultAsync(t => t.TableId == dto.TargetTableId); // [G-01]
             if (targetTable == null)
                 return Json(new { success = false, message = "Hedef masa bulunamadı." });
 

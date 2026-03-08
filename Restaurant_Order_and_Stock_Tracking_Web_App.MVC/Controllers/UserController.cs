@@ -1,8 +1,28 @@
+// ============================================================================
+//  Controllers/UserController.cs
+//  SPRINT 2 — Identity Güvenliği & N+1 Optimizasyonu
+//
+//  [G-02] Çapraz-tenant kullanıcı erişimi kapatıldı:
+//         _userManager.Users → _db.Users + WHERE TenantId filtresi
+//         FindByIdAsync sonrası her metotta sahiplik doğrulaması eklendi.
+//
+//  [G-03] Yeni kullanıcı oluşturulurken TenantId = _tenantService.TenantId
+//         artık zorunlu — null TenantId Global Query Filter bypass'ını önler.
+//
+//  [P-01] foreach + GetRolesAsync N+1 → tek LEFT JOIN sorgusu.
+//
+//  [G-02-DEL] Delete'teki GetUsersInRoleAsync tüm tenantları sayıyordu;
+//             tenant'a özgü admin sayımı _db JOIN sorgusuna taşındı.
+//
+//  Değişmeyen her satır orijinalle birebir aynıdır.
+// ============================================================================
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
+using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Services;       // [G-02/G-03] eklendi
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Shared.Common;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.ViewModels.Users;
@@ -20,40 +40,55 @@ public class UserController : Controller
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RoleManager<IdentityRole> _roleManager;
     private readonly RestaurantDbContext _db;
+    private readonly ITenantService _tenantService; // [G-02/G-03]
 
     public UserController(
         UserManager<ApplicationUser> userManager,
         RoleManager<IdentityRole> roleManager,
-        RestaurantDbContext db)
+        RestaurantDbContext db,
+        ITenantService tenantService)  // [G-02/G-03]
     {
         _userManager = userManager;
         _roleManager = roleManager;
         _db = db;
+        _tenantService = tenantService; // [G-02/G-03]
     }
 
     // ── GET /User ─────────────────────────────────────────────────────
+    // [G-02] ESKİ: _userManager.Users.ToListAsync() → tüm tenant kullanıcıları
+    //              + foreach GetRolesAsync → N+1 (50 kullanıcı = 51 sorgu)
+    //
+    // YENİ: _db.Users + LEFT JOIN _db.UserRoles + _db.Roles → tek sorgu.
+    //       WHERE u.TenantId == tenantId → yalnızca bu restoranın kullanıcıları.
+    //
+    // NOT: ApplicationUser için HasQueryFilter tanımlı değil; bu nedenle
+    //      tenant filtresi elle ekleniyor (Identity API'larının tamamında aynı kural).
     public async Task<IActionResult> Index()
     {
         ViewData["Title"] = "Kullanıcı Yönetimi";
 
-        var users = await _userManager.Users.ToListAsync();
-        var model = new List<UserListItemViewModel>();
+        var tenantId = _tenantService.TenantId;
 
-        foreach (var user in users)
-        {
-            var roles = await _userManager.GetRolesAsync(user);
-            model.Add(new UserListItemViewModel
+        // [G-02 + P-01] Tek LEFT JOIN — kullanıcı + rolü tek round-trip'te çek.
+        var model = await (
+            from u in _db.Users
+                        .Where(u => u.TenantId == tenantId)     // [G-02] tenant izolasyonu
+            join ur in _db.UserRoles on u.Id equals ur.UserId into urs
+            from ur in urs.DefaultIfEmpty()                      // LEFT JOIN: rolsüz kullanıcı da gelsin
+            join r in _db.Roles on ur.RoleId equals r.Id into rs
+            from r in rs.DefaultIfEmpty()                       // LEFT JOIN
+            select new UserListItemViewModel
             {
-                Id = user.Id,
-                UserName = user.UserName ?? "",
-                FullName = user.FullName,
-                Email = user.Email,
-                PhoneNumber = user.PhoneNumber,
-                Role = roles.FirstOrDefault() ?? "— Rol Yok —",
-                CreatedAt = user.CreatedAt,
-                LastLoginAt = user.LastLoginAt
-            });
-        }
+                Id = u.Id,
+                UserName = u.UserName ?? string.Empty,
+                FullName = u.FullName,
+                Email = u.Email,
+                PhoneNumber = u.PhoneNumber,
+                Role = r != null ? r.Name ?? "— Rol Yok —" : "— Rol Yok —",
+                CreatedAt = u.CreatedAt,
+                LastLoginAt = u.LastLoginAt
+            }
+        ).ToListAsync(); // [P-01] N+1 → 1 sorgu
 
         return View(model);
     }
@@ -99,7 +134,10 @@ public class UserController : Controller
             Email = model.Email,
             PhoneNumber = model.PhoneNumber,
             CreatedAt = DateTime.UtcNow,
-            EmailConfirmed = true
+            EmailConfirmed = true,
+            TenantId = _tenantService.TenantId   // [G-03] TenantId null kalırsa
+                                                 // login'de Claims boş → tüm
+                                                 // Global Query Filter'lar bypass olur
         };
 
         var createResult = await _userManager.CreateAsync(user, model.Password);
@@ -130,6 +168,10 @@ public class UserController : Controller
     {
         var user = await _userManager.FindByIdAsync(id);
         if (user == null) return NotFound();
+
+        // [G-02] FindByIdAsync Identity store'da global arar; TenantId kontrolü
+        //        olmadan başka restoranın kullanıcısı düzenlenebilirdi.
+        if (user.TenantId != _tenantService.TenantId) return NotFound();
 
         var roles = await _userManager.GetRolesAsync(user);
         ViewData["Title"] = "Kullanıcı Düzenle";
@@ -165,6 +207,9 @@ public class UserController : Controller
 
         var user = await _userManager.FindByIdAsync(model.Id);
         if (user == null) return NotFound();
+
+        // [G-02] POST ile başka tenant kullanıcısının verisi değiştirilemez.
+        if (user.TenantId != _tenantService.TenantId) return NotFound();
 
         if (user.UserName != model.UserName)
         {
@@ -226,6 +271,9 @@ public class UserController : Controller
         var user = await _userManager.FindByIdAsync(id);
         if (user == null) return NotFound();
 
+        // [G-02] Çapraz-tenant şifre sıfırlama engellendi.
+        if (user.TenantId != _tenantService.TenantId) return NotFound();
+
         var token = await _userManager.GeneratePasswordResetTokenAsync(user);
         var result = await _userManager.ResetPasswordAsync(user, token, newPassword);
 
@@ -250,6 +298,9 @@ public class UserController : Controller
         var user = await _userManager.FindByIdAsync(id);
         if (user == null) return NotFound();
 
+        // [G-02] Çapraz-tenant silme engellendi.
+        if (user.TenantId != _tenantService.TenantId) return NotFound();
+
         if (user.Id == _userManager.GetUserId(User))
         {
             TempData["Error"] = "Kendi hesabınızı silemezsiniz.";
@@ -259,8 +310,19 @@ public class UserController : Controller
         var roles = await _userManager.GetRolesAsync(user);
         if (roles.Contains("Admin"))
         {
-            var adminCount = (await _userManager.GetUsersInRoleAsync("Admin")).Count;
-            if (adminCount <= 1)
+            // [G-02-DEL] ESKİ: GetUsersInRoleAsync("Admin") tüm tenantlardaki
+            //            admin sayısını döndürür → başka restoranın admin'i sayılıyor.
+            //
+            // YENİ: _db JOIN ile sadece bu tenant'ın admin sayısı sorgulanır.
+            var tenantAdminCount = await (
+                from u in _db.Users.Where(u => u.TenantId == _tenantService.TenantId)
+                join ur in _db.UserRoles on u.Id equals ur.UserId
+                join r in _db.Roles on ur.RoleId equals r.Id
+                where r.Name == "Admin"
+                select u.Id
+            ).CountAsync();
+
+            if (tenantAdminCount <= 1)
             {
                 TempData["Error"] = "Sistemde en az bir Admin bulunmalıdır.";
                 return RedirectToAction(nameof(Index));

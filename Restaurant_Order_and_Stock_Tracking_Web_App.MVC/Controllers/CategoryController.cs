@@ -94,7 +94,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         // ── GET: /Category/Edit/5 ────────────────────────────────────────
         public async Task<IActionResult> Edit(int id)
         {
-            var category = await _context.Categories.FindAsync(id);
+            var category = await _context.Categories.FirstOrDefaultAsync(c => c.CategoryId == id); // [G-01]
             if (category == null) return NotFound();
 
             ViewData["Title"] = "Kategori Düzenle";
@@ -105,7 +105,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit([FromBody] CategoryEditDto dto)
         {
-            var category = await _context.Categories.FindAsync(dto.Id);
+            var category = await _context.Categories.FirstOrDefaultAsync(c => c.CategoryId == dto.Id); // [G-01]
             if (category == null)
                 return Json(new { success = false, message = "Kategori bulunamadı." });
 
@@ -158,7 +158,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         [HttpGet]
         public async Task<IActionResult> GetById(int id)
         {
-            var c = await _context.Categories.FindAsync(id);
+            var c = await _context.Categories.FirstOrDefaultAsync(cat => cat.CategoryId == id); // [G-01]
             if (c == null) return Json(new { success = false });
 
             return Json(new

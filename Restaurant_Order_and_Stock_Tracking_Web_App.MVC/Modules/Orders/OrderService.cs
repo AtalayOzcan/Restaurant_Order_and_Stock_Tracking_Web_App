@@ -149,19 +149,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                 _ = NotifyDashboardAsync("🧾",
                     $"{table.TableName} için yeni adisyon açıldı — ₺{total:N0}", "#f97316");
 
-                // SignalR — KDS: Tam adisyon açıldığında mutfak ekranını güncelle
-                // NewOrderItem'dan farklı olarak tüm adisyonu temsil eder;
-                // Kitchen Display bu event'i alarak kart grid'ini yeniler.
-                _ = _kitchenHub.Clients
-                    .Group(_tenantService.TenantId ?? "")
-                    .SendAsync("NewOrder", new
-                    {
-                        orderId = order.OrderId,
-                        tableName = table.TableName,
-                        itemCount = dto.Items.Count,
-                        total = total
-                    });
-
                 return new(true, "Adisyon açıldı.",
                     new CreateOrderResult(order.OrderId, table.TableName, total));
             }
@@ -200,17 +187,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                 var noteNorm = string.IsNullOrWhiteSpace(dto.Note) ? null : dto.Note.Trim();
                 int savedItemId;
 
-                // ── [SPRINT-2 FIX] State Transition Guard ──────────────────────────
-                // SORUN: Mevcut satır Served/Preparing/Ready ise miktar artırımı
-                //        geçersiz durum geçişine yol açıyor (Served → Preparing).
-                // ÇÖZÜM: Sadece Pending + ödenmiş değil satırlara birleş;
-                //        diğer durumlarda her zaman yeni Pending satır aç.
                 var existing = order.OrderItems.FirstOrDefault(oi =>
                     oi.MenuItemId == dto.MenuItemId &&
-                    oi.OrderItemStatus == OrderItemStatus.Pending && // [FIX] Sadece Pending'e birleş
+                    oi.OrderItemStatus != OrderItemStatus.Cancelled && // [ENUM]
                     oi.PaidQuantity < oi.OrderItemQuantity &&
                     oi.OrderItemNote == noteNorm);
-                // ───────────────────────────────────────────────────────────────────
 
                 if (existing != null)
                 {
@@ -326,18 +307,12 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                     int qty = Math.Max(1, line.Quantity);
                     var noteNorm = string.IsNullOrWhiteSpace(line.Note) ? null : line.Note.Trim();
 
-                    // ── [SPRINT-2 FIX] State Transition Guard ──────────────────────
-                    // SORUN: Served/Preparing/Ready satıra miktar eklenmesi sonraki
-                    //        KDS geçişini Served→Preparing yaparak hata verir.
-                    // ÇÖZÜM: Sadece Pending statüsündeki ve ödenmemiş satırlara birleş;
-                    //        tüm diğer durumlar için yeni Pending satır oluştur.
                     var existing = order.OrderItems.FirstOrDefault(oi =>
                         oi.MenuItemId == line.MenuItemId &&
-                        oi.OrderItemStatus == OrderItemStatus.Pending && // [FIX] Sadece Pending'e birleş
+                        oi.OrderItemStatus != OrderItemStatus.Cancelled && // [ENUM]
                         oi.CancelledQuantity == 0 &&
                         oi.PaidQuantity < oi.OrderItemQuantity &&
                         oi.OrderItemNote == noteNorm);
-                    // ───────────────────────────────────────────────────────────────
 
                     int savedItemId;
                     if (existing != null)
@@ -413,37 +388,16 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
         // ═══════════════════════════════════════════════════════════════════════
         public async Task<ServiceResult> UpdateItemStatusAsync(OrderItemStatusUpdateDto dto)
         {
+            // String → Enum dönüşümü: DTO'dan gelen string'i enum'a çevir
             if (!Enum.TryParse<OrderItemStatus>(dto.NewStatus, ignoreCase: true, out var newStatus))
                 return new(false, $"Geçersiz durum: '{dto.NewStatus}'");
 
-            var item = await _db.OrderItems
-                .Include(oi => oi.Order).ThenInclude(o => o.Table)
-                .FirstOrDefaultAsync(oi => oi.OrderItemId == dto.OrderItemId);
-
+            var item = await _db.OrderItems.FindAsync(dto.OrderItemId);
             if (item == null)
                 return new(false, "Kalem bulunamadı.");
 
-            item.OrderItemStatus = newStatus;
+            item.OrderItemStatus = newStatus; // [ENUM]
             await _db.SaveChangesAsync();
-
-            // [SPRINT-4] Garson "Servis Edildi" → rozeti kaldır
-            if (newStatus == OrderItemStatus.Served)
-            {
-                var tenantGroup = _tenantService.TenantId ?? "";
-                bool stillHasReady = await _db.OrderItems.AnyAsync(oi =>
-                    oi.OrderId == item.OrderId &&
-                    oi.OrderItemId != item.OrderItemId &&
-                    oi.OrderItemStatus == OrderItemStatus.Ready);
-
-                if (!stillHasReady)
-                    _ = _kitchenHub.Clients.Group(tenantGroup)
-                        .SendAsync("OrderServed", new
-                        {
-                            orderId = item.OrderId,
-                            tableId = item.Order?.Table?.TableId ?? 0
-                        });
-            }
-
             return new(true, "Durum güncellendi.");
         }
 
@@ -469,7 +423,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                 return new(false, "Adisyon bulunamadı.");
             if (order.OrderStatus != OrderStatus.Open)  // [ENUM]
                 return new(false, "Bu adisyon zaten kapatılmış.");
-
 
             decimal discountAmount = dto.DiscountType == "percent"
                 ? Math.Round(order.OrderTotalAmount * (dto.DiscountValue / 100m), 2)
@@ -585,7 +538,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
             if (dto.PaymentAmount < order.OrderTotalAmount)
                 return new(false, "Ödeme tutarı toplam tutardan az olamaz.");
 
-            
             using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
@@ -725,6 +677,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                             item.MenuItem.IsAvailable = true;
                     }
 
+                    // [F-02] MovementCategory: type-safe enum — Note.StartsWith bağımlılığı kaldırıldı
                     _db.StockLogs.Add(new StockLog
                     {
                         MenuItemId = item.MenuItem!.MenuItemId,
@@ -738,7 +691,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                         SourceType = isWasted ? "SiparişKaynaklı" : null,
                         OrderId = isWasted ? dto.OrderId : null,
                         UnitPrice = item.OrderItemUnitPrice,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
+                        // [F-02] Enum ataması: stoka iade → ReturnFromCancel, zayi → OrderWaste
+                        MovementCategory = isWasted
+                            ? MovementCategory.OrderWaste
+                            : MovementCategory.ReturnFromCancel
                     });
                 }
                 else
@@ -767,29 +724,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                 }
 
                 await tx.CommitAsync();
-
-                // ── [SPRINT-4] İptal Sonrası KDS Senkronizasyonu ─────────────────
-                // Adisyonda hâlâ mutfak görmesi gereken (Pending/Preparing) kalem var mı?
-                bool hasKitchenItems = await _db.OrderItems.AnyAsync(oi =>
-                    oi.OrderId == dto.OrderId &&
-                    (oi.OrderItemStatus == OrderItemStatus.Pending ||
-                     oi.OrderItemStatus == OrderItemStatus.Preparing));
-
-                var tenantGroup = _tenantService.TenantId ?? "";
-
-                if (hasKitchenItems)
-                {
-                    // Kartı yenile — JS GetOrderCardPartial fetch eder
-                    _ = _kitchenHub.Clients.Group(tenantGroup)
-                        .SendAsync("OrderUpdated", new { orderId = dto.OrderId });
-                }
-                else
-                {
-                    // Mutfakta gösterilecek kalem kalmadı — kartı kaldır
-                    _ = _kitchenHub.Clients.Group(tenantGroup)
-                        .SendAsync("RemoveOrderCard", new { orderId = dto.OrderId });
-                }
-                // ─────────────────────────────────────────────────────────────────
 
                 return new(true,
                     $"{dto.CancelQty} adet iptal edildi." +

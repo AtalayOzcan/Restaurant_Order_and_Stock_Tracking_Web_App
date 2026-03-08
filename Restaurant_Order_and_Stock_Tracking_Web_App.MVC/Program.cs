@@ -11,12 +11,14 @@
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;           // [G-06]
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Infrastructure;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Hubs;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Services;
+using System.Threading.RateLimiting;              // [G-06]
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
 {
@@ -112,6 +114,46 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
             // ── SignalR (değişmedi) ──────────────────────────────────────
             builder.Services.AddSignalR();
 
+            // ══════════════════════════════════════════════════════════════
+            // [G-06] Rate Limiting — CallWaiter Spam Koruması
+            //
+            // Sorun: Müşteri "Garson Çağır" butonuna art arda basınca
+            //        saniyeler içinde onlarca SignalR bildirimi gidebilir.
+            //        IsWaiterCalled DB kontrolü kısmi koruma sağlasa da
+            //        eşzamanlı istekler bu bayrağı aşabilir.
+            //
+            // Çözüm: Sliding window rate limiter
+            //   • Pencere: 60 saniye
+            //   • Limit   : 2 istek / pencere / IP
+            //   • Kuyruk  : yok (fazla istek → 429 Too Many Requests)
+            //   • Scope   : IP bazlı (müşteri cihazı) — masa bazlı değil,
+            //               çünkü QrMenuController [AllowAnonymous] olup
+            //               kullanıcı kimliği bilinmiyor.
+            // ══════════════════════════════════════════════════════════════
+            builder.Services.AddRateLimiter(options =>
+            {
+                options.AddSlidingWindowLimiter(
+                    policyName: "WaiterCallPolicy",
+                    configureOptions: limiter =>
+                    {
+                        limiter.Window = TimeSpan.FromSeconds(60); // [G-06] 60 sn pencere
+                        limiter.PermitLimit = 2;                         // [G-06] maks 2 istek
+                        limiter.SegmentsPerWindow = 6;                         // 10 sn granülasyon
+                        limiter.QueueLimit = 0;                         // kuyruk yok → anında 429
+                        limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+                    });
+
+                // 429 yanıtı: JSON body + açıklayıcı header
+                options.OnRejected = async (context, cancellationToken) =>
+                {
+                    context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                    context.HttpContext.Response.ContentType = "application/json";
+                    await context.HttpContext.Response.WriteAsync(
+                        "{\"success\":false,\"message\":\"Çok sık istek gönderildi. Lütfen bekleyin.\"}",
+                        cancellationToken);
+                };
+            });
+
             var app = builder.Build();
 
             if (!app.Environment.IsDevelopment())
@@ -122,6 +164,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
 
             app.UseHttpsRedirection();
             app.UseRouting();
+            app.UseRateLimiter();       // [G-06] UseRouting'den sonra, UseAuthentication'dan önce
             app.UseAuthentication();
             app.UseAuthorization();
 
@@ -149,7 +192,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
                 var db = scope.ServiceProvider.GetRequiredService<RestaurantDbContext>();
 
                 // ── Roller ───────────────────────────────────────────────
-                foreach (var roleName in new[] { "Admin", "Garson", "Kasiyer", "Kitchen" })
+                foreach (var roleName in new[] { "Admin", "Garson", "Kasiyer" })
                 {
                     if (!await roleManager.RoleExistsAsync(roleName))
                         await roleManager.CreateAsync(new IdentityRole(roleName));

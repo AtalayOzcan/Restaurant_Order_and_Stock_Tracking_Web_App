@@ -123,7 +123,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         // ─────────────────────────────────────────────────────────────
         public async Task<IActionResult> Create(int tableId)
         {
-            var table = await _db.Tables.FindAsync(tableId);
+            var table = await _db.Tables.FirstOrDefaultAsync(t => t.TableId == tableId); // [G-01]
             if (table == null) { TempData["Error"] = "Masa bulunamadı."; return RedirectToAction("Index", "Tables"); }
 
             if (table.TableStatus == 1)

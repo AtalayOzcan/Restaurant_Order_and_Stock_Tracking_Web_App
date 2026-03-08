@@ -70,4 +70,41 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Shared.Common
         /// <summary>İptal edildi (kısmi veya tam). DB: "cancelled"</summary>
         Cancelled
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // [F-02] StockLog Hareket Kategorisi — Note.StartsWith fragility ortadan kaldırıldı
+    //
+    // ESKİ: StockLog.Note "İptal iadesi — ..." ile başlıyor mu diye string match.
+    //       Yazım hatası / dil değişimi / refactor → rapor bozuluyor.
+    // YENİ: DB'de integer kolona yazılan enum → type-safe, refactor-safe, hızlı filtre.
+    //
+    // DB default değeri: 0 = Manual
+    // ═══════════════════════════════════════════════════════════════════════
+    /// <summary>
+    /// StockLog hareketi kategorisi — hangi süreçten kaynaklandığını tanımlar.
+    /// DB'ye integer olarak yazılır (value converter yok; EF Core doğrudan int saklar).
+    /// </summary>
+    public enum MovementCategory
+    {
+        /// <summary>El ile yapılan stok girişi / düzeltmesi. DB: 0 (default)</summary>
+        Manual = 0,
+
+        /// <summary>
+        /// Sipariş iptali sonrası stoka iade.
+        /// CancelItemAsync → IsWasted = false durumunda yazılır.
+        /// </summary>
+        ReturnFromCancel = 1,
+
+        /// <summary>
+        /// Sipariş kaynaklı zayi/fire (ürün kullanıldı, stoka dönmez).
+        /// CancelItemAsync → IsWasted = true durumunda yazılır.
+        /// </summary>
+        OrderWaste = 2,
+
+        /// <summary>
+        /// Stok kaynaklı fire (depo kırık/bozuk).
+        /// StockController.UpdateStock fire modunda yazılır.
+        /// </summary>
+        StockWaste = 3
+    }
 }

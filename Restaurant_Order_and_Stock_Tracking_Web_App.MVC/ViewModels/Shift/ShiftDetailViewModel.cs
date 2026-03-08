@@ -1,4 +1,5 @@
-﻿namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.ViewModels.Shift
+﻿// ViewModels/Shift/ShiftDetailViewModel.cs
+namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.ViewModels.Shift
 {
     /// <summary>Z Raporu / Vardiya detay ekranı için ViewModel</summary>
     public class ShiftDetailViewModel
@@ -7,31 +8,17 @@
 
         // ── Ödeme dağılımı ────────────────────────────────────────────
         public decimal TotalCash { get; set; }
-        public decimal TotalCreditCard { get; set; }   // PaymentsMethod == 1
-        public decimal TotalDebitCard { get; set; }   // PaymentsMethod == 2
-        public decimal TotalOther { get; set; }   // PaymentsMethod == 3
+        public decimal TotalCreditCard { get; set; }    // PaymentsMethod == 1
+        public decimal TotalDebitCard { get; set; }     // PaymentsMethod == 2
+        public decimal TotalOther { get; set; }         // PaymentsMethod == 3
 
-        // ── Zayi / Fire (StockLog'dan okunur — IsWasted ezilme problemi yok) ─
-        /// <summary>
-        /// İptal edilip YAKILAN (IsWasted=true) adet.
-        /// Kaynak: StockLog.SourceType == "SiparişKaynaklı".
-        /// Gerçek finansal kayıp.
-        /// </summary>
-        public int WasteCount { get; set; }
-
-        /// <summary>
-        /// İptal edilip yakılan kalemlerin finansal tutarı.
-        /// Kaynak: StockLog.QuantityChange * UnitPrice.
-        /// </summary>
+        // ── İptal & zayi ──────────────────────────────────────────────
+        public int CancelledItemCount { get; set; }
         public decimal WasteAmount { get; set; }
 
-        // ── Stok İade (StockLog'dan okunur) ──────────────────────────
-        /// <summary>
-        /// İptal edilip STOĞA İADE edilen adet (IsWasted=false).
-        /// Kaynak: StockLog Note "İptal iadesi" olan Giriş hareketleri.
-        /// Mali kayıp DEĞİLDİR.
-        /// </summary>
-        public int StockReturnCount { get; set; }
+        // 👇 EKSİK OLAN YENİ ÖZELLİKLER BURAYA EKLENDİ 👇
+        public int WasteCount { get; set; }        // Gerçek fire olan kalem sayısı
+        public int StockReturnCount { get; set; }  // Stoğa iade edilen kalem sayısı
 
         // ── Garson bazlı satış ────────────────────────────────────────
         public List<WaiterSalesRow> WaiterSales { get; set; } = new();

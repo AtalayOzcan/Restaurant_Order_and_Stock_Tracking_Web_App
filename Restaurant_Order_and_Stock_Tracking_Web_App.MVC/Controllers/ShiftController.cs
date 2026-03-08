@@ -136,121 +136,138 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
         // ── POST /Shift/Close/{id} ────────────────────────────────────────────
         // Gövde: { closingBalance, notes }  — threshold opsiyonel
+        //
+        // [RC-03] Çift Vardiya Kapatma Race Condition Kapatması — RepeatableRead
+        // [P-02]  InMemory LINQ → DB SumAsync: tüm parasal toplamlar DB'de hesaplanır
+        // [F-01]  İndirim = GrossSatış − ÖdenenToplam (DB aggregates üzerinden)
+        //         ⚠️  Order.DiscountAmount kolonu şemada yok; indirim AddPaymentAsync'te
+        //             netTotal'a yansıtılır ama kalıcı olarak kaydedilmez. Bu nedenle
+        //             SumAsync(o.DiscountAmount) kullanılamaz; fark formülü korunur.
+        //             Düzeltme: hesaplama artık DB'de çalışıyor (in-memory değil).
         [HttpPost]
         public async Task<IActionResult> Close(int id, [FromBody] ShiftCloseDto dto)
         {
-            var shift = await _db.ShiftLogs
-                .FirstOrDefaultAsync(s => s.ShiftLogId == id && !s.IsClosed);
-
-            if (shift == null)
-                return NotFound(new { success = false, message = "Vardiya bulunamadı veya zaten kapalı." });
-
-            // ── [SPRINT-1] Vardiya Kapatma Kilidi ────────────────────────────
-            // Bu vardiya süresince açılmış ve hâlâ Open durumunda olan sipariş
-            // var mı? Varsa kapatmaya izin verme.
-            var hasOpenOrders = await _db.Orders
-                .AnyAsync(o => o.OrderStatus == OrderStatus.Open
-                            && o.OrderOpenedAt >= shift.OpenedAt);
-
-            if (hasOpenOrders)
-                return BadRequest(new
-                {
-                    success = false,
-                    message = "Açık masalar varken vardiya kapatılamaz. Lütfen önce tüm hesapları kapatın."
-                });
-            // ─────────────────────────────────────────────────────────────────
-
             var user = await _userManager.GetUserAsync(User);
-            var closedAt = DateTime.UtcNow;
 
-            // ── Sistem hesaplamaları ──────────────────────────────────────────
-            // Vardiya aralığındaki (OpenedAt..closedAt) paid Order'ları al
-            var paidOrders = await _db.Orders
-                .Include(o => o.Payments)
-                .Where(o => o.OrderStatus == OrderStatus.Paid // FIX: Enum olarak değiştirildi
-                         && o.OrderClosedAt >= shift.OpenedAt
-                         && o.OrderClosedAt <= closedAt)
-                .ToListAsync();
-
-            var allPayments = paidOrders.SelectMany(o => o.Payments).ToList();
-
-            decimal totalSales = paidOrders.Sum(o => o.OrderTotalAmount);
-            decimal totalCash = allPayments.Where(p => p.PaymentsMethod == 0).Sum(p => p.PaymentsAmount);
-            decimal totalCard = allPayments.Where(p => p.PaymentsMethod == 1 || p.PaymentsMethod == 2).Sum(p => p.PaymentsAmount);
-            decimal totalOther = allPayments.Where(p => p.PaymentsMethod == 3).Sum(p => p.PaymentsAmount);
-
-            // İndirim: (SiparişToplamı - ÖdenenToplam) farkı — negatif olamaz
-            decimal paidTotal = allPayments.Sum(p => p.PaymentsAmount);
-            decimal totalDiscount = Math.Max(0, totalSales - paidTotal);
-
-            // ── [v4 — StockLog Mimarisi] Zayi & Stok İade ────────────────────────
-            // SORUN (v1-v3): OrderItem.IsWasted tek satır; aynı kalem önce zayi
-            //   sonra stok iadesi yapılırsa IsWasted=false eziliyor → zayi tutarı ₺0.
-            //
-            // ÇÖZÜM: StockLog her iptal işlemini ayrı satırda tutar:
-            //   • Zayi     → SourceType="SiparişKaynaklı", MovementType="Çıkış"
-            //   • Stokİade → SourceType=null, Note LIKE "İptal iadesi%", MovementType="Giriş"
-            //   Zaman filtresi: StockLog.CreatedAt (işlem anı) → vardiya aralığına göre.
-
-            // 1) Zayi (gerçek finansal kayıp)
-            var wasteStockLogs = await _db.StockLogs
-                .Include(sl => sl.MenuItem)
-                .Where(sl => sl.SourceType == "SiparişKaynaklı"
-                          && sl.CreatedAt >= shift.OpenedAt
-                          && sl.CreatedAt <= closedAt)
-                .ToListAsync();
-
-            int totalWasteCount = wasteStockLogs.Sum(sl => Math.Abs(sl.QuantityChange));
-            decimal totalWaste = wasteStockLogs.Sum(sl =>
+            // [RC-03] TX ÖNCE açılır; shift bu TX içinde çekilir → satır kilitlenir
+            using var tx = await _db.Database.BeginTransactionAsync(
+                System.Data.IsolationLevel.RepeatableRead);
+            try
             {
-                decimal price = sl.UnitPrice ?? sl.MenuItem?.MenuItemPrice ?? 0m;
-                return Math.Abs(sl.QuantityChange) * price;
-            });
+                // [RC-03] Shift TX İÇİNDE sorgulanır — ID ile çek, IsClosed'u TX içinde kontrol et
+                var shift = await _db.ShiftLogs
+                    .FirstOrDefaultAsync(s => s.ShiftLogId == id);
 
-            // 2) Stok İade (mali kayıp yok — sadece adeti rapor et)
-            int totalStockReturnCount = await _db.StockLogs
-                .Where(sl => sl.SourceType == null
-                          && sl.MovementType == "Giriş"
-                          && sl.Note != null && sl.Note.StartsWith("İptal iadesi")
-                          && sl.CreatedAt >= shift.OpenedAt
-                          && sl.CreatedAt <= closedAt)
-                .SumAsync(sl => (int?)sl.QuantityChange) ?? 0;
+                if (shift == null)
+                    return NotFound(new { success = false, message = "Vardiya bulunamadı." });
 
-            // Kasa farkı: ClosingBalance - (OpeningBalance + TotalCash)
-            decimal difference = dto.ClosingBalance - (shift.OpeningBalance + totalCash);
+                // [RC-03] Guard TX İÇİNDE — birinci commit sonrası ikinci istek buraya girer
+                if (shift.IsClosed)
+                    return BadRequest(new { success = false, message = "Vardiya zaten kapalı. Çift kapama engellendi." });
 
-            // ── ShiftLog'u güncelle ───────────────────────────────────────────
-            shift.ClosedAt = closedAt;
-            shift.ClosedByUserId = user!.Id;
-            shift.ClosingBalance = dto.ClosingBalance;
-            shift.Notes = dto.Notes ?? shift.Notes;
-            if (dto.DifferenceThreshold > 0)
-                shift.DifferenceThreshold = dto.DifferenceThreshold;
+                var closedAt = DateTime.UtcNow;
 
-            shift.TotalSales = totalSales;
-            shift.TotalCash = totalCash;
-            shift.TotalCard = totalCard;
-            shift.TotalOther = totalOther;
-            shift.TotalDiscount = totalDiscount;
-            shift.TotalWaste = totalWaste;
-            shift.Difference = difference;
-            shift.IsClosed = true;
+                // ── [P-02] DB-Side SumAsync — tüm veriler RAM'e çekilmeden toplanır ───
+                // ESKİ: paidOrders.ToListAsync() + allPayments.ToList() + in-memory Sum()
+                //   → Yüzlerce sipariş/ödeme tek seferde RAM'e yükleniyor.
+                // YENİ: Her toplam tek SQL SUM() ile hesaplanır, satır transferi yok.
 
-            await _db.SaveChangesAsync();
+                decimal totalSales = await _db.Orders
+                    .Where(o => o.OrderStatus == OrderStatus.Paid
+                             && o.OrderClosedAt >= shift.OpenedAt
+                             && o.OrderClosedAt <= closedAt)
+                    .SumAsync(o => o.OrderTotalAmount);                          // [P-02]
 
-            // ── SignalR: fark eşiği aşıldıysa uyarı gönder ───────────────────
-            if (Math.Abs(difference) > shift.DifferenceThreshold)
-            {
-                await _hub.Clients.Group(_tenantService.TenantId ?? "").SendAsync("ShiftDifferenceAlert", new // NEW EKLENDİ
+                decimal totalCash = await _db.Payments
+                    .Where(p => p.Order.OrderStatus == OrderStatus.Paid
+                             && p.Order.OrderClosedAt >= shift.OpenedAt
+                             && p.Order.OrderClosedAt <= closedAt
+                             && p.PaymentsMethod == 0)
+                    .SumAsync(p => p.PaymentsAmount);                            // [P-02]
+
+                decimal totalCard = await _db.Payments
+                    .Where(p => p.Order.OrderStatus == OrderStatus.Paid
+                             && p.Order.OrderClosedAt >= shift.OpenedAt
+                             && p.Order.OrderClosedAt <= closedAt
+                             && (p.PaymentsMethod == 1 || p.PaymentsMethod == 2))
+                    .SumAsync(p => p.PaymentsAmount);                            // [P-02]
+
+                decimal totalOther = await _db.Payments
+                    .Where(p => p.Order.OrderStatus == OrderStatus.Paid
+                             && p.Order.OrderClosedAt >= shift.OpenedAt
+                             && p.Order.OrderClosedAt <= closedAt
+                             && p.PaymentsMethod == 3)
+                    .SumAsync(p => p.PaymentsAmount);                            // [P-02]
+
+                // [F-01] İndirim = GrossSatış − TümÖdemeler
+                //   Order.DiscountAmount kolonu yok; indirim ödeme anında netTotal'a
+                //   yansıtılır. Fark formülü DB aggregate'lerden türetildiği için
+                //   artık tutarlı ve memory'den bağımsız.
+                decimal totalPaid = totalCash + totalCard + totalOther;
+                decimal totalDiscount = Math.Max(0m, totalSales - totalPaid);   // [F-01]
+
+                // ── [P-02] İptal & Zayi — tek SQL SUM(CASE WHEN) ─────────────────────
+                // ESKİ: wastedItems.ToListAsync() + in-memory Sum() ile COALESCE mantığı
+                // YENİ: OrderItemUnitPrice > 0 ? UnitPrice : MenuItem.MenuItemPrice
+                //       ifadesi EF Core tarafından SQL CASE WHEN'e çevrilir.
+                decimal totalWaste = await _db.OrderItems
+                    .Where(oi => oi.CancelledQuantity > 0
+                              && (
+                                  (oi.Order.OrderClosedAt != null
+                                   && oi.Order.OrderClosedAt >= shift.OpenedAt
+                                   && oi.Order.OrderClosedAt <= closedAt)
+                                  ||
+                                  (oi.Order.OrderClosedAt == null
+                                   && oi.OrderItemAddedAt >= shift.OpenedAt
+                                   && oi.OrderItemAddedAt <= closedAt)
+                              ))
+                    .SumAsync(oi => oi.CancelledQuantity *                       // [P-02]
+                        (oi.OrderItemUnitPrice > 0
+                            ? oi.OrderItemUnitPrice
+                            : oi.MenuItem!.MenuItemPrice));
+
+                // Kasa farkı: ClosingBalance - (OpeningBalance + TotalCash)
+                decimal difference = dto.ClosingBalance - (shift.OpeningBalance + totalCash);
+
+                // ── ShiftLog'u güncelle ───────────────────────────────────────────
+                shift.ClosedAt = closedAt;
+                shift.ClosedByUserId = user!.Id;
+                shift.ClosingBalance = dto.ClosingBalance;
+                shift.Notes = dto.Notes ?? shift.Notes;
+                if (dto.DifferenceThreshold > 0)
+                    shift.DifferenceThreshold = dto.DifferenceThreshold;
+
+                shift.TotalSales = totalSales;
+                shift.TotalCash = totalCash;
+                shift.TotalCard = totalCard;
+                shift.TotalOther = totalOther;
+                shift.TotalDiscount = totalDiscount;
+                shift.TotalWaste = totalWaste;
+                shift.Difference = difference;
+                shift.IsClosed = true; // [RC-03] commit öncesi son adım
+
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync(); // [RC-03]
+
+                // ── SignalR: fark eşiği aşıldıysa uyarı gönder ───────────────────
+                if (Math.Abs(difference) > shift.DifferenceThreshold)
                 {
-                    shiftId = shift.ShiftLogId,
-                    difference = shift.Difference,
-                    threshold = shift.DifferenceThreshold,
-                    closedBy = user.FullName ?? user.UserName
-                });
-            }
+                    await _hub.Clients.Group(_tenantService.TenantId ?? "").SendAsync("ShiftDifferenceAlert", new
+                    {
+                        shiftId = shift.ShiftLogId,
+                        difference = shift.Difference,
+                        threshold = shift.DifferenceThreshold,
+                        closedBy = user.FullName ?? user.UserName
+                    });
+                }
 
-            return Ok(new { success = true, shiftId = shift.ShiftLogId });
+                return Ok(new { success = true, shiftId = shift.ShiftLogId });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return StatusCode(500, new { success = false, message = "Vardiya kapatılırken hata oluştu: " + ex.Message });
+            }
         }
 
         // ── POST /Shift/ToggleLock/{id} ───────────────────────────────────────
@@ -267,6 +284,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         }
 
         // ── GET /Shift/PreviewTotals/{id} — Close sayfası AJAX önizleme ───────
+        // [P-02] InMemory LINQ → DB SumAsync
+        // [F-01] İndirim DB aggregate'lerden türetilir
         [HttpGet]
         public async Task<IActionResult> PreviewTotals(int id)
         {
@@ -276,44 +295,54 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             var now = DateTime.UtcNow;
 
-            var paidOrders = await _db.Orders
-                .Include(o => o.Payments)
-                .Where(o => o.OrderStatus == OrderStatus.Paid // FIX: Enum olarak değiştirildi
+            // [P-02] Tek SumAsync sorguları — hiçbir satır RAM'e çekilmez
+            decimal totalSales = await _db.Orders
+                .Where(o => o.OrderStatus == OrderStatus.Paid
                          && o.OrderClosedAt >= shift.OpenedAt
                          && o.OrderClosedAt <= now)
-                .ToListAsync();
+                .SumAsync(o => o.OrderTotalAmount);
 
-            var allPayments = paidOrders.SelectMany(o => o.Payments).ToList();
+            decimal totalCash = await _db.Payments
+                .Where(p => p.Order.OrderStatus == OrderStatus.Paid
+                         && p.Order.OrderClosedAt >= shift.OpenedAt
+                         && p.Order.OrderClosedAt <= now
+                         && p.PaymentsMethod == 0)
+                .SumAsync(p => p.PaymentsAmount);
 
-            decimal totalSales = paidOrders.Sum(o => o.OrderTotalAmount);
-            decimal totalCash = allPayments.Where(p => p.PaymentsMethod == 0).Sum(p => p.PaymentsAmount);
-            decimal totalCard = allPayments.Where(p => p.PaymentsMethod == 1 || p.PaymentsMethod == 2).Sum(p => p.PaymentsAmount);
-            decimal totalOther = allPayments.Where(p => p.PaymentsMethod == 3).Sum(p => p.PaymentsAmount);
-            decimal paidTotal = allPayments.Sum(p => p.PaymentsAmount);
-            decimal totalDiscount = Math.Max(0, totalSales - paidTotal);
+            decimal totalCard = await _db.Payments
+                .Where(p => p.Order.OrderStatus == OrderStatus.Paid
+                         && p.Order.OrderClosedAt >= shift.OpenedAt
+                         && p.Order.OrderClosedAt <= now
+                         && (p.PaymentsMethod == 1 || p.PaymentsMethod == 2))
+                .SumAsync(p => p.PaymentsAmount);
 
-            // ── [v4 — StockLog Mimarisi] Zayi & Stok İade (PreviewTotals) ─────────
-            var wasteStockLogs = await _db.StockLogs
-                .Include(sl => sl.MenuItem)
-                .Where(sl => sl.SourceType == "SiparişKaynaklı"
-                          && sl.CreatedAt >= shift.OpenedAt
-                          && sl.CreatedAt <= now)
-                .ToListAsync();
+            decimal totalOther = await _db.Payments
+                .Where(p => p.Order.OrderStatus == OrderStatus.Paid
+                         && p.Order.OrderClosedAt >= shift.OpenedAt
+                         && p.Order.OrderClosedAt <= now
+                         && p.PaymentsMethod == 3)
+                .SumAsync(p => p.PaymentsAmount);
 
-            int totalWasteCount = wasteStockLogs.Sum(sl => Math.Abs(sl.QuantityChange));
-            decimal totalWaste = wasteStockLogs.Sum(sl =>
-            {
-                decimal price = sl.UnitPrice ?? sl.MenuItem?.MenuItemPrice ?? 0m;
-                return Math.Abs(sl.QuantityChange) * price;
-            });
+            // [F-01] İndirim = GrossSatış − TümÖdemeler (DB aggregates)
+            decimal totalPaid = totalCash + totalCard + totalOther;
+            decimal totalDiscount = Math.Max(0m, totalSales - totalPaid);
 
-            int totalStockReturnCount = await _db.StockLogs
-                .Where(sl => sl.SourceType == null
-                          && sl.MovementType == "Giriş"
-                          && sl.Note != null && sl.Note.StartsWith("İptal iadesi")
-                          && sl.CreatedAt >= shift.OpenedAt
-                          && sl.CreatedAt <= now)
-                .SumAsync(sl => (int?)sl.QuantityChange) ?? 0;
+            // [P-02] İptal & Zayi — SQL CASE WHEN ile tek sorgu
+            decimal totalWaste = await _db.OrderItems
+                .Where(oi => oi.CancelledQuantity > 0
+                          && (
+                              (oi.Order.OrderClosedAt != null
+                               && oi.Order.OrderClosedAt >= shift.OpenedAt
+                               && oi.Order.OrderClosedAt <= now)
+                              ||
+                              (oi.Order.OrderClosedAt == null
+                               && oi.OrderItemAddedAt >= shift.OpenedAt
+                               && oi.OrderItemAddedAt <= now)
+                          ))
+                .SumAsync(oi => oi.CancelledQuantity *
+                    (oi.OrderItemUnitPrice > 0
+                        ? oi.OrderItemUnitPrice
+                        : oi.MenuItem!.MenuItemPrice));
 
             return Ok(new
             {
@@ -323,8 +352,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 totalOther,
                 totalDiscount,
                 totalWaste,
-                totalWasteCount,
-                totalStockReturnCount,
                 openingBalance = shift.OpeningBalance,
                 differenceThreshold = shift.DifferenceThreshold
             });
@@ -505,7 +532,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                             row.RelativeItem().Border(0.5f).BorderColor(borderClr).Padding(8).AlignCenter().Column(c =>
                             {
                                 c.Item().Text("İptal Edilen Kalem").FontSize(7).FontColor(mutedClr).Bold();
-                                c.Item().Text($"{vm.WasteCount} zayi / {vm.StockReturnCount} iade").FontSize(12).Bold().FontColor("#f59e0b");
+                                c.Item().Text(vm.CancelledItemCount.ToString()).FontSize(14).Bold().FontColor("#f59e0b");
                             });
                             row.ConstantItem(16);
                             row.RelativeItem().Border(0.5f).BorderColor(borderClr).Padding(8).AlignCenter().Column(c =>
@@ -617,60 +644,87 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
         // ═════════════════════════════════════════════════════════════════════
         // PRIVATE — BuildDetailViewModel
+        // [P-02] Tüm parasal toplamlar + gruplama sorguları DB'de çalışır
+        // [F-01] İndirim DB aggregate farkından türetilir
+        //
+        // ESKİ: paidOrders.ToListAsync() → tüm sipariş + ödeme + kalem RAM'de
+        //   → 500 sipariş × ortalama 5 kalem = 2500 satır + tüm navigation nesneleri
+        // YENİ:
+        //   • Ödeme dağılımı    → 4 ayrı SumAsync (her biri 1 skaler döner)
+        //   • İptal/zayi        → SumAsync + CountAsync
+        //   • Garson satışları  → DB-side GroupBy + ToListAsync (sadece scalar projeksiyonlar)
+        //   • Top 5 ürün        → DB-side GroupBy → Take(5) → ToListAsync
+        //   • Kategori dağılımı → DB-side GroupBy → ToListAsync
         // ═════════════════════════════════════════════════════════════════════
         private async Task<ShiftDetailViewModel> BuildDetailViewModel(ShiftLog shift)
         {
             var closedAt = shift.ClosedAt ?? DateTime.UtcNow;
 
-            // Vardiya aralığındaki ödenmiş siparişler
-            var paidOrders = await _db.Orders
-                .Include(o => o.Payments)
-                .Include(o => o.OrderItems)
-                    .ThenInclude(oi => oi.MenuItem)
-                        .ThenInclude(mi => mi.Category)
-                .Where(o => o.OrderStatus == OrderStatus.Paid // FIX: Enum olarak değiştirildi
+            // ── [P-02] Ödeme dağılımı — DB SumAsync, sıfır satır RAM'e gelmez ────
+            decimal cash = await _db.Payments
+                .Where(p => p.Order.OrderStatus == OrderStatus.Paid
+                         && p.Order.OrderClosedAt >= shift.OpenedAt
+                         && p.Order.OrderClosedAt <= closedAt
+                         && p.PaymentsMethod == 0)
+                .SumAsync(p => p.PaymentsAmount);
+
+            decimal creditCard = await _db.Payments
+                .Where(p => p.Order.OrderStatus == OrderStatus.Paid
+                         && p.Order.OrderClosedAt >= shift.OpenedAt
+                         && p.Order.OrderClosedAt <= closedAt
+                         && p.PaymentsMethod == 1)
+                .SumAsync(p => p.PaymentsAmount);
+
+            decimal debitCard = await _db.Payments
+                .Where(p => p.Order.OrderStatus == OrderStatus.Paid
+                         && p.Order.OrderClosedAt >= shift.OpenedAt
+                         && p.Order.OrderClosedAt <= closedAt
+                         && p.PaymentsMethod == 2)
+                .SumAsync(p => p.PaymentsAmount);
+
+            decimal other = await _db.Payments
+                .Where(p => p.Order.OrderStatus == OrderStatus.Paid
+                         && p.Order.OrderClosedAt >= shift.OpenedAt
+                         && p.Order.OrderClosedAt <= closedAt
+                         && p.PaymentsMethod == 3)
+                .SumAsync(p => p.PaymentsAmount);
+
+            // ── [P-02] İptal adedi — DB CountAsync (ağırlıklı toplam) ─────────────
+            int cancelledCount = await _db.OrderItems
+                .Where(oi => oi.CancelledQuantity > 0
+                          && (
+                              (oi.Order.OrderClosedAt != null
+                               && oi.Order.OrderClosedAt >= shift.OpenedAt
+                               && oi.Order.OrderClosedAt <= closedAt)
+                              ||
+                              (oi.Order.OrderClosedAt == null
+                               && oi.OrderItemAddedAt >= shift.OpenedAt
+                               && oi.OrderItemAddedAt <= closedAt)
+                          ))
+                .SumAsync(oi => oi.CancelledQuantity);
+
+            // ── [P-02] Zayi tutarı — DB SumAsync + SQL CASE WHEN price fallback ───
+            decimal wasteAmount = await _db.OrderItems
+                .Where(oi => oi.CancelledQuantity > 0
+                          && (
+                              (oi.Order.OrderClosedAt != null
+                               && oi.Order.OrderClosedAt >= shift.OpenedAt
+                               && oi.Order.OrderClosedAt <= closedAt)
+                              ||
+                              (oi.Order.OrderClosedAt == null
+                               && oi.OrderItemAddedAt >= shift.OpenedAt
+                               && oi.OrderItemAddedAt <= closedAt)
+                          ))
+                .SumAsync(oi => oi.CancelledQuantity *
+                    (oi.OrderItemUnitPrice > 0
+                        ? oi.OrderItemUnitPrice
+                        : oi.MenuItem!.MenuItemPrice));
+
+            // ── [P-02] Garson bazlı satış — DB GroupBy, yalnızca scalar projeksiyon ─
+            var waiterSales = await _db.Orders
+                .Where(o => o.OrderStatus == OrderStatus.Paid
                          && o.OrderClosedAt >= shift.OpenedAt
                          && o.OrderClosedAt <= closedAt)
-                .ToListAsync();
-
-            var allPayments = paidOrders.SelectMany(o => o.Payments).ToList();
-
-            decimal cash = allPayments.Where(p => p.PaymentsMethod == 0).Sum(p => p.PaymentsAmount);
-            decimal creditCard = allPayments.Where(p => p.PaymentsMethod == 1).Sum(p => p.PaymentsAmount);
-            decimal debitCard = allPayments.Where(p => p.PaymentsMethod == 2).Sum(p => p.PaymentsAmount);
-            decimal other = allPayments.Where(p => p.PaymentsMethod == 3).Sum(p => p.PaymentsAmount);
-
-            // ── [v4 — StockLog Mimarisi] BuildDetailViewModel Zayi & Stok İade ────
-            // OrderItem.IsWasted ezilme problemi: aynı kalem hem zayi hem iade edilince
-            // IsWasted son işleme göre eziliyor → zayi tutarı ₺0 görünüyor.
-            // ÇÖZÜM: Her iptal işlemi StockLog'a ayrı satır olarak yazılıyor:
-            //   • Zayi     → SourceType="SiparişKaynaklı", MovementType="Çıkış"
-            //   • Stok İade→ SourceType=null, Note LIKE "İptal iadesi%", MovementType="Giriş"
-
-            var wasteStockLogs = await _db.StockLogs
-                .Include(sl => sl.MenuItem)
-                .Where(sl => sl.SourceType == "SiparişKaynaklı"
-                          && sl.CreatedAt >= shift.OpenedAt
-                          && sl.CreatedAt <= closedAt)
-                .ToListAsync();
-
-            int wasteCount = wasteStockLogs.Sum(sl => Math.Abs(sl.QuantityChange));
-            decimal wasteAmount = wasteStockLogs.Sum(sl =>
-            {
-                decimal price = sl.UnitPrice ?? sl.MenuItem?.MenuItemPrice ?? 0m;
-                return Math.Abs(sl.QuantityChange) * price;
-            });
-
-            int stockReturnCount = await _db.StockLogs
-                .Where(sl => sl.SourceType == null
-                          && sl.MovementType == "Giriş"
-                          && sl.Note != null && sl.Note.StartsWith("İptal iadesi")
-                          && sl.CreatedAt >= shift.OpenedAt
-                          && sl.CreatedAt <= closedAt)
-                .SumAsync(sl => (int?)sl.QuantityChange) ?? 0;
-
-            // Garson bazlı satış
-            var waiterSales = paidOrders
                 .GroupBy(o => o.OrderOpenedBy)
                 .Select(g => new WaiterSalesRow
                 {
@@ -679,35 +733,41 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                     TotalAmount = g.Sum(o => o.OrderTotalAmount)
                 })
                 .OrderByDescending(w => w.TotalAmount)
-                .ToList();
+                .ToListAsync();
 
-            // Top 5 ürün — FIX: ActiveQuantity veya PaidQuantity, tutar OrderItemLineTotal
-            var topProducts = paidOrders
-                .SelectMany(o => o.OrderItems)
-                .Where(oi => oi.ActiveQuantity > 0)
-                .GroupBy(oi => oi.MenuItem?.MenuItemName ?? "Bilinmiyor")
+            // ── [P-02] Top 5 ürün — DB GroupBy + Take(5) ──────────────────────────
+            // ActiveQuantity computed property (=> OrderItemQuantity - CancelledQuantity)
+            // DB'ye yazılmaz; EF Core CASE WHEN'e çeviremez. Fark inline hesaplanır.
+            var topProducts = await _db.OrderItems
+                .Where(oi => oi.Order.OrderStatus == OrderStatus.Paid
+                          && oi.Order.OrderClosedAt >= shift.OpenedAt
+                          && oi.Order.OrderClosedAt <= closedAt
+                          && oi.OrderItemQuantity > oi.CancelledQuantity) // ActiveQty > 0
+                .GroupBy(oi => oi.MenuItem.MenuItemName)
                 .Select(g => new TopProductRow
                 {
-                    ProductName = g.Key,
-                    Quantity = g.Sum(oi => oi.ActiveQuantity),
+                    ProductName = g.Key ?? "Bilinmiyor",
+                    Quantity = g.Sum(oi => oi.OrderItemQuantity - oi.CancelledQuantity),
                     TotalAmount = g.Sum(oi => oi.OrderItemLineTotal)
                 })
                 .OrderByDescending(p => p.TotalAmount)
                 .Take(5)
-                .ToList();
+                .ToListAsync();
 
-            // Kategori dağılımı
-            var categorySales = paidOrders
-                .SelectMany(o => o.OrderItems)
-                .Where(oi => oi.ActiveQuantity > 0)
-                .GroupBy(oi => oi.MenuItem?.Category?.CategoryName ?? "Diğer")
+            // ── [P-02] Kategori dağılımı — DB GroupBy ─────────────────────────────
+            var categorySales = await _db.OrderItems
+                .Where(oi => oi.Order.OrderStatus == OrderStatus.Paid
+                          && oi.Order.OrderClosedAt >= shift.OpenedAt
+                          && oi.Order.OrderClosedAt <= closedAt
+                          && oi.OrderItemQuantity > oi.CancelledQuantity)
+                .GroupBy(oi => oi.MenuItem.Category.CategoryName)
                 .Select(g => new CategorySalesRow
                 {
-                    CategoryName = g.Key,
+                    CategoryName = g.Key ?? "Diğer",
                     TotalAmount = g.Sum(oi => oi.OrderItemLineTotal)
                 })
                 .OrderByDescending(c => c.TotalAmount)
-                .ToList();
+                .ToListAsync();
 
             return new ShiftDetailViewModel
             {
@@ -716,9 +776,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 TotalCreditCard = creditCard,
                 TotalDebitCard = debitCard,
                 TotalOther = other,
-                WasteCount = wasteCount,          // zayi adedi   (StockLog kaynaklı)
-                WasteAmount = wasteAmount,          // zayi tutarı  (StockLog kaynaklı)
-                StockReturnCount = stockReturnCount,     // stok iade adedi (mali kayıp yok)
+                CancelledItemCount = cancelledCount,
+                WasteAmount = wasteAmount,
                 WaiterSales = waiterSales,
                 TopProducts = topProducts,
                 CategorySales = categorySales
