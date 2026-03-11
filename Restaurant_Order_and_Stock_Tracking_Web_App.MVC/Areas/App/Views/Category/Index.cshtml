@@ -155,7 +155,7 @@
                     </td>
                     <td>
                         <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
-                            <a asp-action="Detail" asp-route-id="@cat.CategoryId" class="btn btn-detail btn-sm">👁 Detay</a>
+                            <a asp-area="App" asp-controller="Category" asp-action="Detail" asp-route-id="@cat.CategoryId" class="btn btn-detail btn-sm">👁 Detay</a>
                             <button class="btn btn-edit btn-sm" onclick="openEditModal(@cat.CategoryId)">✏️ Düzenle</button>
                             <button class="btn btn-delete btn-sm" onclick="openDeleteModal(@cat.CategoryId, '@cat.CategoryName')">🗑 Sil</button>
                         </div>

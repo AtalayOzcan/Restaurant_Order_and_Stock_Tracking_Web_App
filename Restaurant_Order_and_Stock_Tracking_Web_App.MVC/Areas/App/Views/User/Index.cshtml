@@ -91,8 +91,8 @@
                     </td>
                     <td>
                         <div class="action-btns">
-                            <a asp-action="Edit" asp-route-id="@user.Id" class="btn-sm btn-edit">✏️ Düzenle</a>
-                            <form asp-action="Delete" method="post" onsubmit="return confirm('@user.FullName kullanıcısını silmek istediğinize emin misiniz?')">
+                            <a asp-area="App" asp-controller="User" asp-action="Edit" asp-route-id="@user.Id" class="btn-sm btn-edit">✏️ Düzenle</a>
+                            <form asp-area="App" asp-controller="User" asp-action="Delete" method="post" onsubmit="return confirm('@user.FullName kullanıcısını silmek istediğinize emin misiniz?')">
                                 @Html.AntiForgeryToken()
                                 <input type="hidden" name="id" value="@user.Id" />
                                 <button type="submit" class="btn-sm btn-danger">🗑 Sil</button>

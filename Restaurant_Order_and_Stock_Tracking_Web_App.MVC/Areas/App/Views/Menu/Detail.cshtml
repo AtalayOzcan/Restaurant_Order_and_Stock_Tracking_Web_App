@@ -14,8 +14,8 @@
         <div class="page-subtitle">Ürün Detayı • #@Model.MenuItemId</div>
     </div>
     <div style="display:flex;gap:.6rem;">
-        <a asp-action="Index" class="btn btn-ghost">← Menü</a>
-        <a asp-action="Edit" asp-route-id="@Model.MenuItemId" class="btn btn-edit">✏️ Düzenle</a>
+        <a asp-area="App" asp-controller="Menu" asp-action="Index" class="btn btn-ghost">← Menü</a>
+        <a asp-area="App" asp-controller="Menu" asp-action="Edit" asp-route-id="@Model.MenuItemId" class="btn btn-edit">✏️ Düzenle</a>
     </div>
 </div>
 

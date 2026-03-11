@@ -147,7 +147,7 @@
     </style>
 }
 
-<a asp-action="Index" class="btn-back" style="margin-bottom:1rem;">← Geri</a>
+<a asp-area="App" asp-controller="User" asp-action="Index" class="btn-back" style="margin-bottom:1rem;">← Geri</a>
 
 @if (TempData["Success"] != null)
 {
@@ -161,7 +161,7 @@
 <div class="form-card">
     <div class="form-title">✏️ Kullanıcı Düzenle</div>
 
-    <form asp-action="Edit" method="post">
+    <form asp-area="App" asp-controller="User" asp-action="Edit" method="post">
         @Html.AntiForgeryToken()
         <input type="hidden" asp-for="Id" />
 
@@ -199,14 +199,14 @@
 
         <div class="form-actions">
             <button type="submit" class="btn-primary">Kaydet</button>
-            <a asp-action="Index" class="btn-back">İptal</a>
+            <a asp-area="App" asp-controller="User" asp-action="Index" class="btn-back">İptal</a>
         </div>
     </form>
 
     <hr class="divider" />
 
     <div class="form-title" style="font-size:1rem;">🔑 Şifre Sıfırla</div>
-    <form asp-action="ResetPassword" method="post">
+    <form asp-area="App" asp-controller="User" asp-action="ResetPassword" method="post">
         @Html.AntiForgeryToken()
         <input type="hidden" name="id" value="@Model.Id" />
         <div class="f-group">

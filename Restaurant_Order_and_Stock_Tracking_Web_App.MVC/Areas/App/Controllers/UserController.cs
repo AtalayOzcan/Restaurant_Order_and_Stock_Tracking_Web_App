@@ -172,7 +172,7 @@ public class UserController : AppBaseController
         }
 
         TempData["Success"] = $"'{user.FullName}' kullanıcısı '{model.Role}' rolüyle oluşturuldu.";
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), "User", new { area = "App" });
     }
 
     // ── GET /App/User/Edit/{id} ────────────────────────────────────────────
@@ -276,7 +276,7 @@ public class UserController : AppBaseController
         await _userManager.UpdateSecurityStampAsync(user);
 
         TempData["Success"] = $"'{user.FullName}' güncellendi.";
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), "User", new { area = "App" });
     }
 
     // ── POST /App/User/ResetPassword ──────────────────────────────────────
@@ -287,7 +287,7 @@ public class UserController : AppBaseController
         if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 6)
         {
             TempData["Error"] = "Şifre en az 6 karakter olmalıdır.";
-            return RedirectToAction(nameof(Edit), new { id });
+            return RedirectToAction(nameof(Edit), "User", new { id = id, area = "App" });
         }
 
         var user = await _userManager.FindByIdAsync(id);
@@ -309,7 +309,7 @@ public class UserController : AppBaseController
             TempData["Error"] = string.Join(", ", result.Errors.Select(e => e.Description));
         }
 
-        return RedirectToAction(nameof(Edit), new { id });
+        return RedirectToAction(nameof(Edit), "User", new { id = id, area = "App" });
     }
 
     // ── POST /App/User/Delete ──────────────────────────────────────────────
@@ -326,7 +326,7 @@ public class UserController : AppBaseController
         if (user.Id == _userManager.GetUserId(User))
         {
             TempData["Error"] = "Kendi hesabınızı silemezsiniz.";
-            return RedirectToAction(nameof(Index));
+            return RedirectToAction(nameof(Index), "User", new { area = "App" }); ;
         }
 
         var roles = await _userManager.GetRolesAsync(user);
@@ -344,7 +344,7 @@ public class UserController : AppBaseController
             if (tenantAdminCount <= 1)
             {
                 TempData["Error"] = "Sistemde en az bir Admin bulunmalıdır.";
-                return RedirectToAction(nameof(Index));
+                return RedirectToAction(nameof(Index), "User", new { area = "App" });
             }
         }
 
@@ -353,11 +353,11 @@ public class UserController : AppBaseController
         if (hasActiveOrders)
         {
             TempData["Error"] = $"'{user.FullName}' adına açık siparişler var. Önce kapatın.";
-            return RedirectToAction(nameof(Index));
+            return RedirectToAction(nameof(Index), "User", new { area = "App" });
         }
 
         await _userManager.DeleteAsync(user);
         TempData["Success"] = "Kullanıcı silindi.";
-        return RedirectToAction(nameof(Index));
+        return RedirectToAction(nameof(Index), "User", new { area = "App" });
     }
 }

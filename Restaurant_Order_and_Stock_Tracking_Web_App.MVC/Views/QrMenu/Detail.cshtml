@@ -3,11 +3,15 @@
 @{
     Layout = null;
     var tableName = (string)(ViewData["TableName"] ?? "");
+    var tenantId = (string)(ViewData["TenantId"] ?? ""); // [YENİ] Dükkan Kodu
     var prevId = (int?)ViewData["PrevItemId"];
     var nextId = (int?)ViewData["NextItemId"];
-    var backUrl = string.IsNullOrEmpty(tableName) ? "#" : $"/QrMenu/Index/{Uri.EscapeDataString(tableName)}";
-    var prevUrl = prevId.HasValue ? $"/QrMenu/Detail/{prevId}?tableName={Uri.EscapeDataString(tableName)}" : null;
-    var nextUrl = nextId.HasValue ? $"/QrMenu/Detail/{nextId}?tableName={Uri.EscapeDataString(tableName)}" : null;
+
+    // [YENİ] Linklerin arasına tenantId eklendi!
+    var backUrl = string.IsNullOrEmpty(tableName) ? "#" : $"/QrMenu/{tenantId}/Index/{Uri.EscapeDataString(tableName)}";
+    var prevUrl = prevId.HasValue ? $"/QrMenu/{tenantId}/Detail/{prevId}?tableName={Uri.EscapeDataString(tableName)}" : null;
+    var nextUrl = nextId.HasValue ? $"/QrMenu/{tenantId}/Detail/{nextId}?tableName={Uri.EscapeDataString(tableName)}" : null;
+
     bool isLowStock = Model.TrackStock && Model.StockQuantity > 0
                     && Model.StockQuantity <= Model.AlertThreshold
                     && Model.AlertThreshold > 0;
@@ -28,7 +32,6 @@
 </head>
 <body class="detail-body">
 
-   
     <header class="detail-topbar">
         <a class="detail-back-btn" href="@backUrl" aria-label="Menüye dön">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -39,7 +42,6 @@
         <div class="detail-topbar-spacer"></div>
     </header>
 
-   
     <div class="detail-hero @(string.IsNullOrWhiteSpace(Model.ImagePath) ? "detail-hero--no-img" : "")">
         @if (!string.IsNullOrWhiteSpace(Model.ImagePath))
         {
@@ -55,8 +57,6 @@
     </div>
 
     <div class="detail-card">
-
-       
         <div class="detail-title-row">
             <h1 class="detail-name">@Model.MenuItemName</h1>
             <div class="detail-price">
@@ -64,7 +64,6 @@
             </div>
         </div>
 
-       
         <div class="detail-meta-row">
             <span class="detail-cat-pill">@Model.Category?.CategoryName</span>
             @if (isOutOfStock)
@@ -77,16 +76,13 @@
             }
         </div>
 
-      
         <div class="detail-divider"></div>
 
-       
         @if (!string.IsNullOrWhiteSpace(Model.Description))
         {
             <p class="detail-short-desc">@Model.Description</p>
         }
 
-        
         @if (!string.IsNullOrWhiteSpace(Model.DetailedDescription))
         {
             <div class="detail-long-desc-wrap">
@@ -96,7 +92,6 @@
                 <div class="detail-long-desc">@Model.DetailedDescription</div>
             </div>
         }
-
     </div>
 
     @if (prevUrl != null || nextUrl != null)
@@ -138,6 +133,5 @@
         <p class="footer-text">Bizi tercih ettiğiniz için teşekkür ederiz.</p>
         <span class="footer-sub">Afiyet Olsun</span>
     </footer>
-
 </body>
 </html>
