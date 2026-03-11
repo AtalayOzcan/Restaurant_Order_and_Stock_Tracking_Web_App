@@ -315,8 +315,7 @@
     @* SignalR — App Area layout'unda her sayfada yüklü.
        RestaurantHub (/hubs/restaurant) ve NotificationHub (/notificationHub)
        bu script'e bağımlı view'lar Scripts section'ından bağlantıyı kurar. *@
-    <script src="~/lib/microsoft/signalr/dist/browser/signalr.js"
-            asp-append-version="true"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
 
     @await RenderSectionAsync("Scripts", required: false)
 

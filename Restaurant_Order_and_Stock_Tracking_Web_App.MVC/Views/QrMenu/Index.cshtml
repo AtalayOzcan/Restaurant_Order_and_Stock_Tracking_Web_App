@@ -2,6 +2,7 @@
 @{
     Layout = null;
     var tableName = (string)ViewData["TableName"]!;
+    var tenantId = (string)ViewData["TenantId"]!; // [YENİ] Dükkan Kodu
     var isWaiterCalled = (bool)ViewData["IsWaiterCalled"]!;
     var lang = (ViewData["Lang"] as string ?? "tr").ToLower();
     var isRtl = lang == "ar";
@@ -125,17 +126,11 @@
             </button>
         </div>
 
-        @* ════════════════════════════════════════════════════════
-           KATEGORİ FİLTRE NAV — Sticky + Yatay Kaydırmalı
-           ════════════════════════════════════════════════════════ *@
         @if (Model.Any())
         {
             <nav class="cat-nav-wrap" id="catNavWrap" aria-label="Kategori filtresi">
                 <div class="cat-nav" id="catNav">
-                    @* ── "Tümü" — sabit ilk buton ── *@
                     <button class="cat-nav-btn active" data-cat="all" onclick="filterCategory('all', this)">@T("allItems")</button>
-
-                    @* ── Veritabanından gelen kategoriler — dinamik ── *@
                     @foreach (var cat in Model)
                     {
                         <button class="cat-nav-btn" data-cat="@cat.CategoryId" onclick="filterCategory('@cat.CategoryId', this)">
@@ -146,9 +141,6 @@
             </nav>
         }
 
-        @* ════════════════════════════════════════════════════════
-           MENÜ — Kategorilere göre Dinamik Bölümler
-           ════════════════════════════════════════════════════════ *@
         @if (!Model.Any())
         {
             <div class="menu-empty">@T("noProduct")</div>
@@ -186,13 +178,14 @@
                             bool isLowStock = item.TrackStock && item.StockQuantity > 0 && item.StockQuantity <= item.AlertThreshold && item.AlertThreshold > 0;
                             var displayName = ItemName(item);
                             var displayDesc = ItemDesc(item);
-                            var detailUrl = $"/QrMenu/Detail/{item.MenuItemId}?tableName={Uri.EscapeDataString(tableName)}";
+
+                            // [YENİ] Detay sayfasına giderken araya tenantId eklendi!
+                            var detailUrl = $"/QrMenu/{tenantId}/Detail/{item.MenuItemId}?tableName={Uri.EscapeDataString(tableName)}";
 
                             <div class="menu-item" role="listitem" tabindex="0"
                                  onclick="location.href='@detailUrl'"
                                  onkeydown="if(event.key==='Enter')location.href='@detailUrl'">
 
-                                @* Sütun 0: Görsel *@
                                 <div class="item-thumb-col" aria-hidden="true">
                                     @if (!string.IsNullOrWhiteSpace(item.ImagePath))
                                     {
@@ -204,10 +197,8 @@
                                     }
                                 </div>
 
-                                @* Sütun 1: Numara *@
                                 <div class="item-number" aria-hidden="true" style="display:none;">@itemNo</div>
 
-                                @* Sütun 2: İsim + Açıklama + Etiket *@
                                 <div class="item-info">
                                     <div class="item-name">
                                         @displayName
@@ -230,7 +221,6 @@
                                     }
                                 </div>
 
-                                @* Sütun 3: Fiyat *@
                                 <div class="item-price-col" aria-label="Fiyat: @item.MenuItemPrice.ToString("N2") Türk Lirası">
                                     <div class="item-price">
                                         <span class="item-price-currency">₺</span>@item.MenuItemPrice.ToString("N0")
@@ -249,9 +239,6 @@
             }
         }
 
-        @* ════════════════════════════════════════════════════════
-           FOOTER
-           ════════════════════════════════════════════════════════ *@
         <footer class="qr-footer">
             <span class="footer-ornament">◆ &nbsp; ◆ &nbsp; ◆</span>
             <p class="footer-text">@T("thanks")</p>
@@ -270,9 +257,6 @@
             window.location.href = url.toString();
         }
 
-        /* ════════════════════════════════════════════════════════════════
-           KATEGORİ FİLTRELEME
-           ════════════════════════════════════════════════════════════════ */
         let activeFilter = 'all';
 
         function filterCategory(catId, btn) {
@@ -298,9 +282,6 @@
             }
         }
 
-        /* ════════════════════════════════════════════════════════════════
-           SCROLL SPY
-           ════════════════════════════════════════════════════════════════ */
         (function initScrollSpy() {
             const sections = document.querySelectorAll('.menu-section[id]');
             const navBtns  = document.querySelectorAll('.cat-nav-btn');
@@ -323,10 +304,9 @@
             sections.forEach(s => observer.observe(s));
         })();
 
-        /* ════════════════════════════════════════════════════════════════
-           GARSON ÇAĞIR
-           ════════════════════════════════════════════════════════════════ */
+        // [YENİ] Masa Adı ve Dükkan Kodu JS tarafına aktarıldı
         const TABLE_NAME_JS = "@Html.Raw(tableName.Replace("\"", "\\\""))";
+        const TENANT_ID_JS = "@Html.Raw(tenantId.Replace("\"", "\\\""))";
 
         async function callWaiter() {
             const btn = document.getElementById('btnCallWaiter');
@@ -335,7 +315,8 @@
                 const res = await fetch('/QrMenu/CallWaiter', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ TableName: TABLE_NAME_JS })
+                    // [YENİ] Payload içerisine TenantId eklendi!
+                    body: JSON.stringify({ TableName: TABLE_NAME_JS, TenantId: TENANT_ID_JS })
                 });
                 const data = await res.json();
 
@@ -351,9 +332,6 @@
             }
         }
 
-        /* ════════════════════════════════════════════════════════════════
-           TOAST
-           ════════════════════════════════════════════════════════════════ */
         function showToast(msg) {
             const wrap = document.getElementById('toastWrap');
             const t = document.createElement('div');

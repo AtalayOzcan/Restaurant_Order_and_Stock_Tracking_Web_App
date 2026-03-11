@@ -100,7 +100,7 @@ public class TenantOnboardingService : ITenantOnboardingService
             // ── Adım 6: Admin kullanıcısı ─────────────────────────────────
             var adminUser = new ApplicationUser
             {
-                UserName = dto.AdminUsername,
+                UserName = $"{tenantId}_{dto.AdminUsername.Trim()}",
                 FullName = dto.FullName,
                 Email = dto.Email,
                 EmailConfirmed = true,

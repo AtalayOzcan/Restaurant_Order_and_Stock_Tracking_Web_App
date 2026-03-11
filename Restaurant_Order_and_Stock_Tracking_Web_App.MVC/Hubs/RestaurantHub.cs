@@ -41,24 +41,31 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Hubs
     public class RestaurantHub : Hub
     {
         // ── [SIG-1] Bağlantı Kurulunca — Tenant Grubuna Ekle ────────────────
+        // RestaurantHub.cs - OnConnectedAsync metodu
         public override async Task OnConnectedAsync()
         {
-            // Claims'ten TenantId oku (TenantClaimsTransformation tarafından eklendi)
-            var tenantId = Context.User?.FindFirstValue("TenantId");
+            // Kanka, burası en tehlikeli yer. Claim'ler bazen farklı isimlerle gelir. 
+            // O yüzden bulabildiğimiz her yerden Dükkan Kodunu arıyoruz.
+            var tenantId = Context.User?.FindFirst("TenantId")?.Value
+                        ?? Context.User?.FindFirstValue("TenantId")
+                        ?? Context.User?.Claims.FirstOrDefault(c => c.Type.Contains("TenantId", StringComparison.OrdinalIgnoreCase))?.Value;
+
+            // Bulduğumuz değeri temizleyelim (boşluk falan varsa silinsin)
+            tenantId = tenantId?.Trim();
 
             if (!string.IsNullOrEmpty(tenantId))
             {
-                // Connection'ı yalnızca bu tenant'ın grubuna ekle.
-                // Grup adı = TenantId string'i (ör: "burger-palace-sisli")
-                // Clients.Group(tenantId) artık YALNIZCA bu restoranın
-                // bağlı kullanıcılarına mesaj iletir.
                 await Groups.AddToGroupAsync(Context.ConnectionId, tenantId);
+                Console.WriteLine($"[SIGNALR HUB] {Context.User?.Identity?.Name} isimli garson {tenantId} odasına GİRDİ!");
             }
-            // TenantId yoksa (anonim bağlantı) gruba eklenmez — kasıtlı.
+            else
+            {
+                Console.WriteLine($"[SIGNALR HUB] DİKKAT! Garsonun dükkan kodu bulunamadı. Lobiye alındı (Odası Yok).");
+            }
 
             await base.OnConnectedAsync();
         }
-
+        
         // ── [SIG-2] Bağlantı Kesilince — Gruptan Çıkar ──────────────────────
         public override async Task OnDisconnectedAsync(Exception? exception)
         {

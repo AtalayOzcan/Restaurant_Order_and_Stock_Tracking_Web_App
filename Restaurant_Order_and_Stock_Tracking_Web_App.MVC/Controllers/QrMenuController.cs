@@ -1,13 +1,14 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;    // [G-06]
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
-using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Services;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Hubs;
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 {
+    [AllowAnonymous] // QR Menü herkese açıktır
     public class QrMenuController : Controller
     {
         private readonly RestaurantDbContext _context;
@@ -22,22 +23,25 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             _hub = hub;
         }
 
-        // ── GET /QrMenu/Index/{tableName} ──────────────────────────────
+        // ── GET /QrMenu/{tenantId}/Index/{tableName} ──────────────────────────────
+        // [YENİ] URL'ye tenantId eklendi!
         [HttpGet]
-        [Route("QrMenu/Index/{tableName}")]
-        public async Task<IActionResult> Index(string tableName)
+        [Route("QrMenu/{tenantId}/Index/{tableName}")]
+        public async Task<IActionResult> Index(string tenantId, string tableName)
         {
             var decodedName = Uri.UnescapeDataString(tableName);
 
+            // [YENİ] IgnoreQueryFilters() şart! Çünkü kullanıcı giriş yapmadığı için otomatik filtre çalışmaz.
+            // Sadece bu URL'deki tenantId'ye ait masayı arıyoruz.
             var table = await _context.Tables
-                .FirstOrDefaultAsync(t => t.TableName == decodedName);
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.TenantId == tenantId && t.TableName == decodedName);
 
             if (table == null)
-                return NotFound("Bu QR koda ait masa bulunamadı.");
+                return NotFound("Bu QR koda ait masa bulunamadı veya dükkan kapalı.");
 
-            // ── Dil seçimi: önce query string, sonra cookie, varsayılan TR ──
+            // Dil Seçimi
             string lang = "tr";
-
             if (!string.IsNullOrWhiteSpace(Request.Query["lang"]))
             {
                 var qLang = Request.Query["lang"].ToString().ToLower();
@@ -49,16 +53,17 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                 lang = cookieLang!.ToLower();
             }
 
-            // Cookie'yi tazeliyoruz (30 gün)
             Response.Cookies.Append("qrmenu_lang", lang, new CookieOptions
             {
                 Expires = DateTimeOffset.UtcNow.AddDays(30),
-                HttpOnly = false,    // JS okuyabilsin
+                HttpOnly = false,
                 SameSite = SameSiteMode.Lax
             });
 
+            // [YENİ] Sadece bu dükkana (tenantId) ait kategorileri ve ürünleri çek
             var categories = await _context.Categories
-                .Where(c => c.IsActive)
+                .IgnoreQueryFilters()
+                .Where(c => c.TenantId == tenantId && c.IsActive)
                 .OrderBy(c => c.CategorySortOrder)
                 .Include(c => c.MenuItems
                     .Where(m =>
@@ -75,31 +80,29 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             ViewData["Title"] = $"{table.TableName} — Menü";
             ViewData["TableName"] = table.TableName;
+            ViewData["TenantId"] = tenantId; // [YENİ] JS ve View linkleri için şart!
             ViewData["IsWaiterCalled"] = table.IsWaiterCalled;
-            ViewData["Lang"] = lang;   // ← View bunu okur
+            ViewData["Lang"] = lang;
 
             return View(categories);
         }
 
-        // ── GET /QrMenu/Detail/{id}?tableName={tableName} ─────────────────────
-        /// <summary>
-        /// Müşteri ürün kartına tıklayınca açılan tam sayfa ürün detayı.
-        /// tableName: geri dönüş linkini inşa etmek için query string olarak taşınır.
-        /// </summary>
+        // ── GET /QrMenu/{tenantId}/Detail/{id}?tableName={tableName} ─────────────────────
         [HttpGet]
-        [Route("QrMenu/Detail/{id}")]
-        public async Task<IActionResult> Detail(int id, string? tableName)
+        [Route("QrMenu/{tenantId}/Detail/{id}")]
+        public async Task<IActionResult> Detail(string tenantId, int id, string? tableName)
         {
             var item = await _context.MenuItems
+                .IgnoreQueryFilters()
                 .Include(m => m.Category)
-                .FirstOrDefaultAsync(m => m.MenuItemId == id && !m.IsDeleted);
+                .FirstOrDefaultAsync(m => m.TenantId == tenantId && m.MenuItemId == id && !m.IsDeleted);
 
             if (item == null)
                 return NotFound("Ürün bulunamadı.");
 
-            // Aynı kategorideki önceki/sonraki ürün navigasyonu için tüm ürünleri al
             var sibling = await _context.MenuItems
-                .Where(m => !m.IsDeleted && m.CategoryId == item.CategoryId
+                .IgnoreQueryFilters()
+                .Where(m => m.TenantId == tenantId && !m.IsDeleted && m.CategoryId == item.CategoryId
                     && (m.IsAvailable || (m.TrackStock && m.StockQuantity > 0)))
                 .OrderBy(m => m.MenuItemCreatedTime)
                 .Select(m => new { m.MenuItemId, m.MenuItemName })
@@ -111,28 +114,23 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             ViewData["Title"] = item.MenuItemName;
             ViewData["TableName"] = tableName ?? "";
+            ViewData["TenantId"] = tenantId; // İleri/Geri linkleri için lazım
+
             return View(item);
         }
 
-        // ── POST /QrMenu/CallWaiter ────────────────────────────────────────────
-        /// <summary>
-        /// Müşteri "Garson Çağır" butonuna basınca çağrılır.
-        /// Payload: { "TableName": "Masa 1" }
-        /// SignalR ile tüm bağlı admin/garson ekranlarına anlık bildirim gönderir.
-        /// </summary>
-        // [G-06] WaiterCallPolicy: 60 sn içinde maks 2 istek/IP — spam koruması
-        //        Fazlası → 429 Too Many Requests (Program.cs OnRejected JSON yanıtı)
         [HttpPost]
         [IgnoreAntiforgeryToken]
-        [EnableRateLimiting("WaiterCallPolicy")]   // [G-06]
+        [EnableRateLimiting("WaiterCallPolicy")]
         [Route("QrMenu/CallWaiter")]
         public async Task<IActionResult> CallWaiter([FromBody] CallWaiterRequest request)
         {
-            if (request is null || string.IsNullOrWhiteSpace(request.TableName))
-                return BadRequest(new { success = false, message = "Geçersiz masa adı." });
+            if (request is null || string.IsNullOrWhiteSpace(request.TableName) || string.IsNullOrWhiteSpace(request.TenantId))
+                return BadRequest(new { success = false, message = "Geçersiz masa veya dükkan bilgisi." });
 
             var table = await _context.Tables
-                .FirstOrDefaultAsync(t => t.TableName == request.TableName);
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.TenantId == request.TenantId && t.TableName == request.TableName);
 
             if (table == null)
                 return NotFound(new { success = false, message = "Masa bulunamadı." });
@@ -144,19 +142,29 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             table.WaiterCalledAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
-            // [SIG] QrMenuController [AllowAnonymous] → ITenantService null. table.TenantId kullanılır.
-            await _hub.Clients.Group(table.TenantId ?? "").SendAsync("WaiterCalled", new // [SIG] Clients.All→Group
+            // 🚀 GARANTİLİ MESAJ GÖNDERİMİ VE LOGLAMA
+            // Veritabanındaki TenantId'nin sağında solunda boşluk kalmışsa diye Trimliyoruz!
+            var roomId = table.TenantId?.Trim() ?? "";
+
+            if (!string.IsNullOrEmpty(roomId))
             {
-                tableName = table.TableName,
-                calledAtUtc = table.WaiterCalledAt!.Value.ToString("o")
-            });
+                await _hub.Clients.Group(roomId).SendAsync("WaiterCalled", new
+                {
+                    tableName = table.TableName,
+                    calledAtUtc = table.WaiterCalledAt!.Value.ToString("o")
+                });
+                // 👇 BU ÇOK ÖNEMLİ: Visual Studio ekranına mesajı kime attığımızı yazdıracak
+                Console.WriteLine($"🚨 [QR MENU] {roomId} odasına '{table.TableName}' için mesaj ATEŞLENDİ!");
+            }
 
             return Ok(new { success = true, alreadyCalled = false, message = "Garson çağrıldı." });
-        }
-    }
 
-    public class CallWaiterRequest
+        }
+
+        // [YENİ] JSON Payload'una TenantId eklendi!
+    } public class CallWaiterRequest
     {
+        public string TenantId { get; set; } = string.Empty;
         public string TableName { get; set; } = string.Empty;
     }
 }
