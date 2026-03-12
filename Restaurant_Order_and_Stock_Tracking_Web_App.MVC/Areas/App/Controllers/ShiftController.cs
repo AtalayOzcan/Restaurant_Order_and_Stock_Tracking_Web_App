@@ -87,9 +87,22 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
             if (hasOpen)
             {
                 TempData["Warning"] = "Zaten açık bir vardiya mevcut. Önce kapatın.";
-                // [S5-URL] Aynı controller → area explicit ama opsiyonel
                 return RedirectToAction(nameof(Index), "Shift", new { area = "App" });
             }
+
+            // Son kapatılan vardiyadan önerilen değerler (null-safe)
+            var lastShift = await _db.ShiftLogs
+                .Where(s => s.IsClosed)
+                .OrderByDescending(s => s.ClosedAt)
+                .Select(s => new { s.ClosingBalance, s.DifferenceThreshold })
+                .FirstOrDefaultAsync();
+
+            // InvariantCulture: JS'de "100.00" beklenir, "100,00" değil
+            ViewBag.SuggestedBalance = (lastShift?.ClosingBalance ?? 0m)
+                                            .ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+            ViewBag.SuggestedThreshold = (lastShift?.DifferenceThreshold ?? 100m)
+                                            .ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+
             return View();
         }
 

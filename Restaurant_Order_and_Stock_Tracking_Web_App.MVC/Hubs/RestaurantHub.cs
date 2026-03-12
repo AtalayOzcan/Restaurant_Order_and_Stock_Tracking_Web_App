@@ -1,17 +1,29 @@
 ﻿// ============================================================================
-//  Hubs/RestaurantHub.cs
-//  SPRINT B.2 — KDS Cookie Güvenlik Açığı Kapatması
+//  Hubs/RestaurantHub.cs  —  v2
 //
-//  DEĞİŞİKLİKLER:
-//  [SEC-1] RestaurantDbContext inject edildi
-//  [SEC-2] OnConnectedAsync → Cookie'den okunan TenantId DB'de doğrulanıyor
-//  [SEC-3] Doğrulanamayan bağlantılar gruba eklenmiyor + Context.Abort() ile reddediliyor
+//  [HUB-1] SysAdmin Düzeltmesi
+//    ESKİ : Kimlikli kullanıcı fakat TenantId Claim'i yok (SysAdmin) → Abort()
+//    YENİ : Kimlikli + TenantId yok → grup katılımı atlanır, bağlantı açık kalır.
+//           Anonim + TenantId yok (cookie da yok) → Abort() (güvenlik).
 //
-//  GEREKÇE:
-//    Önceki implementasyonda cookie değeri kör güvenle kabul ediliyordu.
-//    Kötü niyetli kullanıcı "ros-tenant" cookie'sini manipüle ederek
-//    başka bir tenant'ın KDS grubuna girebiliyordu.
+//  [HUB-2] Tenant İzolasyon Güvencesi (belgesel)
+//    Her bağlantı yalnızca KENDİ tenantId grubu ile eşleşir.
+//    Tüm Broadcast'ler: _hub.Clients.Group(tenantId).SendAsync(...)
+//    Farklı bir gruba mesaj gönderilmesi kod seviyesinde imkânsız.
+//
+//  [HUB-3] Kaynak Ayrımı Logu
+//    Bağlantı kurulduğunda Claims mi yoksa Cookie mi kullanıldığı loglanır.
+//    Bu sayede KDS tabletlerinin cookie-based bağlantıları izlenebilir.
+//
+//  ÖNEMLİ: Bu hub'da HiçBİR broadcast metodu yoktur (intentional).
+//  Tüm SendAsync çağrıları IHubContext<RestaurantHub> üzerinden yapılır:
+//    • KitchenController.UpdateStatus  → OrderItemStatusChanged, OrderReadyForPickup
+//    • TablesController.ServeReadyItems → OrderServed, RemoveOrderCard/OrderUpdated
+//    • TablesController.DismissWaiter  → WaiterDismissed
+//    • QrMenuController.CallWaiter     → WaiterCalled
+//    • OrderService (NotifyKitchenAsync) → NewOrderItem
 // ============================================================================
+
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
@@ -21,24 +33,26 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Hubs
 {
     /// <summary>
     /// Restoran genelindeki gerçek zamanlı bildirimler için SignalR Hub.
+    ///
+    /// TENANT İZOLASYON PROTOKOLÜ:
+    ///   1. OnConnectedAsync → TenantId doğrulanır → Groups.AddToGroupAsync(connId, tenantId)
+    ///   2. Tüm broadcast'ler → Clients.Group(tenantId).SendAsync(...)
+    ///   3. OnDisconnectedAsync → Groups.RemoveFromGroupAsync(connId, tenantId)
+    ///
     /// Desteklenen event'ler (server → client):
     ///   • WaiterCalled           – müşteri "Garson Çağır"a bastı
     ///   • WaiterDismissed        – garson "İlgilenildi"ye bastı
-    ///   • OrderItemStatusChanged – KDS item durumu değişti
+    ///   • OrderItemStatusChanged – KDS item durumu değişti (Preparing / Ready)
     ///   • NewOrderItem           – garson yeni ürün ekledi → KDS'e düşer
     ///   • OrderReadyForPickup    – mutfak "Hazır" bastı → garson bildirim alır
-    ///   • OrderServed            – garson servis etti → detail sayfası yenilenir
-    ///   • RemoveOrderCard        – KDS kartı kaldır
-    ///   • OrderUpdated           – KDS kartı güncelle
+    ///   • OrderServed            – garson "Servis Et"e bastı → detail sayfası güncellenir
+    ///   • RemoveOrderCard        – KDS kartı kaldır (masa adisyonu birleştirildi vb.)
+    ///   • OrderUpdated           – KDS kartı yenile
     ///   • ShiftDifferenceAlert   – vardiya farkı eşiği aşıldı
     /// </summary>
     public class RestaurantHub : Hub
     {
         private readonly ILogger<RestaurantHub> _logger;
-
-        // [SEC-1] Tenant doğrulaması için DbContext inject edildi.
-        // IDbContextFactory yerine doğrudan DbContext kullanılıyor:
-        // Hub scope'u zaten per-connection olduğundan lifetime uyumlu.
         private readonly RestaurantDbContext _db;
 
         public RestaurantHub(ILogger<RestaurantHub> logger, RestaurantDbContext db)
@@ -47,62 +61,86 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Hubs
             _db = db;
         }
 
-        // ── [SEC-2] Bağlantı Kurulunca — Tenant Doğrula + Gruba Ekle ────────
+        // ── Bağlantı Kurulunca ───────────────────────────────────────────────
         public override async Task OnConnectedAsync()
         {
-            // 1. Önce Claims (kimlikli kullanıcılar: garson, kasiyer, admin)
+            var connId = Context.ConnectionId;
+
+            // ── Adım 1: TenantId'yi kaynaktan çöz ──────────────────────────
             var tenantId = Context.User?.FindFirstValue("TenantId");
             var source = "claims";
 
-            // 2. Claims boşsa → Cookie fallback (KDS — AllowAnonymous)
             if (string.IsNullOrEmpty(tenantId))
             {
                 tenantId = Context.GetHttpContext()?.Request.Cookies["ros-tenant"];
                 source = "cookie";
             }
 
-            // 3. Her iki kaynaktan da TenantId gelmemişse → reddet
+            // ── Adım 2: TenantId yok — kaynak ayrımı yap ───────────────────
             if (string.IsNullOrEmpty(tenantId))
             {
-                _logger.LogWarning(
-                    "[RestaurantHub] TenantId yok — ConnectionId: {ConnectionId} reddedildi.",
-                    Context.ConnectionId);
-                Context.Abort();
+                var isAuthenticated = Context.User?.Identity?.IsAuthenticated == true;
+
+                if (isAuthenticated)
+                {
+                    // [HUB-1] SysAdmin veya TenantId'siz kimlikli kullanıcı:
+                    // Bağlantıyı açık tut fakat gruba ekleme.
+                    // SysAdmin'in tüm tenant verilerine erişmesi farklı mekanizmalarla olur.
+                    _logger.LogInformation(
+                        "[RestaurantHub] Kimlikli kullanıcı TenantId'siz bağlandı " +
+                        "(muhtemelen SysAdmin) — grup katılımı atlandı. ConnId: {ConnId}",
+                        connId);
+                }
+                else
+                {
+                    // Anonim + TenantId yok = geçersiz bağlantı (cookie set edilmemiş).
+                    // KDS tabletinin önce /App/Kitchen/Display'e gitmesi gerekir.
+                    _logger.LogWarning(
+                        "[RestaurantHub] Anonim bağlantı, TenantId yok — bağlantı reddedildi. " +
+                        "ConnId: {ConnId}", connId);
+                    Context.Abort();
+                    return;
+                }
+
+                await base.OnConnectedAsync();
                 return;
             }
 
-            // [SEC-2] Cookie'den gelen değeri kör kabul etme:
-            // DB'de gerçekten böyle aktif bir tenant var mı diye doğrula.
-            // Claims'ten gelen değer zaten login sırasında doğrulandığından
-            // sadece cookie kaynağında kontrol yeterlidir; ancak her iki
-            // kaynağı da kontrol etmek defence-in-depth sağlar.
+            // ── Adım 3: Cookie kaynağı için DB doğrulaması ──────────────────
+            // Claims'ten gelen TenantId zaten login sırasında doğrulandı.
+            // Cookie manipülasyonuna karşı her iki kaynakta da kontrol yapılır
+            // (defence-in-depth).
             var tenantExists = await _db.Tenants
                 .AnyAsync(t => t.TenantId == tenantId && t.IsActive);
 
             if (!tenantExists)
             {
-                // [SEC-3] Geçersiz / manipüle edilmiş / pasif tenant → bağlantıyı kes
                 _logger.LogWarning(
-                    "[RestaurantHub] Geçersiz veya pasif TenantId '{TenantId}' — " +
-                    "kaynak: {Source}, ConnectionId: {ConnectionId}. Bağlantı reddedildi.",
-                    tenantId, source, Context.ConnectionId);
+                    "[RestaurantHub] Geçersiz/pasif TenantId '{TenantId}' " +
+                    "(kaynak: {Source}) — bağlantı reddedildi. ConnId: {ConnId}",
+                    tenantId, source, connId);
                 Context.Abort();
                 return;
             }
 
-            await Groups.AddToGroupAsync(Context.ConnectionId, tenantId);
+            // ── Adım 4: Doğrulanmış TenantId grubuna ekle ───────────────────
+            // [HUB-2] TENANT İZOLASYON GÜVENCESI:
+            // Bu noktadan sonra bu bağlantı YALNIZCA tenantId grubundan
+            // mesaj alabilir. Clients.Group(tenantId).SendAsync(...)
+            // çağrıları yalnızca bu grubu hedefler.
+            await Groups.AddToGroupAsync(connId, tenantId);
 
             _logger.LogInformation(
-                "[RestaurantHub] Bağlandı — ConnectionId: {ConnectionId} → " +
-                "Group: {TenantId} (kaynak: {Source})",
-                Context.ConnectionId, tenantId, source);
+                "[RestaurantHub] Bağlandı — ConnId: {ConnId} → Group: '{TenantId}' (kaynak: {Source})",
+                connId, tenantId, source);
 
             await base.OnConnectedAsync();
         }
 
-        // ── Bağlantı Kesilince — Gruptan Çıkar ──────────────────────────────
+        // ── Bağlantı Kesilince ───────────────────────────────────────────────
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
+            var connId = Context.ConnectionId;
             var tenantId = Context.User?.FindFirstValue("TenantId");
 
             if (string.IsNullOrEmpty(tenantId))
@@ -110,16 +148,19 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Hubs
 
             if (!string.IsNullOrEmpty(tenantId))
             {
-                await Groups.RemoveFromGroupAsync(Context.ConnectionId, tenantId);
+                await Groups.RemoveFromGroupAsync(connId, tenantId);
                 _logger.LogInformation(
-                    "[RestaurantHub] Bağlantı kesildi — ConnectionId: {ConnectionId}, Group: {TenantId}",
-                    Context.ConnectionId, tenantId);
+                    "[RestaurantHub] Bağlantı kesildi — ConnId: {ConnId}, Group: '{TenantId}'",
+                    connId, tenantId);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "[RestaurantHub] Bağlantı kesildi — ConnId: {ConnId} (grup üyesi değildi)",
+                    connId);
             }
 
             await base.OnDisconnectedAsync(exception);
         }
-
-        // Hub metodları intentionally boş.
-        // Tüm broadcast'ler IHubContext<RestaurantHub> üzerinden yapılır.
     }
 }

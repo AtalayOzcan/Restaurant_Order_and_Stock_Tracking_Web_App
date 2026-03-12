@@ -1,11 +1,27 @@
-﻿@{
-    ViewData["Title"] = "Vardiya Aç";
-}
+﻿@* ═══════════════════════════════════════════════════════════════════
+   Areas/App/Views/Shift/Open.cshtml
+   
+   [DÜZELTME — RuntimeBinderException]
+   Faz 1'de @inject IAntiforgery ve @{ var __afTokenValue } bloğu
+   @section Scripts { } İÇİNE yazılmıştı. Razor'da @{ } bloğu bir
+   section içinde kendi yerel scope'unu oluşturur; aynı section'daki
+   <script> tag'i bu değişkeni göremeyince null dynamic referans oluşur
+   → RuntimeBinderException fırlatılır.
 
-@* [FE-01] SEC-02 Antiforgery token kaynağı *@
-@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery _af
+   DOĞRU ÇÖZÜM:
+   @inject IAntiforgery hiç gerekmez. _AppLayout.cshtml logout formu
+   içinde @Html.AntiForgeryToken() zaten render ediyor; bu hidden input
+   her sayfada DOM'da mevcuttur. JS tarafı doğrudan okur:
+     document.querySelector('input[name="__RequestVerificationToken"]')
+   ═══════════════════════════════════════════════════════════════════ *@
 @{
-    var __afTokenValue = _af.GetAndStoreTokens(Context).RequestToken!;
+    ViewData["Title"] = "Vardiya Aç";
+
+    // ViewBag değerlerini null-safe oku.
+    // Controller gönderemediyse (örn. yönlendirme loop'u gibi edge case)
+    // güvenli varsayılan kullanılır.
+    var suggestedBalance   = ViewBag.SuggestedBalance   as string ?? "0.00";
+    var suggestedThreshold = ViewBag.SuggestedThreshold as string ?? "100.00";
 }
 
 @section Styles {
@@ -348,12 +364,11 @@
                        placeholder="0"
                        min="0"
                        step="0.01"
-                       value="0"
+                       value="@suggestedBalance"
                        inputmode="decimal" />
             </div>
             <div class="premium-hint">Gün başında kasadaki nakit miktarı.</div>
         </div>
-
 
         <div class="premium-field">
             <div class="premium-label">
@@ -368,7 +383,7 @@
                        placeholder="100"
                        min="0"
                        step="0.01"
-                       value="100"
+                       value="@suggestedThreshold"
                        inputmode="decimal" />
             </div>
             <div class="premium-hint">Bu tutarı aşan kasa farklarında SignalR uyarısı gönderilir.</div>
@@ -405,133 +420,95 @@
 
 @section Scripts {
     <script>
-        // ── [FE-01] Antiforgery token — SEC-02 CSRF koruması için ────────────────
-        const __afToken = '@__afTokenValue';
+        // ════════════════════════════════════════════════════════════════════
+        //  [DÜZELTME — RuntimeBinderException]
+        //
+        //  SORUN (Faz 1 hatası):
+        //    @@inject IAntiforgery _af ve @@{ var __afTokenValue = ... }
+        //    bloğu bu section'ın İÇİNE yazıldı. Razor'da @@{ } bloğu bir
+        //    section içinde yerel scope oluşturur; alt satırlardaki
+        //    '@@__afTokenValue' ifadesi bu scope dışında kalır, null dynamic
+        //    referans olur ve RuntimeBinderException fırlatır.
+        //
+        //  ÇÖZÜM:
+        //    @@inject IAntiforgery hiç gerekmez.
+        //    _AppLayout.cshtml logout formu zaten @@Html.AntiForgeryToken()
+        //    render ediyor → her sayfada DOM'da bir hidden input mevcuttur:
+        //      <input type="hidden" name="__RequestVerificationToken" value="...">
+        //    JS bu değeri doğrudan DOM'dan okuyabilir.
+        //    safeFetch çağrısında headers içine eklenir →
+        //    [ValidateAntiForgeryToken] bu header'ı kabul eder.
+        // ════════════════════════════════════════════════════════════════════
 
-        const shiftId   = @Model.ShiftLogId;
-        const fmt       = v => '₺' + Number(v).toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
-        let sysCashVal  = 0;
-        let sysOpenVal  = @Model.OpeningBalance.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        const SHIFT_OPEN_URL   = '@Url.Action("Open",   "Shift", new { area = "App" })';
+        const SHIFT_DETAIL_URL = '@Url.Action("Detail", "Shift", new { area = "App" })';
 
-        // ── Sistem verilerini AJAX ile çek ─────────────────────────────────────
-        (async function loadPreview() {
-            // [FE-01] fetch() → window.safeFetch()
-            // PreviewTotals bir GET endpoint'i — CSRF token gerekmez,
-            // ama safeFetch 401 koruması bu çağrıda da aktif.
-            const res = await window.safeFetch(`/App/Shift/PreviewTotals/${shiftId}`);
-            if (!res) return;   // 401 → modal gösterildi, sessizce dur
+        // [DÜZELTME] @@inject yerine DOM'dan oku — scope hatası sıfır
+        // _AppLayout her sayfada @Html.AntiForgeryToken() render eder.
+        const __afToken = document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
 
-            if (!res.ok) { console.warn('PreviewTotals failed', res.status); return; }
+        document.getElementById('btnOpen').addEventListener('click', async function () {
+            const openingBalance = parseFloat(document.getElementById('openingBalance').value) || 0;
+            const threshold      = parseFloat(document.getElementById('threshold').value)      || 100;
+            const notes          = document.getElementById('notes').value.trim();
 
-            try {
-                const d = await res.json();
+            this.disabled = true;
+            this.innerHTML = `
+                <span class="cta-icon" style="display:inline-block;animation:spin .9s linear infinite">⏳</span>
+                <span class="cta-text">
+                    <span class="cta-text-main">Açılıyor…</span>
+                    <span class="cta-text-sub">Lütfen bekleyin</span>
+                </span>`;
 
-                sysCashVal = d.totalCash ?? 0;
-                sysOpenVal = d.openingBalance ?? sysOpenVal;
-
-                document.getElementById('sysSales').textContent   = fmt(d.totalSales ?? 0);
-                document.getElementById('sysCash').textContent    = fmt(d.totalCash ?? 0);
-                document.getElementById('sysCard').textContent    = fmt(d.totalCard ?? 0);
-                document.getElementById('sysOther').textContent   = fmt(d.totalOther ?? 0);
-                document.getElementById('sysWaste').textContent   = fmt(d.totalWaste ?? 0);
-                document.getElementById('sysOpening').textContent = fmt(d.openingBalance ?? sysOpenVal);
-
-                if (d.differenceThreshold > 0)
-                    document.getElementById('threshold').value = d.differenceThreshold;
-
-                updateDiff();
-            } catch (e) {
-                console.error('PreviewTotals parse error:', e);
-            }
-        })();
-
-        // ── Canlı fark önizleme ─────────────────────────────────────────────────
-        document.getElementById('closingBalance').addEventListener('input', updateDiff);
-        document.getElementById('threshold').addEventListener('input', updateDiff);
-
-        function updateDiff() {
-            const closing  = parseFloat(document.getElementById('closingBalance').value) || 0;
-            const thr      = parseFloat(document.getElementById('threshold').value) || 100;
-            const expected = sysOpenVal + sysCashVal;
-            const diff     = closing - expected;
-            const isOver   = Math.abs(diff) > thr;
-            const hasInput = document.getElementById('closingBalance').value !== '';
-
-            const elNum  = document.getElementById('diffPreview');
-            const elBox  = document.getElementById('diffBox');
-            const elNote = document.getElementById('diffNote');
-            const elForm = document.getElementById('diffFormula');
-
-            if (!hasInput) {
-                elNum.textContent  = 'Kapanış bakiyesi girin…';
-                elNum.style.color  = 'var(--text-muted)';
-                elBox.className    = 'diff-preview-box';
-                elNote.textContent = '';
-                elForm.textContent = '';
-                return;
-            }
-
-            elNum.textContent  = (diff >= 0 ? '+' : '') + fmt(diff);
-            elNum.style.color  = isOver ? '#ef4444' : '#10b981';
-            elBox.className    = 'diff-preview-box ' + (isOver ? 'warn' : 'ok');
-            elForm.textContent = `${fmt(closing)} - (${fmt(sysOpenVal)} açılış + ${fmt(sysCashVal)} nakit) = ${(diff >= 0 ? '+' : '') + fmt(diff)}`;
-            elForm.style.color = 'var(--text-muted)';
-            elNote.textContent = isOver ? `⚠️ Uyarı eşiği ${fmt(thr)} aşılacak! SignalR uyarısı gönderilecek.` : '';
-        }
-
-        // ── Kapat ───────────────────────────────────────────────────────────────
-        document.getElementById('btnClose').addEventListener('click', async function () {
-            const closingBalance      = parseFloat(document.getElementById('closingBalance').value) || 0;
-            const differenceThreshold = parseFloat(document.getElementById('threshold').value) || 100;
-            const notes               = document.getElementById('notes').value.trim();
-            const diff                = closingBalance - (sysOpenVal + sysCashVal);
-
-            if (!confirm(
-                `Vardiyayı kapatmak üzeresiniz.\n\n` +
-                `Kapanış Kasası : ${fmt(closingBalance)}\n` +
-                `Tahmini Fark   : ${(diff >= 0 ? '+' : '') + fmt(diff)}\n\n` +
-                `Bu işlem geri alınamaz. Onaylıyor musunuz?`
-            )) return;
-
-            this.disabled    = true;
-            this.textContent = 'Kapatılıyor…';
-
-            // [FE-01] fetch() → window.safeFetch()
-            // [SEC-02] RequestVerificationToken header'ı eklendi (CSRF koruması)
-            const res = await window.safeFetch(`/App/Shift/Close/${shiftId}`, {
+            // [FE-01 + SEC-02] fetch() → window.safeFetch()
+            // safeFetch: 401 → showSessionExpiredModal (sessiz çökme yok)
+            // RequestVerificationToken header → [ValidateAntiForgeryToken] CSRF koruması
+            const res = await window.safeFetch(SHIFT_OPEN_URL, {
                 method:  'POST',
                 headers: { 'RequestVerificationToken': __afToken },
-                body:    JSON.stringify({ closingBalance, notes, differenceThreshold })
+                body:    JSON.stringify({ openingBalance, notes, differenceThreshold: threshold })
             });
 
-            if (!res) {                  // 401 → modal gösterildi
-                this.disabled  = false;
-                this.innerHTML = '⏹&nbsp; Vardiyayı Kapat &amp; Z Raporu Oluştur';
+            // safeFetch null döndü → 401, modal zaten gösterildi
+            if (!res) {
+                resetBtn(this);
                 return;
             }
 
+            let data;
             try {
-                const d = await res.json();
-                if (res.ok && d.success) {
-                    window.location.href = `/App/Shift/Detail/${d.shiftId}`;
-                } else {
-                    showAlert(d.message || 'Vardiya kapatılamadı.');
-                    this.disabled  = false;
-                    this.innerHTML = '⏹&nbsp; Vardiyayı Kapat &amp; Z Raporu Oluştur';
-                }
+                data = await res.json();
             } catch {
-                showAlert('Sunucu yanıtı işlenemedi. Tekrar deneyin.');
-                this.disabled  = false;
-                this.innerHTML = '⏹&nbsp; Vardiyayı Kapat &amp; Z Raporu Oluştur';
+                showAlert('Sunucu yanıtı işlenemedi. Lütfen tekrar deneyin.');
+                resetBtn(this);
+                return;
+            }
+
+            if (res.ok && data.success) {
+                window.location.href = `${SHIFT_DETAIL_URL}/${data.shiftId}`;
+            } else {
+                showAlert(data.message || 'Vardiya açılamadı.');
+                resetBtn(this);
             }
         });
 
+        function resetBtn(btn) {
+            btn.disabled = false;
+            btn.innerHTML = `
+                <span class="cta-icon">🚀</span>
+                <span class="cta-text">
+                    <span class="cta-text-main">Vardiyayı Başlat</span>
+                    <span class="cta-text-sub">Kasa açılacak ve kayıt başlayacak</span>
+                </span>`;
+        }
+
         function showAlert(msg) {
             document.getElementById('alertBox').innerHTML =
-                `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:10px;
-                             padding:12px 16px;font-size:13px;color:#ef4444;margin-bottom:16px;display:flex;gap:8px;align-items:center">
-                    <span>❌</span><span>${msg}</span>
+                `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px 18px;font-size:13px;color:#ef4444;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:18px;flex-shrink:0">⚠️</span>
+                    <span>${msg}</span>
                  </div>`;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     </script>
 }

@@ -403,17 +403,102 @@ async function dismissWaiter(tableName) {
 
 
 // ══════════════════════════════════════════════════════════════
-// ── SignalR Bağlantısı — SPRINT 3
+// ── [SORUN-B ÇÖZÜM] Servis Et Fonksiyonu
+//
+// Index.cshtml'deki "Servis Et" butonu bu fonksiyonu çağırır:
+//   onclick="serveOrder(@table.TableId, '...')"
+//
+// Endpoint: POST /App/Tables/ServeReadyItems
+// Payload : { tableId }
+//
+// Ne yapar:
+//   1. Masanın açık adisyonundaki TÜM Ready kalemleri Served yapar
+//   2. Başarı sonrası masa kartından ready state'i temizler
+//   3. SignalR üzerinden OrderServed event'i gelirse o da temizler (idempotent)
+// ══════════════════════════════════════════════════════════════
+async function serveOrder(tableId, tableName) {
+    // Çift tıklamayı önle: butonu hemen devre dışı bırak
+    const btn = document.querySelector(`.table-card[data-table-id="${tableId}"] .serve-order-btn`);
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ Servis ediliyor...';
+    }
+
+    try {
+        const data = await postJson('/App/Tables/ServeReadyItems', { tableId });
+
+        if (data.success) {
+            // Sunucu başarılı — masa kartındaki ready state'i temizle
+            _clearReadyState(tableId);
+
+            showToast(
+                `served-${tableId}-${Date.now()}`,
+                'success',
+                '🍽️',
+                `${tableName} — Servis Tamamlandı`,
+                data.message || 'Tüm hazır ürünler servis edildi.',
+                5000
+            );
+        } else {
+            // Hata: butonu geri aktif et
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '🍽️ Servis Et';
+            }
+            showToast(
+                `serve-err-${tableId}`,
+                'danger',
+                '⚠️',
+                'Servis Hatası',
+                data.message || 'Bilinmeyen hata.',
+                6000
+            );
+        }
+    } catch (err) {
+        if (err.message !== 'Unauthorized') {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '🍽️ Servis Et';
+            }
+            console.error('[serveOrder] İstek hatası:', err);
+        }
+    }
+}
+
+// ── Masa kartındaki "hazır" görsel durumunu temizle ───────────
+// Bu fonksiyon hem serveOrder hem de SignalR OrderServed handler tarafından
+// çağrılır → idempotent tasarım (iki kez çağrılması sorun yaratmaz).
+function _clearReadyState(tableId) {
+    const card = document.querySelector(`.table-card[data-table-id="${tableId}"]`);
+    if (!card) return;
+
+    // CSS sınıflarını kaldır
+    card.classList.remove('order-ready', 'has-ready-items');
+
+    // DB'den render edilmiş sabit rozeti kaldır (id="ready-badge-{tableId}")
+    document.getElementById(`ready-badge-${tableId}`)?.remove();
+
+    // SignalR ile dinamik eklenen per-item rozet'leri kaldır
+    card.querySelectorAll('.ready-item-badge').forEach(b => b.remove());
+
+    // "Servis Et" butonunu kaldır
+    card.querySelector('.serve-order-btn')?.remove();
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// ── SignalR Bağlantısı — Bulletproof Edition
 // ══════════════════════════════════════════════════════════════
 (function initSignalR() {
 
     const connection = new signalR.HubConnectionBuilder()
         .withUrl('/hubs/restaurant')
         .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
-        .configureLogging(signalR.LogLevel.Warning)
+        // Information: gelen frame'ler konsolda görünür → debug için F12 → "[SignalR:Tables]"
+        .configureLogging(signalR.LogLevel.Information)
         .build();
 
-    // ── Reconnect durum logları ────────────────────────────────
+    // ── Bağlantı durum logları ────────────────────────────────
     connection.onreconnecting(err =>
         console.warn('[SignalR:Tables] Bağlantı koptu, yeniden bağlanıyor...', err));
     connection.onreconnected(cid =>
@@ -421,105 +506,224 @@ async function dismissWaiter(tableName) {
     connection.onclose(err =>
         console.error('[SignalR:Tables] Bağlantı kalıcı olarak kapandı.', err));
 
-    // ── WaiterCalled ───────────────────────────────────────────
+    // ── Payload case-insensitive okuma yardımcısı ─────────────
+    // camelCase önce (SignalR System.Text.Json standardı),
+    // PascalCase fallback (farklı serializer veya eski kod).
+    function p(payload, key) {
+        const camel = key.charAt(0).toLowerCase() + key.slice(1);
+        const pascal = key.charAt(0).toUpperCase() + key.slice(1);
+        const val = payload[camel] ?? payload[pascal];
+        return (val === undefined || val === null) ? null : val;
+    }
+
+    // ── WaiterCalled ──────────────────────────────────────────
+    // C# payload: { tableName, calledAtUtc }
     connection.off('WaiterCalled');
     connection.on('WaiterCalled', function (payload) {
-        const card = document.querySelector(`.table-card[data-table-name="${payload.tableName}"]`);
-        if (!card) return;
+        try {
+            console.info('[SignalR:Tables] WaiterCalled ←', payload);
 
-        card.classList.add('waiter-called');
+            const tableName = p(payload, 'tableName');
+            const calledAtUtc = p(payload, 'calledAtUtc');
 
-        if (payload.calledAtUtc) {
-            card.dataset.waiterCalledAt = payload.calledAtUtc;
-        }
-
-        if (!card.querySelector('.waiter-bell-badge')) {
-            const badge = document.createElement('div');
-            badge.className = 'waiter-bell-badge';
-            badge.appendChild(document.createTextNode('🔔 Garson!'));
-
-            if (payload.calledAtUtc) {
-                const timerSpan = document.createElement('span');
-                timerSpan.className = 'waiter-sla-timer';
-                timerSpan.dataset.calledAt = payload.calledAtUtc;
-                badge.appendChild(timerSpan);
+            if (!tableName) {
+                console.warn('[SignalR:Tables] WaiterCalled — tableName boş, yoksayıldı.');
+                return;
             }
 
-            card.prepend(badge);
-            tickSlaTimers();
-        }
+            // CSS.escape: masa adında özel karakter ('Teras 1' gibi) varsa selector'ı kırmaz
+            const card = document.querySelector(`.table-card[data-table-name="${CSS.escape(tableName)}"]`);
+            if (!card) {
+                console.warn('[SignalR:Tables] WaiterCalled — kart bulunamadı:', tableName);
+                return;
+            }
 
-        const actions = card.querySelector('.card-actions');
-        if (actions && !actions.querySelector('.dismiss-waiter')) {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'card-btn dismiss-waiter';
-            btn.textContent = '✅ İlgilenildi (Tamam)';
-            btn.onclick = () => dismissWaiter(payload.tableName);
-            actions.appendChild(btn);
+            card.classList.add('waiter-called');
+            if (calledAtUtc) card.dataset.waiterCalledAt = calledAtUtc;
+
+            if (!card.querySelector('.waiter-bell-badge')) {
+                const badge = document.createElement('div');
+                badge.className = 'waiter-bell-badge';
+                badge.appendChild(document.createTextNode('🔔 Garson!'));
+
+                if (calledAtUtc) {
+                    const timerSpan = document.createElement('span');
+                    timerSpan.className = 'waiter-sla-timer';
+                    timerSpan.dataset.calledAt = calledAtUtc;
+                    badge.appendChild(timerSpan);
+                }
+
+                card.prepend(badge);
+                tickSlaTimers();
+            }
+
+            const actions = card.querySelector('.card-actions');
+            if (actions && !actions.querySelector('.dismiss-waiter')) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'card-btn dismiss-waiter';
+                btn.textContent = '✅ İlgilenildi (Tamam)';
+                btn.onclick = () => dismissWaiter(tableName);
+                actions.appendChild(btn);
+            }
+
+        } catch (err) {
+            console.error('[SignalR:Tables] WaiterCalled handler hatası:', err, payload);
         }
     });
 
-    // ── WaiterDismissed ────────────────────────────────────────
+    // ── WaiterDismissed ───────────────────────────────────────
+    // C# payload: { tableName }
     connection.off('WaiterDismissed');
     connection.on('WaiterDismissed', function (payload) {
-        const card = document.querySelector(`.table-card[data-table-name="${payload.tableName}"]`);
-        if (!card) return;
-        card.classList.remove('waiter-called', 'sla-violated');
-        card.removeAttribute('data-waiter-called-at');
-        card.querySelector('.waiter-bell-badge')?.remove();
-        card.querySelector('.dismiss-waiter')?.remove();
+        try {
+            console.info('[SignalR:Tables] WaiterDismissed ←', payload);
+
+            const tableName = p(payload, 'tableName');
+            if (!tableName) {
+                console.warn('[SignalR:Tables] WaiterDismissed — tableName boş, yoksayıldı.');
+                return;
+            }
+
+            const card = document.querySelector(`.table-card[data-table-name="${CSS.escape(tableName)}"]`);
+            if (!card) {
+                console.warn('[SignalR:Tables] WaiterDismissed — kart bulunamadı:', tableName);
+                return;
+            }
+
+            card.classList.remove('waiter-called', 'sla-violated');
+            card.removeAttribute('data-waiter-called-at');
+            card.querySelector('.waiter-bell-badge')?.remove();
+            card.querySelector('.dismiss-waiter')?.remove();
+
+        } catch (err) {
+            console.error('[SignalR:Tables] WaiterDismissed handler hatası:', err, payload);
+        }
     });
 
-    // ── OrderReadyForPickup — YENİ ─────────────────────────────
-    // payload: { orderItemId, orderId, tableName, menuItemName, readyAt }
+    // ── OrderReadyForPickup ───────────────────────────────────
+    // C# payload: { orderItemId, orderId, tableName, menuItemName, readyAt }
+    // KitchenController.UpdateStatus, item Ready'ye geçtiğinde fırlatır.
     connection.off('OrderReadyForPickup');
     connection.on('OrderReadyForPickup', function (payload) {
-        // İlgili masa kartını bul
-        const card = document.querySelector(`.table-card[data-table-name="${payload.tableName}"]`);
-        if (!card) return;
+        try {
+            console.info('[SignalR:Tables] OrderReadyForPickup ←', payload);
 
-        // Aynı kalem için rozet zaten varsa ekleme
-        const badgeId = `ready-badge-${payload.orderItemId}`;
-        if (document.getElementById(badgeId)) return;
+            const orderItemId = p(payload, 'orderItemId');
+            const tableName = p(payload, 'tableName');
+            const menuItemName = p(payload, 'menuItemName') ?? 'Ürün';
 
-        // Yeşil rozet oluştur
-        const badge = document.createElement('span');
-        badge.id = badgeId;
-        badge.className = 'ready-item-badge';
-        badge.textContent = `✅ ${payload.menuItemName} Hazır`;
-
-        // Rozeti sipariş kalemleri alanına veya kart sonuna ekle
-        const itemsPreview = card.querySelector('.order-items-preview');
-        if (itemsPreview) {
-            itemsPreview.appendChild(badge);
-        } else {
-            card.appendChild(badge);
-        }
-
-        // Masa kartına yeşil pulse ekle
-        card.classList.add('has-ready-items');
-
-        // Toast bildirimi göster
-        showToast(
-            `ready-${payload.orderItemId}`,
-            'success',
-            '✅',
-            `${payload.tableName} — Hazır!`,
-            `${payload.menuItemName} servis için hazır`,
-            8000
-        );
-
-        // 60 saniye sonra rozeti ve pulse'u otomatik kaldır
-        setTimeout(() => {
-            document.getElementById(badgeId)?.remove();
-            if (!card.querySelector('.ready-item-badge')) {
-                card.classList.remove('has-ready-items');
+            if (!orderItemId || !tableName) {
+                console.warn('[SignalR:Tables] OrderReadyForPickup — eksik alan:', payload);
+                return;
             }
-        }, 60000);
+
+            const card = document.querySelector(`.table-card[data-table-name="${CSS.escape(tableName)}"]`);
+            if (!card) {
+                // Garson başka bir ekrandaysa masa kartı olmayabilir → sadece toast
+                console.warn('[SignalR:Tables] OrderReadyForPickup — kart bulunamadı:', tableName);
+                showToast(`ready-notile-${orderItemId}`, 'success', '✅',
+                    `${tableName} — Hazır!`,
+                    `${menuItemName} servis için hazır (masa kartı bu ekranda yok)`,
+                    8000);
+                return;
+            }
+
+            // Aynı kalem için rozet zaten eklenmişse idempotent yoksay
+            const badgeId = `ready-badge-item-${orderItemId}`;
+            if (document.getElementById(badgeId)) {
+                console.info('[SignalR:Tables] OrderReadyForPickup — rozet zaten var:', badgeId);
+                return;
+            }
+
+            // Per-item hazır rozeti oluştur
+            const badge = document.createElement('span');
+            badge.id = badgeId;
+            badge.className = 'ready-item-badge';
+            badge.textContent = `✅ ${menuItemName} Hazır`;
+
+            const itemsPreview = card.querySelector('.order-items-preview');
+            if (itemsPreview) {
+                itemsPreview.appendChild(badge);
+            } else {
+                card.appendChild(badge);
+            }
+
+            // Masa kartına "sipariş hazır" vurgusu ekle
+            card.classList.add('order-ready', 'has-ready-items');
+
+            // "Servis Et" butonu kart üzerinde değilse dinamik ekle
+            const cardActions = card.querySelector('.card-actions');
+            if (cardActions && !cardActions.querySelector('.serve-order-btn')) {
+                const tableId = card.dataset.tableId;
+                const tblName = card.dataset.tableName || tableName;
+                const serveBtn = document.createElement('button');
+                serveBtn.type = 'button';
+                serveBtn.className = 'card-btn serve-order-btn';
+                serveBtn.textContent = '🍽️ Servis Et';
+                serveBtn.onclick = () => serveOrder(parseInt(tableId), tblName);
+                cardActions.appendChild(serveBtn);
+            }
+
+            showToast(
+                `ready-${orderItemId}`,
+                'success', '✅',
+                `${tableName} — Hazır!`,
+                `${menuItemName} servis için hazır`,
+                8000
+            );
+
+            // 90 saniye sonra per-item rozeti otomatik kaldır
+            // (garson "Servis Et"e basmadıysa temizlik)
+            setTimeout(() => {
+                document.getElementById(badgeId)?.remove();
+                if (document.body.contains(card) && !card.querySelector('.ready-item-badge')) {
+                    card.classList.remove('has-ready-items');
+                }
+            }, 90000);
+
+        } catch (err) {
+            console.error('[SignalR:Tables] OrderReadyForPickup handler hatası:', err, payload);
+        }
     });
 
-    // ── Bağlantıyı başlat ──────────────────────────────────────
+    // ── OrderServed ───────────────────────────────────────────
+    // C# payload: { orderId, tableId, tableName }
+    // TablesController.ServeReadyItems başarılı olduğunda fırlatılır.
+    // serveOrder() başarı sonrası _clearReadyState()'i zaten çağırır.
+    // Bu handler aynı event'i BAŞKA bir sekmede/cihazda açık sayfa alırsa
+    // oradaki UI'ı da günceller (idempotent).
+    connection.off('OrderServed');
+    connection.on('OrderServed', function (payload) {
+        try {
+            console.info('[SignalR:Tables] OrderServed ←', payload);
+
+            const tableId = p(payload, 'tableId');
+            const tableName = p(payload, 'tableName') ?? '';
+
+            if (!tableId) {
+                console.warn('[SignalR:Tables] OrderServed — tableId boş, yoksayıldı.');
+                return;
+            }
+
+            // Masa kartındaki tüm hazır durumu temizle (idempotent)
+            _clearReadyState(tableId);
+
+            // Diğer sekmeler / cihazlar için toast
+            showToast(
+                `served-sig-${tableId}`,
+                'success', '🍽️',
+                `${tableName || 'Masa'} — Servis Edildi`,
+                'Hazır ürünler servis edildi.',
+                4000
+            );
+
+        } catch (err) {
+            console.error('[SignalR:Tables] OrderServed handler hatası:', err, payload);
+        }
+    });
+
+    // ── Bağlantıyı başlat ─────────────────────────────────────
     async function startConnection() {
         try {
             await connection.start();

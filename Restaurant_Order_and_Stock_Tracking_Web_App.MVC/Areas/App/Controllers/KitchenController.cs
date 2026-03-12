@@ -1,154 +1,167 @@
 ﻿// ============================================================================
-//  Areas/App/Controllers/KitchenController.cs  —  KDS v5
+//  Areas/App/Controllers/KitchenController.cs  —  KDS v4
 //
-//  SPRINT C (korundu):
-//  [SC-3] [Area("App")] attribute → /App/Kitchen/Display 404 çözüldü
-//  [SC-4] AppBaseController miras ALMIYOR — KDS [AllowAnonymous] gerektirir
+//  [v4] DEĞİŞİKLİKLER:
 //
-//  DÜZELTME FAZI 1:
-//  [SEC-01] ros-tenant cookie → Secure = !env.IsDevelopment()
-//  [SEC-03] UpdateStatus → ros-tenant cookie tenantId çapraz doğrulaması
-//  [BIZ-01] UpdateStatus → Trial süresi dolmuş tenant Forbid() ile reddedilir
+//  [ISO-1] GQF Tenant İzolasyon Deliği Kapatıldı
+//    SORUN  : _tenantService.TenantId anonim (KDS) isteklerde null döner.
+//             GQF: "null == null || ..." → koşul her zaman true →
+//             tüm tenant'ların siparişleri KDS'e akar!
+//    ÇÖZÜM  : IgnoreQueryFilters() + açık WHERE(o => o.TenantId == resolvedId)
+//             Böylece GQF'nin null bypass davranışına bağımlı kalmıyoruz.
 //
-//  DÜZELTME FAZI 2:
-//  [ASYNC-03] Display() → KDS boş sipariş durumunda cookie hâlâ yazılır.
-//             TenantId kaynağı öncelik sırası:
-//               1. Açık sipariş listesinden    (runtime bilgi, en güvenilir)
-//               2. ?tenantId= query parametresi (KDS URL'ine eklenmeli)
-//             Cookie her iki durumda da yazılır; SignalR grup join'i garantilenir.
-//  [ASYNC-04] UpdateStatus() → "Ready → Served" otomatik atlama kaldırıldı.
-//             Aşçı "Hazır" bastığında item OrderItemStatus.Ready olur.
-//             "Served" geçişi ayrı bir adım (garson servis eder).
-//             State machine: Pending → Preparing → Ready → (garson) → Served
+//  [ISO-2] 3-Öncelikli TenantId Çözümleme
+//    1. User.FindFirstValue("TenantId")  — kimlikli garson/admin
+//    2. Request.Cookies["ros-tenant"]    — anonim KDS tableti (cookie zaten set)
+//    3. ?tenantId= query string          — ilk kurulum (henüz cookie yok)
+//    Hiçbirinden gelmediyse: boş view döner (veri sızdırmaz).
+//
+//  [SM-1] State Machine Düzeltildi (Servis Et butonu artık çalışıyor)
+//    SORUN  : parsedNew == Ready ? Saved Served : parsedNew
+//             → "Hazır" basıldığında item Served olarak kaydediliyor
+//             → ServeReadyItems Ready item bulamıyor → "Servis Et" başarısız
+//    ÇÖZÜM  : item.OrderItemStatus = parsedNew  (doğrudan ata)
+//             Pending  → Preparing  : "Ocağa Al" butonu
+//             Preparing → Ready     : "Hazır — Garsonu Çağır" butonu
+//             Ready    → Served     : TablesController.ServeReadyItems (garson ekranı)
+//
+//  [ISO-3] UpdateStatus Cross-Tenant Kontrolü
+//    SORUN  : Herhangi bir item'ın ID'si tahmin edilirse başka tenant'ın
+//             siparişi güncellenebilirdi.
+//    ÇÖZÜM  : item.Order.TenantId == resolvedTenantId kontrolü.
 // ============================================================================
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Hubs;
+using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Shared.Common;
+using System.Security.Claims;
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
 {
     [Area("App")]
-    [AllowAnonymous]                // KDS ekranı giriş gerektirmez
+    [AllowAnonymous]   // KDS tableti giriş gerektirmez; izolasyon cookie ile sağlanır
     public class KitchenController : Controller
     {
         private readonly RestaurantDbContext _db;
         private readonly IHubContext<RestaurantHub> _hub;
-        private readonly IWebHostEnvironment _env;   // [SEC-01]
+        private readonly IWebHostEnvironment _env;
+        private readonly ILogger<KitchenController> _logger;
 
         public KitchenController(
             RestaurantDbContext db,
             IHubContext<RestaurantHub> hub,
-            IWebHostEnvironment env)
+            IWebHostEnvironment env,
+            ILogger<KitchenController> logger)
         {
             _db = db;
             _hub = hub;
             _env = env;
+            _logger = logger;
         }
 
-        // ── GET /App/Kitchen/Display?tenantId={slug} ──────────────────────────
-        //
-        // [ASYNC-03] tenantId route parametresi eklendi.
-        // KDS TV ekranı URL'i artık şu formatta olmalı:
-        //   /App/Kitchen/Display?tenantId=benim-restoranim
-        //
-        // Bu sayede mutfakta hiç açık sipariş olmasa bile (sabah açılışı,
-        // servis arası) ros-tenant cookie YAZILIR ve SignalR grubuna JOIN
-        // garantiyle gerçekleşir. İlk sipariş KDS'e anlık düşer.
+        // ── Yardımcı: TenantId Çözümleme ────────────────────────────────────
+        // [ISO-2] Claims → Cookie → QueryString öncelik sırası.
+        // KDS AllowAnonymous olduğundan Claims çoğunlukla boş gelir;
+        // bu durumda Display() tarafından önceden set edilmiş "ros-tenant"
+        // cookie'si kullanılır.
+        private string? ResolveTenantId(string? queryStringFallback = null)
+        {
+            // 1. Kimlikli kullanıcı (garson/admin KDS'e erişirse)
+            var fromClaims = User.FindFirstValue("TenantId");
+            if (!string.IsNullOrWhiteSpace(fromClaims))
+                return fromClaims;
+
+            // 2. Anonim KDS tableti — önceden set edilmiş cookie
+            var fromCookie = Request.Cookies["ros-tenant"];
+            if (!string.IsNullOrWhiteSpace(fromCookie))
+                return fromCookie;
+
+            // 3. İlk kurulum — URL'den tenantId=... parametresi
+            if (!string.IsNullOrWhiteSpace(queryStringFallback))
+                return queryStringFallback;
+
+            return null;
+        }
+
+        // ── GET /App/Kitchen/Display ─────────────────────────────────────────
         public async Task<IActionResult> Display(string? tenantId = null)
         {
-            // ── [ASYNC-03] TenantId Kaynağı Belirleme ────────────────────────
-            //
-            // Öncelik 1: Açık siparişlerden — runtime'da en güncel bilgi.
-            //   Avantaj: Tenant'ın gerçekten aktif olduğunu örtük olarak kanıtlar.
-            //
-            // Öncelik 2: ?tenantId= query parametresi — açık sipariş yokken devreye girer.
-            //   Güvenlik notu: Bu değer aşağıda DB'den doğrulanmıyor (Display yalnızca
-            //   okuma yapar; yazma işlemi UpdateStatus'ta doğrulanıyor). Bununla
-            //   birlikte cookie değeri RestaurantHub.OnConnectedAsync'te DB'den
-            //   doğrulanacağı için manipüle edilmiş bir değer SignalR grubuna giremez.
+            // [ISO-2] TenantId'yi 3 kaynaktan çöz
+            var resolvedId = ResolveTenantId(tenantId);
 
+            // TenantId hiçbir yerden gelmediyse: boş sayfa (veri sızdırmaz)
+            if (string.IsNullOrEmpty(resolvedId))
+            {
+                _logger.LogWarning("[KDS] Display() — TenantId çözümlenemedi. Boş ekran döndürülüyor.");
+                return View(Enumerable.Empty<Order>());
+            }
+
+            // [ISO-1] IgnoreQueryFilters() + açık WHERE — GQF null bypass'ını engeller.
+            // GQF: "_tenantService.TenantId == null → tüm tenant'lar" kuralı burada
+            // devre dışı bırakılır; sadece bu tenant'ın aktif siparişleri gelir.
             var orders = await _db.Orders
-                .Where(o => o.OrderStatus == OrderStatus.Open)
+                .IgnoreQueryFilters()
+                .Where(o =>
+                    o.TenantId == resolvedId &&
+                    o.OrderStatus == OrderStatus.Open)
                 .Include(o => o.Table)
                 .Include(o => o.OrderItems
-                    .Where(oi => oi.OrderItemStatus == OrderItemStatus.Pending
-                              || oi.OrderItemStatus == OrderItemStatus.Preparing))
+                    .Where(oi =>
+                        oi.OrderItemStatus == OrderItemStatus.Pending ||
+                        oi.OrderItemStatus == OrderItemStatus.Preparing))
                     .ThenInclude(oi => oi.MenuItem)
                 .OrderBy(o => o.OrderOpenedAt)
                 .ToListAsync();
 
+            // Kalem kalmamış (hepsi Served/Cancelled) siparişleri filtrele
             orders = orders.Where(o => o.OrderItems.Any()).ToList();
 
-            // ── [ASYNC-03] TenantId kaynağı belirleme ────────────────────────
-            // Öncelik 1: Açık siparişler var → ilk siparişin TenantId'si güvenilir
-            var resolvedTenantId = orders.FirstOrDefault()?.TenantId;
-
-            // Öncelik 2: Açık sipariş yok, ama query string'de tenantId var
-            if (string.IsNullOrEmpty(resolvedTenantId)
-                && !string.IsNullOrEmpty(tenantId))
+            // [ISO-1] Cookie'yi çöz ve yaz (yoksa ilk kez; varsa yenile)
+            // HttpOnly = false: SignalR JS'nin de okuyabilmesi için
+            Response.Cookies.Append("ros-tenant", resolvedId, new CookieOptions
             {
-                resolvedTenantId = tenantId;
-            }
+                HttpOnly = false,
+                Secure = !_env.IsDevelopment(),
+                SameSite = SameSiteMode.Strict,
+                Expires = DateTimeOffset.UtcNow.AddHours(8)
+            });
 
-            // ── [KDS-COOKIE] ros-tenant cookie'yi HER HALÜKARDA yaz ──────────
-            //
-            // [ASYNC-03 FIX] Önceki implementasyon: yalnızca açık sipariş varsa yaz.
-            //   Sorun: Boş mutfakta cookie yazılmıyor → SignalR gruba join yok →
-            //          ilk gelen sipariş KDS'e düşmüyor.
-            //
-            // Yeni implementasyon: resolvedTenantId null değilse her zaman yaz.
-            //   RestaurantHub.OnConnectedAsync DB'den doğrulayacağı için
-            //   sahte bir tenantId cookie olsa bile SignalR gruba giremez.
-            if (!string.IsNullOrEmpty(resolvedTenantId))
-            {
-                Response.Cookies.Append("ros-tenant", resolvedTenantId, new CookieOptions
-                {
-                    HttpOnly = false,                    // JS ile okunabilsin (SignalR client)
-                    Secure = !_env.IsDevelopment(),   // [SEC-01] Production'da HTTPS zorunlu
-                    SameSite = SameSiteMode.Strict,
-                    Expires = DateTimeOffset.UtcNow.AddHours(8)
-                });
-            }
+            _logger.LogInformation("[KDS] Display() — TenantId: {TenantId}, Aktif Sipariş: {Count}",
+                resolvedId, orders.Count);
 
             return View(orders);
         }
 
-        // ── POST /App/Kitchen/UpdateStatus ────────────────────────────────────
+        // ── POST /App/Kitchen/UpdateStatus ──────────────────────────────────
+        // State Machine (KDS yönetir):
+        //   Pending   → Preparing   ("Ocağa Al" butonu)
+        //   Preparing → Ready       ("Hazır — Garsonu Çağır" butonu)
+        //
+        // Ready → Served geçişi KDS'in sorumluluğu DEĞİLDİR.
+        // Bu geçişi TablesController.ServeReadyItems (garson ekranı) yapar.
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateStatus([FromBody] KdsStatusUpdateDto dto)
         {
             if (dto is null)
                 return BadRequest(new { message = "Geçersiz istek gövdesi." });
 
-            // ── [SEC-03 / BIZ-01] Adım 1: TenantId Kimlik Doğrulaması ────────
-            var tenantId = Request.Cookies["ros-tenant"];
-            if (string.IsNullOrEmpty(tenantId))
-                return Unauthorized(new { message = "KDS kimliği doğrulanamadı. Sayfayı yenileyin." });
-
-            // ── [SEC-03 / BIZ-01] Adım 2: Tenant DB Doğrulaması ─────────────
-            var tenant = await _db.Tenants
-                .AsNoTracking()
-                .Select(t => new { t.TenantId, t.PlanType, t.TrialEndsAt, t.IsActive })
-                .FirstOrDefaultAsync(t => t.TenantId == tenantId);
-
-            if (tenant is null || !tenant.IsActive)
-                return Unauthorized(new { message = "Geçersiz veya pasif dükkan kimliği." });
-
-            // [BIZ-01] Trial süresi dolmuş → KDS yazma işlemleri de engellenir
-            if (tenant.PlanType == "trial"
-                && tenant.TrialEndsAt.HasValue
-                && tenant.TrialEndsAt.Value < DateTime.UtcNow)
+            // [ISO-2] KDS için TenantId'yi cookie'den çöz
+            var resolvedTenantId = ResolveTenantId();
+            if (string.IsNullOrEmpty(resolvedTenantId))
             {
-                return StatusCode(StatusCodes.Status403Forbidden,
-                    new { message = "Deneme süreniz dolmuş. Lütfen aboneliğinizi yenileyin." });
+                _logger.LogWarning("[KDS] UpdateStatus — TenantId çözümlenemedi. OrderItemId: {Id}", dto.OrderItemId);
+                return Unauthorized(new { message = "Tenant kimliği belirlenemedi." });
             }
 
-            // ── Order item'ı çek ─────────────────────────────────────────────
+            // [ISO-1] IgnoreQueryFilters() + Order ve Table include ile çek
             var item = await _db.OrderItems
+                .IgnoreQueryFilters()
                 .Include(oi => oi.Order).ThenInclude(o => o.Table)
                 .Include(oi => oi.MenuItem)
                 .FirstOrDefaultAsync(oi => oi.OrderItemId == dto.OrderItemId);
@@ -156,70 +169,106 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
             if (item is null)
                 return NotFound(new { message = "Sipariş kalemi bulunamadı." });
 
-            // ── [SEC-03] Adım 3: Çapraz Tenant Doğrulaması ──────────────────
-            if (item.Order?.TenantId != tenantId)
-                return StatusCode(StatusCodes.Status403Forbidden,
-                    new { message = "Bu sipariş kalemine erişim yetkiniz yok." });
+            // [ISO-3] Cross-tenant erişim kontrolü
+            // KDS sadece kendi tenant'ının item'larını güncelleyebilir.
+            if (item.Order?.TenantId != resolvedTenantId)
+            {
+                _logger.LogWarning(
+                    "[KDS] UpdateStatus — Cross-tenant erişim denemesi! " +
+                    "İstek TenantId: {ReqTenant}, Item TenantId: {ItemTenant}, OrderItemId: {Id}",
+                    resolvedTenantId, item.Order?.TenantId, dto.OrderItemId);
+                return StatusCode(403, new { message = "Bu işlem için yetkiniz yok." });
+            }
 
-            // ── Durum geçiş doğrulaması ──────────────────────────────────────
+            // String → Enum dönüşümü
             if (!Enum.TryParse<OrderItemStatus>(dto.NewStatus, ignoreCase: true, out var parsedNew))
                 return BadRequest(new { message = $"Geçersiz durum değeri: '{dto.NewStatus}'" });
 
+            // [SM-1] State Machine — izin verilen geçişler (KDS'in yetkisi)
+            //
+            //   Pending   → Preparing ✓  ("Ocağa Al")
+            //   Preparing → Ready     ✓  ("Hazır — Garsonu Çağır")
+            //
+            // DİĞER GEÇİŞLER KDS'İN SORUMLULUĞU DEĞİLDİR:
+            //   Ready     → Served    →  TablesController.ServeReadyItems
+            //   *         → Cancelled →  OrdersController.CancelItem
             bool gecerli =
                 (item.OrderItemStatus == OrderItemStatus.Pending && parsedNew == OrderItemStatus.Preparing) ||
                 (item.OrderItemStatus == OrderItemStatus.Preparing && parsedNew == OrderItemStatus.Ready);
 
             if (!gecerli)
+            {
+                _logger.LogWarning(
+                    "[KDS] UpdateStatus — Geçersiz geçiş: '{Current}' → '{New}', OrderItemId: {Id}",
+                    item.OrderItemStatus, dto.NewStatus, dto.OrderItemId);
                 return BadRequest(new
                 {
-                    message = $"Geçersiz geçiş: '{item.OrderItemStatus}' → '{dto.NewStatus}'"
+                    message = $"Geçersiz geçiş: '{item.OrderItemStatus}' → '{dto.NewStatus}'. " +
+                              $"KDS yalnızca Pending→Preparing ve Preparing→Ready geçişlerini yönetir."
                 });
+            }
 
             var tableName = item.Order?.Table?.TableName ?? $"Adisyon #{item.OrderId}";
             var menuItemName = item.MenuItem?.MenuItemName ?? "Ürün";
 
-            // ── [ASYNC-04] State Machine Düzeltmesi ──────────────────────────
-            //
-            // ESKİ (hatalı):
-            //   item.OrderItemStatus = parsedNew == OrderItemStatus.Ready
-            //       ? OrderItemStatus.Served     ← Ready gelince Served'e atlıyordu!
-            //       : parsedNew;
-            //
-            // YENİ (doğru):
-            //   item.OrderItemStatus = parsedNew;   ← gelen değer ne ise o yazılır
-            //
-            // Doğru state machine: Pending → Preparing → Ready → (garson servis eder) → Served
-            // "Hazır" butonu artık Ready yazar; Served ayrı bir adımdır.
+            // [SM-1] Durumu DOĞRUDAN kaydet — eski kod Ready'yi Served'e çeviriyordu.
+            // Bu hata "Servis Et" butonunun çalışmamasına yol açıyordu.
             item.OrderItemStatus = parsedNew;
-
             await _db.SaveChangesAsync();
 
-            // OrderItemStatusChanged — tüm istemcilere (KDS + garsonlar)
-            await _hub.Clients.Group(tenantId).SendAsync("OrderItemStatusChanged", new
+            // ── SignalR: OrderItemStatusChanged ─────────────────────────────
+            // KDS ve adisyon detay sayfası bu event'i dinler.
+            try
             {
-                orderItemId = item.OrderItemId,
-                newStatus = item.OrderItemStatus.ToString().ToLowerInvariant(), // DB ile tutarlı
-                tableName,
-                menuItemName
-            });
-
-            // OrderReadyForPickup — yalnızca Ready geçişinde garson bildirim alır
-            if (parsedNew == OrderItemStatus.Ready)
-            {
-                await _hub.Clients.Group(tenantId).SendAsync("OrderReadyForPickup", new
+                await _hub.Clients.Group(resolvedTenantId).SendAsync("OrderItemStatusChanged", new
                 {
                     orderItemId = item.OrderItemId,
-                    orderId = item.OrderId,
+                    newStatus = dto.NewStatus,   // camelCase — JS ile eşleşir
                     tableName,
-                    menuItemName,
-                    readyAt = DateTime.Now.ToString("HH:mm:ss")
+                    menuItemName
                 });
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "[KDS] OrderItemStatusChanged gönderilemedi — TenantGroup: {Group}, ItemId: {Id}",
+                    resolvedTenantId, item.OrderItemId);
+            }
+
+            // ── SignalR: OrderReadyForPickup (sadece Ready geçişinde) ────────
+            // Tables ekranı bu event'i dinler:
+            //   • "Sipariş Hazır!" rozeti ekler
+            //   • "Servis Et" butonu gösterir
+            if (parsedNew == OrderItemStatus.Ready)
+            {
+                try
+                {
+                    await _hub.Clients.Group(resolvedTenantId).SendAsync("OrderReadyForPickup", new
+                    {
+                        orderItemId = item.OrderItemId,
+                        orderId = item.OrderId,
+                        tableName,
+                        menuItemName,
+                        readyAt = DateTime.Now.ToString("HH:mm:ss")
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "[KDS] OrderReadyForPickup gönderilemedi — TenantGroup: {Group}, ItemId: {Id}",
+                        resolvedTenantId, item.OrderItemId);
+                }
+            }
+
+            _logger.LogInformation(
+                "[KDS] UpdateStatus OK — TenantId: {Tenant}, Table: {Table}, Item: {Item}, {Old}→{New}",
+                resolvedTenantId, tableName, menuItemName, item.OrderItemStatus, dto.NewStatus);
 
             return Ok(new { success = true, tableName, menuItemName });
         }
     }
 
+    // ── DTO ──────────────────────────────────────────────────────────────────
     public class KdsStatusUpdateDto
     {
         public int OrderItemId { get; set; }

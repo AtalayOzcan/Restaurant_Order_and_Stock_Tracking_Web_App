@@ -652,93 +652,240 @@
         }
 
         // ══ SİGNALR BAĞLANTISI ════════════════════════════════════════════════════════
+        // ══ SİGNALR BAĞLANTISI — Bulletproof Edition ═══════════════════════════
         const connection = new signalR.HubConnectionBuilder()
-          .withUrl('/hubs/restaurant')
-          .withAutomaticReconnect([0, 2000, 5000, 10000, 20000])
-          .build();
+        .withUrl('/hubs/restaurant')
+        .withAutomaticReconnect([0, 2000, 5000, 10000, 20000])
+        // [FIX] Warning → Information: gelen frame'ler konsolda görünür
+        .configureLogging(signalR.LogLevel.Information)
+        .build();
 
         const led  = document.getElementById('connLed');
         const text = document.getElementById('connText');
 
         connection.onreconnecting(() => {
-          led.className = 'led led-yellow'; text.textContent = 'Yeniden bağlanıyor…';
+        if (led)  led.className  = 'led led-yellow';
+        if (text) text.textContent = 'Yeniden bağlanıyor…';
         });
-        // [S-01] onreconnected tek yerde tanımlanır (aşağıda polling ile birleşik).
-        //        Buradaki ilk tanım kaldırıldı — çift kayıt ikincisini ezerdi.
+
         connection.onclose(() => {
-          led.className = 'led led-red'; text.textContent = 'Bağlantı Kesildi';
-          startPolling();
+        if (led)  led.className  = 'led led-red';
+        if (text) text.textContent = 'Bağlantı Kesildi';
+        startPolling();
         });
 
-        // Mutfak item durumu değişti
-        connection.on('OrderItemStatusChanged', d => {
-          applyStatusChange(d.orderItemId, d.newStatus);
+        // ── Payload case-insensitive okuma yardımcısı ────────────────────────
+        // [FIX] camelCase önce, PascalCase fallback — backend değişse bile çalışır
+        function kp(payload, key) {
+        const camel  = key.charAt(0).toLowerCase() + key.slice(1);
+        const pascal = key.charAt(0).toUpperCase() + key.slice(1);
+        const val = payload[camel] ?? payload[pascal];
+        return (val === undefined || val === null) ? null : val;
+        }
+
+        // ── OrderItemStatusChanged ────────────────────────────────────────────
+        //
+        // C# payload: { orderItemId, newStatus, tableName, menuItemName }
+        // [FIX] applyStatusChange içindeki row.remove() → closest() hatası giderildi:
+        //       orderId, remove() ÖNCE okunuyor.
+        connection.off('OrderItemStatusChanged');
+        connection.on('OrderItemStatusChanged', function (d) {
+        try {
+        console.info('[SignalR KDS] OrderItemStatusChanged ←', d);
+
+        const itemId   = kp(d, 'orderItemId');
+        const newStatus = kp(d, 'newStatus');
+
+        if (!itemId || !newStatus) {
+        console.warn('[SignalR KDS] OrderItemStatusChanged — eksik alan:', d);
+        return;
+        }
+
+        applyStatusChangeSafe(itemId, newStatus);
+        setLastUpdate();
+
+        } catch (err) {
+        console.error('[SignalR KDS] OrderItemStatusChanged handler hatası:', err, d);
+        }
         });
 
-        // Yeni ürün eklendi
-        connection.on('NewOrderItem', d => {
-          playBeep();
-          addNewItem(d);
-          showToast(`🍽️ ${esc(d.tableName)} — ${esc(d.menuItemName)} × ${d.quantity}`, 'blue');
+        // ── NewOrderItem ──────────────────────────────────────────────────────
+        //
+        // C# payload: { orderItemId, orderId, tableName, menuItemName,
+        //               quantity, note, addedAt }
+        connection.off('NewOrderItem');
+        connection.on('NewOrderItem', function (d) {
+        try {
+        console.info('[SignalR KDS] Yeni Ürün Geldi:', d);
+
+        const orderItemId  = kp(d, 'orderItemId');
+        const orderId      = kp(d, 'orderId');
+        const tableName    = kp(d, 'tableName')    ?? `#${orderId ?? '?'}`;
+        const menuItemName = kp(d, 'menuItemName') ?? 'Bilinmeyen Ürün';
+        const quantity     = kp(d, 'quantity')     ?? 1;
+        const note         = kp(d, 'note');
+
+        if (!orderItemId || !orderId) {
+        console.warn('[SignalR KDS] NewOrderItem — eksik alan:', d);
+        return;
+        }
+
+        // addNewItem'e normalize edilmiş nesne ilet
+        addNewItem({
+        orderItemId,
+        orderId,
+        tableName,
+        menuItemName,
+        quantity,
+        note
         });
 
-        // Hazır bildirimini de KDS dinler (bilgi amaçlı; garson ekranı asıl tetikleyici)
-        connection.on('OrderReadyForPickup', d => {
-          playReadyChime();
-          showToast(`✅ ${esc(d.tableName)} — ${esc(d.menuItemName)} servis için hazır!`, 'green');
+        playBeep();
+        showToast(`🍽️ ${esc(tableName)} — ${esc(menuItemName)} × ${quantity}`, 'blue');
+
+        } catch (err) {
+        console.error('[SignalR KDS] NewOrderItem handler hatası:', err, d);
+        }
         });
 
+        // ── OrderReadyForPickup ───────────────────────────────────────────────
+        //
+        // KDS bu event'i bilgi amaçlı dinler; garson ekranı asıl alıcıdır.
+        // C# payload: { orderItemId, orderId, tableName, menuItemName, readyAt }
+        connection.off('OrderReadyForPickup');
+        connection.on('OrderReadyForPickup', function (d) {
+        try {
+        console.info('[SignalR KDS] OrderReadyForPickup ←', d);
+
+        const tableName    = kp(d, 'tableName')    ?? '?';
+        const menuItemName = kp(d, 'menuItemName') ?? 'Ürün';
+
+        playReadyChime();
+        showToast(`✅ ${esc(tableName)} — ${esc(menuItemName)} servis için hazır!`, 'green');
+
+        } catch (err) {
+        console.error('[SignalR KDS] OrderReadyForPickup handler hatası:', err, d);
+        }
+        });
+
+        // ── applyStatusChangeSafe — row.remove() öncesi orderId okunur ────────
+        //
+        // [FIX] Orijinal applyStatusChange'deki kritik hata:
+        //
+        //   setTimeout(() => {
+        //     row.remove();                               ← DOM'dan kaldırıldı
+        //     const card = querySelector(                 ← closest() artık null döner!
+        //       `[data-order-id="${row.closest(...)}"]`   ← silent crash
+        //     );
+        //   }, 350);
+        //
+        // Düzeltme: orderId, remove() çağrısından ÖNCE saklanır.
+        function applyStatusChangeSafe(itemId, newStatus) {
+        const row = document.getElementById('item-row-' + itemId);
+        if (!row) {
+        console.warn('[KDS] applyStatusChangeSafe — satır bulunamadı:', itemId);
+        return;
+        }
+
+        const btnArea = document.getElementById('btn-area-' + itemId);
+
+        if (newStatus === 'preparing') {
+        // Durum rozetini güncelle
+        const badge = row.querySelector('.item-row span[class*="rounded-full"]');
+        if (badge) {
+        badge.style.cssText =
+        'background:rgba(251,146,60,.15);color:#fb923c;border:1px solid rgba(251,146,60,.25);';
+        badge.textContent = '🔥 Ocakta';
+        }
+        // Butonu değiştir
+        if (btnArea) {
+        btnArea.innerHTML = `
+        <button class="btn-kitchen text-sm font-bold px-4 py-2.5 rounded-xl whitespace-nowrap"
+        style="background:linear-gradient(135deg,#22c55e,#16a34a);box-shadow:0 4px 15px rgba(34,197,94,.35);"
+        onclick="updateStatus(${itemId},'ready')">
+        🔔 Hazır — Garsonu Çağır
+        </button>`;
+        }
+        row.dataset.status = 'preparing';
+
+        } else if (newStatus === 'ready' || newStatus === 'served') {
+        // [FIX] orderId, remove() ÖNCE alınıyor
+        const cardEl  = row.closest('[data-order-id]');
+        const orderId = cardEl?.dataset?.orderId ?? null;
+
+        row.style.transition = 'opacity .3s, transform .3s';
+        row.style.opacity    = '0';
+        row.style.transform  = 'translateX(12px)';
+
+        setTimeout(() => {
+        row.remove();
+
+        // Kart boşaldıysa kaldır
+        if (orderId) {
+        const card = document.querySelector(`[data-order-id="${orderId}"]`);
+        if (card) {
+        const remaining = card.querySelectorAll('[id^="item-row-"]');
+        if (remaining.length === 0) dismissCard(card);
+        }
+        }
+
+        checkEmpty();
+        }, 350);
+
+        row.dataset.status = newStatus;
+        }
+
+        setLastUpdate();
+        }
+
+        // ── Bağlantıyı başlat ─────────────────────────────────────────────────
         connection.start()
-          .then(() => { led.className = 'led led-green'; text.textContent = 'Bağlı'; setLastUpdate(); })
-          .catch(() => { led.className = 'led led-red'; text.textContent = 'Bağlantı Yok'; startPolling(); });
+        .then(() => {
+        if (led)  led.className   = 'led led-green';
+        if (text) text.textContent = 'Bağlı';
+        setLastUpdate();
+        })
+        .catch(() => {
+        if (led)  led.className   = 'led led-red';
+        if (text) text.textContent = 'Bağlantı Yok';
+        startPolling();
+        });
 
-        // ══ POLLING FALLBACK (15 sn) ══════════════════════════════════════════════════
+        // ══ POLLING FALLBACK (15 sn) ════════════════════════════════════════════
         let _pollTimer = null;
 
-        // [S-01] Grid yenileme mantığı ayrı fonksiyon: hem polling hem reconnect kullanır
         async function refreshKdsGrid() {
-          try {
-            const res = await fetch(KITCHEN_DISPLAY_URL);
-            if (!res.ok) return;
-            const html = await res.text();
-            const tmp = document.createElement('html');
-            tmp.innerHTML = html;
-            const newGrid = tmp.querySelector('#cardsGrid');
-            if (newGrid) {
-              document.getElementById('cardsGrid').innerHTML = newGrid.innerHTML;
-              checkEmpty();
-              updateAllTimers();
-              setLastUpdate();
-            }
-          } catch(e) { console.error('KDS grid yenileme hatası:', e); }
+        try {
+        const res = await fetch(KITCHEN_DISPLAY_URL);
+        if (!res.ok) return;
+        const html = await res.text();
+        const tmp  = document.createElement('html');
+        tmp.innerHTML = html;
+        const newGrid = tmp.querySelector('#cardsGrid');
+        if (newGrid) {
+        document.getElementById('cardsGrid').innerHTML = newGrid.innerHTML;
+        checkEmpty();
+        updateAllTimers();
+        setLastUpdate();
+        }
+        } catch (e) {
+        console.error('[KDS] Grid yenileme hatası:', e);
+        }
         }
 
         function startPolling() {
-          if (_pollTimer) return;
-          console.warn('KDS: polling modu aktif (15s)');
-          _pollTimer = setInterval(refreshKdsGrid, 15000); // [S-01] ortak fonksiyon
+        if (_pollTimer) return;
+        console.warn('[KDS] Polling modu aktif (15s)');
+        _pollTimer = setInterval(refreshKdsGrid, 15000);
         }
 
-        // [S-01] Tek onreconnected: polling durdur + grid yenile + LED güncelle.
-        //
-        // Neden grid yenileme gerekli?
-        //   SignalR bağlantısız kaldığı sürede sunucuya gelen NewOrderItem/
-        //   OrderItemStatusChanged event'leri istemciye ulaşmadı → KDS ekranı
-        //   o siparişlerden habersiz. Reconnect anında anlık DB snapshot'ı
-        //   çekerek kayıp siparişler kurtarılır.
-        //
-        //   refreshKdsGrid() startPolling() ile aynı HTML-swap mantığını kullanır
-        //   ama tek seferlik çalışır (interval kurmaz).
+        // [S-01] Reconnect: polling durdur + grid yenile + LED güncelle
         connection.onreconnected(async () => {
-          // 1. Polling fallback'i durdur (SignalR devralıyor)
-          if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
-
-          // 2. LED güncelle
-          led.className = 'led led-green'; text.textContent = 'Bağlı';
-
-          // 3. [S-01] Kaçırılan siparişleri kurtarmak için grid'i tazele
-          await refreshKdsGrid();
-          showToast('🔄 Bağlantı yenilendi — sipariş listesi güncellendi', 'blue');
+        if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+        if (led)  led.className   = 'led led-green';
+        if (text) text.textContent = 'Bağlı';
+        await refreshKdsGrid();
+        showToast('🔄 Bağlantı yenilendi — sipariş listesi güncellendi', 'blue');
         });
 
         // İlk yükleme
