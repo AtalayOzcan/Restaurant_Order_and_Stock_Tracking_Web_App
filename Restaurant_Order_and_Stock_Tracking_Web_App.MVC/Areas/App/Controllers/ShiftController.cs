@@ -95,6 +95,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
 
         // ── POST /App/Shift/Open ──────────────────────────────────────────────
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Open([FromBody] ShiftOpenDto dto)
         {
             var hasOpen = await _db.ShiftLogs.AnyAsync(s => !s.IsClosed);
@@ -131,6 +132,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
 
             if (shift == null) return NotFound();
 
+            // [SEC-06] Global Query Filter ikinci savunma hattı.
+            // FirstOrDefaultAsync GQF'yi kullanır; ek kontrol defence-in-depth sağlar.
+            if (shift.TenantId != _tenantService.TenantId)
+                return NotFound();   // 403 yerine 404 → kayıt varlığı ifşa edilmez
+
             var vm = await BuildDetailViewModel(shift);
             return View(vm);
         }
@@ -158,6 +164,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
         // [P-02]  Tüm toplamlar DB SumAsync ile hesaplanır
         // [F-01]  İndirim DB aggregate farkından türetilir
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> Close(int id, [FromBody] ShiftCloseDto dto)
         {
             var user = await _userManager.GetUserAsync(User);
@@ -276,10 +283,19 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
 
         // ── POST /App/Shift/ToggleLock/{id} ───────────────────────────────────
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> ToggleLock(int id)
         {
-            var shift = await _db.ShiftLogs.FindAsync(id);
-            if (shift == null) return NotFound(new { success = false });
+            var shift = await _db.ShiftLogs
+                .FirstOrDefaultAsync(s => s.ShiftLogId == id);
+
+            if (shift == null)
+                return NotFound(new { success = false });
+
+            // FindAsync'ten FirstOrDefaultAsync'e geçiş GQF'yi aktif etti;
+            // bu satır ek güvence sağlar (edge-case defence-in-depth).
+            if (shift.TenantId != _tenantService.TenantId)
+                return StatusCode(403, new { success = false });
 
             shift.IsLocked = !shift.IsLocked;
             await _db.SaveChangesAsync();

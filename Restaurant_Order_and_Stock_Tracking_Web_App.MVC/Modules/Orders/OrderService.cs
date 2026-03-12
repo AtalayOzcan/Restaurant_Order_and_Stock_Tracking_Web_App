@@ -38,40 +38,85 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
         private readonly ITenantService _tenantService;
         private readonly IHubContext<NotificationHub> _notifHub;   // Dashboard bildirimleri
         private readonly IHubContext<RestaurantHub> _kitchenHub;   // KDS (mutfak ekranı)
+        private readonly ILogger<OrderService> _logger;
+
 
         public OrderService(
-            RestaurantDbContext db,
-            ITenantService tenantService,
-            IHubContext<NotificationHub> notifHub,
-            IHubContext<RestaurantHub> kitchenHub)
+        RestaurantDbContext db,
+        ITenantService tenantService,
+        IHubContext<NotificationHub> notifHub,
+        IHubContext<RestaurantHub> kitchenHub,
+        ILogger<OrderService> logger)          // [ASYNC-01] eklendi
         {
             _db = db;
             _tenantService = tenantService;
             _notifHub = notifHub;
             _kitchenHub = kitchenHub;
+            _logger = logger;               // [ASYNC-01] eklendi
         }
 
         // ── Özel Yardımcı: Dashboard SignalR Bildirimi ────────────────────────
         // Fire-and-forget; hub hatası operasyonu durdurmamalı.
-        private Task NotifyDashboardAsync(string icon, string message, string color = "#f97316")
-            => _notifHub.Clients
-                .Group(_tenantService.TenantId ?? "")
-                .SendAsync("ReceiveNotification", new
-                {
-                    icon,
-                    message,
-                    color,
-                    time = DateTime.Now.ToString("HH:mm")
-                });
+        private async Task NotifyDashboardAsync(string icon, string message, string color = "#f97316")
+        {
+            try
+            {
+                await _notifHub.Clients
+                    .Group(_tenantService.TenantId ?? "")
+                    .SendAsync("ReceiveNotification", new
+                    {
+                        icon,
+                        message,
+                        color,
+                        time = DateTime.Now.ToString("HH:mm")
+                    });
+            }
+            catch (Exception ex)
+            {
+                // Hub hatası iş akışını durdurmamalı; ancak artık log'a düşüyor.
+                // Böylece "dashboard boş, neden?" sorularına canlıda yanıt bulunabilir.
+                _logger.LogError(ex,
+                    "[OrderService] Dashboard SignalR bildirimi gönderilemedi. " +
+                    "TenantId: {TenantId} | Mesaj: {Message}",
+                    _tenantService.TenantId, message);
+            }
+        }
 
         // ── Özel Yardımcı: KDS SignalR Bildirimi ─────────────────────────────
-        private Task NotifyKitchenAsync(object payload)
-            => _kitchenHub.Clients
-                .Group(_tenantService.TenantId ?? "")
-                .SendAsync("NewOrderItem", payload);
+        private async Task NotifyKitchenAsync(object payload)
+        {
+            try
+            {
+                await _kitchenHub.Clients
+                    .Group(_tenantService.TenantId ?? "")
+                    .SendAsync("NewOrderItem", payload);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "[OrderService] KDS SignalR bildirimi gönderilemedi. " +
+                    "TenantId: {TenantId}",
+                    _tenantService.TenantId);
+            }
+        }
 
         // ═══════════════════════════════════════════════════════════════════════
         //  1. CreateOrderAsync — Adisyon Aç
+        // ═══════════════════════════════════════════════════════════════════════
+        // ═══════════════════════════════════════════════════════════════════════
+        //  1. CreateOrderAsync — Adisyon Aç
+        //
+        //  [PERF-01 FIX] Çift N+1 Döngüsü → Tek WhereIn + Dictionary
+        //
+        //  ESKİ YÖNTEM (N+1 × 2):
+        //    Döngü-1 (stok ön kontrol) → her satır için FindAsync()  = N istek
+        //    Döngü-2 (item oluşturma)  → her satır için FindAsync()  = N istek
+        //    5 ürünlük sipariş = 10 DB çağrısı
+        //
+        //  YENİ YÖNTEM (1 + 1 = 2 sabit DB çağrısı):
+        //    Tüm benzersiz MenuItemId'ler toplanır.
+        //    Tek bir WHERE IN sorgusuyla hepsi çekilir ve Dictionary'e alınır.
+        //    Her iki döngü de artık bu Dictionary üzerinden O(1) lookup yapar.
         // ═══════════════════════════════════════════════════════════════════════
         public async Task<ServiceResult<CreateOrderResult>> CreateOrderAsync(
             OrderCreateDto dto, string openedBy)
@@ -83,12 +128,28 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
             if (table == null)
                 return new(false, "Masa bulunamadı.");
 
-            // Stok ön kontrolü — döngüye girmeden önce hepsini kontrol et
+            // ── [PERF-01] Tüm MenuItemId'leri tek sorguda çek ────────────────
+            //
+            // dto.Items içindeki tüm benzersiz MenuItemId'leri bir WHERE IN
+            // sorgusuna çeviriyoruz. EF Core bunu tek bir
+            //   SELECT … WHERE "MenuItemId" IN (1, 2, 3, …)
+            // olarak üretiyor. Sonuç bir Dictionary'e alınır; ardından her iki
+            // döngü sabit O(1) maliyetle lookup yapıyor.
+            var uniqueIds = dto.Items
+                .Where(i => i.Quantity >= 1)
+                .Select(i => i.MenuItemId)
+                .Distinct()
+                .ToList();
+
+            var menuItemMap = await _db.MenuItems
+                .Where(m => uniqueIds.Contains(m.MenuItemId))
+                .ToDictionaryAsync(m => m.MenuItemId);
+
+            // ── Stok ön kontrolü — Dictionary üzerinden ──────────────────────
             foreach (var line in dto.Items)
             {
                 if (line.Quantity < 1) continue;
-                var miCheck = await _db.MenuItems.FindAsync(line.MenuItemId);
-                if (miCheck == null) continue;
+                if (!menuItemMap.TryGetValue(line.MenuItemId, out var miCheck)) continue;
                 if (miCheck.TrackStock && miCheck.StockQuantity < line.Quantity)
                     return new(false,
                         $"Stok yetersiz: {miCheck.MenuItemName} — mevcut {miCheck.StockQuantity} adet",
@@ -112,10 +173,13 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                 await _db.SaveChangesAsync();
 
                 decimal total = 0;
+
+                // ── Item oluşturma — Dictionary üzerinden ────────────────────
                 foreach (var line in dto.Items)
                 {
-                    var mi = await _db.MenuItems.FindAsync(line.MenuItemId);
-                    if (mi == null) continue;
+                    // [PERF-01] FindAsync() YOK — Dictionary'den O(1) lookup
+                    if (!menuItemMap.TryGetValue(line.MenuItemId, out var mi)) continue;
+
                     int qty = Math.Max(1, line.Quantity);
                     decimal lineTotal = mi.MenuItemPrice * qty;
 

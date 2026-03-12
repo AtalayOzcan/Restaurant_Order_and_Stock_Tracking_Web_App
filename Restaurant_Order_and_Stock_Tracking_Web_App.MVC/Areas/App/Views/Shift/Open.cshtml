@@ -2,6 +2,12 @@
     ViewData["Title"] = "Vardiya Aç";
 }
 
+@* [FE-01] SEC-02 Antiforgery token kaynağı *@
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery _af
+@{
+    var __afTokenValue = _af.GetAndStoreTokens(Context).RequestToken!;
+}
+
 @section Styles {
     <link href="~/css/Views/Shift/Index.css" rel="stylesheet" asp-append-version="true" />
     <style>
@@ -399,59 +405,133 @@
 
 @section Scripts {
     <script>
-        // ── [FIX] Area-safe URL sabitleri ────────────────────────────────────────────
-        const SHIFT_OPEN_URL   = '@Url.Action("Open", "Shift", new { area = "App" })';
-        const SHIFT_DETAIL_URL = '@Url.Action("Detail", "Shift", new { area = "App" })';
+        // ── [FE-01] Antiforgery token — SEC-02 CSRF koruması için ────────────────
+        const __afToken = '@__afTokenValue';
 
-        document.getElementById('btnOpen').addEventListener('click', async function () {
-            const openingBalance = parseFloat(document.getElementById('openingBalance').value) || 0;
-            const threshold      = parseFloat(document.getElementById('threshold').value) || 100;
-            const notes          = document.getElementById('notes').value.trim();
+        const shiftId   = @Model.ShiftLogId;
+        const fmt       = v => '₺' + Number(v).toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2});
+        let sysCashVal  = 0;
+        let sysOpenVal  = @Model.OpeningBalance.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-            this.disabled = true;
-            this.innerHTML = `
-                <span class="cta-icon" style="display:inline-block;animation:spin .9s linear infinite">⏳</span>
-                <span class="cta-text">
-                    <span class="cta-text-main">Açılıyor…</span>
-                    <span class="cta-text-sub">Lütfen bekleyin</span>
-                </span>`;
+        // ── Sistem verilerini AJAX ile çek ─────────────────────────────────────
+        (async function loadPreview() {
+            // [FE-01] fetch() → window.safeFetch()
+            // PreviewTotals bir GET endpoint'i — CSRF token gerekmez,
+            // ama safeFetch 401 koruması bu çağrıda da aktif.
+            const res = await window.safeFetch(`/App/Shift/PreviewTotals/${shiftId}`);
+            if (!res) return;   // 401 → modal gösterildi, sessizce dur
+
+            if (!res.ok) { console.warn('PreviewTotals failed', res.status); return; }
 
             try {
-                const res  = await fetch(SHIFT_OPEN_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ openingBalance, notes, differenceThreshold: threshold })
-                });
-                const data = await res.json();
-                if (res.ok && data.success) {
-                    window.location.href = `${SHIFT_DETAIL_URL}/${data.shiftId}`;
+                const d = await res.json();
+
+                sysCashVal = d.totalCash ?? 0;
+                sysOpenVal = d.openingBalance ?? sysOpenVal;
+
+                document.getElementById('sysSales').textContent   = fmt(d.totalSales ?? 0);
+                document.getElementById('sysCash').textContent    = fmt(d.totalCash ?? 0);
+                document.getElementById('sysCard').textContent    = fmt(d.totalCard ?? 0);
+                document.getElementById('sysOther').textContent   = fmt(d.totalOther ?? 0);
+                document.getElementById('sysWaste').textContent   = fmt(d.totalWaste ?? 0);
+                document.getElementById('sysOpening').textContent = fmt(d.openingBalance ?? sysOpenVal);
+
+                if (d.differenceThreshold > 0)
+                    document.getElementById('threshold').value = d.differenceThreshold;
+
+                updateDiff();
+            } catch (e) {
+                console.error('PreviewTotals parse error:', e);
+            }
+        })();
+
+        // ── Canlı fark önizleme ─────────────────────────────────────────────────
+        document.getElementById('closingBalance').addEventListener('input', updateDiff);
+        document.getElementById('threshold').addEventListener('input', updateDiff);
+
+        function updateDiff() {
+            const closing  = parseFloat(document.getElementById('closingBalance').value) || 0;
+            const thr      = parseFloat(document.getElementById('threshold').value) || 100;
+            const expected = sysOpenVal + sysCashVal;
+            const diff     = closing - expected;
+            const isOver   = Math.abs(diff) > thr;
+            const hasInput = document.getElementById('closingBalance').value !== '';
+
+            const elNum  = document.getElementById('diffPreview');
+            const elBox  = document.getElementById('diffBox');
+            const elNote = document.getElementById('diffNote');
+            const elForm = document.getElementById('diffFormula');
+
+            if (!hasInput) {
+                elNum.textContent  = 'Kapanış bakiyesi girin…';
+                elNum.style.color  = 'var(--text-muted)';
+                elBox.className    = 'diff-preview-box';
+                elNote.textContent = '';
+                elForm.textContent = '';
+                return;
+            }
+
+            elNum.textContent  = (diff >= 0 ? '+' : '') + fmt(diff);
+            elNum.style.color  = isOver ? '#ef4444' : '#10b981';
+            elBox.className    = 'diff-preview-box ' + (isOver ? 'warn' : 'ok');
+            elForm.textContent = `${fmt(closing)} - (${fmt(sysOpenVal)} açılış + ${fmt(sysCashVal)} nakit) = ${(diff >= 0 ? '+' : '') + fmt(diff)}`;
+            elForm.style.color = 'var(--text-muted)';
+            elNote.textContent = isOver ? `⚠️ Uyarı eşiği ${fmt(thr)} aşılacak! SignalR uyarısı gönderilecek.` : '';
+        }
+
+        // ── Kapat ───────────────────────────────────────────────────────────────
+        document.getElementById('btnClose').addEventListener('click', async function () {
+            const closingBalance      = parseFloat(document.getElementById('closingBalance').value) || 0;
+            const differenceThreshold = parseFloat(document.getElementById('threshold').value) || 100;
+            const notes               = document.getElementById('notes').value.trim();
+            const diff                = closingBalance - (sysOpenVal + sysCashVal);
+
+            if (!confirm(
+                `Vardiyayı kapatmak üzeresiniz.\n\n` +
+                `Kapanış Kasası : ${fmt(closingBalance)}\n` +
+                `Tahmini Fark   : ${(diff >= 0 ? '+' : '') + fmt(diff)}\n\n` +
+                `Bu işlem geri alınamaz. Onaylıyor musunuz?`
+            )) return;
+
+            this.disabled    = true;
+            this.textContent = 'Kapatılıyor…';
+
+            // [FE-01] fetch() → window.safeFetch()
+            // [SEC-02] RequestVerificationToken header'ı eklendi (CSRF koruması)
+            const res = await window.safeFetch(`/App/Shift/Close/${shiftId}`, {
+                method:  'POST',
+                headers: { 'RequestVerificationToken': __afToken },
+                body:    JSON.stringify({ closingBalance, notes, differenceThreshold })
+            });
+
+            if (!res) {                  // 401 → modal gösterildi
+                this.disabled  = false;
+                this.innerHTML = '⏹&nbsp; Vardiyayı Kapat &amp; Z Raporu Oluştur';
+                return;
+            }
+
+            try {
+                const d = await res.json();
+                if (res.ok && d.success) {
+                    window.location.href = `/App/Shift/Detail/${d.shiftId}`;
                 } else {
-                    showAlert(data.message || 'Vardiya açılamadı.');
-                    resetBtn(this);
+                    showAlert(d.message || 'Vardiya kapatılamadı.');
+                    this.disabled  = false;
+                    this.innerHTML = '⏹&nbsp; Vardiyayı Kapat &amp; Z Raporu Oluştur';
                 }
             } catch {
-                showAlert('Sunucu hatası. Lütfen tekrar deneyin.');
-                resetBtn(this);
+                showAlert('Sunucu yanıtı işlenemedi. Tekrar deneyin.');
+                this.disabled  = false;
+                this.innerHTML = '⏹&nbsp; Vardiyayı Kapat &amp; Z Raporu Oluştur';
             }
         });
 
-        function resetBtn(btn) {
-            btn.disabled = false;
-            btn.innerHTML = `
-                <span class="cta-icon">🚀</span>
-                <span class="cta-text">
-                    <span class="cta-text-main">Vardiyayı Başlat</span>
-                    <span class="cta-text-sub">Kasa açılacak ve kayıt başlayacak</span>
-                </span>`;
-        }
-
         function showAlert(msg) {
             document.getElementById('alertBox').innerHTML =
-                `<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px 18px;font-size:13px;color:#ef4444;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
-                    <span style="font-size:18px;flex-shrink:0">⚠️</span>
-                    <span>${msg}</span>
+                `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:10px;
+                             padding:12px 16px;font-size:13px;color:#ef4444;margin-bottom:16px;display:flex;gap:8px;align-items:center">
+                    <span>❌</span><span>${msg}</span>
                  </div>`;
-            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     </script>
 }

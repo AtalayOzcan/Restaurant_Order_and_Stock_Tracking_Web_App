@@ -5,9 +5,10 @@ using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
-using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Shared.Common;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Dtos.Stock;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models;
+using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Services;
+using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Shared.Common;
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
 {
@@ -17,9 +18,13 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
     {
         private readonly RestaurantDbContext _context;
 
-        public StockController(RestaurantDbContext context)
+        private readonly ITenantService _tenantService;  // [SEC-06] ikinci savunma hattı
+
+
+        public StockController(RestaurantDbContext context, ITenantService tenantService)
         {
             _context = context;
+            _tenantService = tenantService;  // [SEC-06]
         }
 
         // ── GET: /Stock ──────────────────────────────────────────────
@@ -105,9 +110,14 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateStock([FromBody] StockUpdateDto dto)
         {
-            var item = await _context.MenuItems.FirstOrDefaultAsync(m => m.MenuItemId == dto.MenuItemId); // [G-01]
+            var item = await _context.MenuItems
+                .FirstOrDefaultAsync(m => m.MenuItemId == dto.MenuItemId);
+
             if (item == null)
                 return Json(new { success = false, message = "Ürün bulunamadı." });
+
+            if (item.TenantId != _tenantService.TenantId)
+                return Json(new { success = false, message = "Bu ürüne erişim yetkiniz yok." });
 
             int previousStock = item.StockQuantity;
             int newStock;
@@ -211,6 +221,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
             var item = await _context.MenuItems.FirstOrDefaultAsync(m => m.MenuItemId == id); // [G-01]
             if (item == null)
                 return Json(new { success = false, message = "Ürün bulunamadı." });
+
+            if (item.TenantId != _tenantService.TenantId)
+                return Json(new { success = false, message = "Bu ürüne erişim yetkiniz yok." });
 
             var logs = await _context.StockLogs
                 .Where(l => l.MenuItemId == id)
