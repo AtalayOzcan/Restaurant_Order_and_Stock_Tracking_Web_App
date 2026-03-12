@@ -1,11 +1,8 @@
 ﻿// ============================================================================
 //  Services/ITenantOnboardingService.cs
-//  SaaS Onboarding — Yeni Restoran Kayıt Arayüzü
 //
-//  CreateTenantAsync:
-//    → Tenant + TenantConfig + Admin kullanıcısını tek transaction'da oluşturur.
-//    → Başarıda: (true, tenantId, null)
-//    → Hata'da:  (false, null, hata mesajı)
+//  SPRINT C DEĞİŞİKLİKLERİ:
+//  [SC-5] TenantOnboardingDto → PhoneNumber alanı eklendi
 // ============================================================================
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Services;
@@ -16,7 +13,8 @@ public record TenantOnboardingDto(
     string AdminUsername,
     string Password,
     string FullName,
-    string? Email
+    string? Email,
+    string PhoneNumber       // [SC-5] Trial koruması için zorunlu
 );
 
 public interface ITenantOnboardingService

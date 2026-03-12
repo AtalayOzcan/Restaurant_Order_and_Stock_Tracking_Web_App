@@ -1,18 +1,26 @@
 ﻿// ============================================================================
-//  Controllers/KitchenController.cs  —  KDS v3
-//  SPRINT 3 DEĞİŞİKLİĞİ: Display() metoduna "ros-tenant" cookie eki
+//  Areas/App/Controllers/KitchenController.cs  —  KDS v3
+//
+//  SPRINT C DEĞİŞİKLİKLERİ:
+//  [SC-1] Dosya Controllers/ → Areas/App/Controllers/ taşındı
+//  [SC-2] Namespace → ...Areas.App.Controllers
+//  [SC-3] [Area("App")] attribute eklendi → /App/Kitchen/Display 404 çözüldü
+//  [SC-4] Controller → AppBaseController miras ALMIYOR (AllowAnonymous KDS için zorunlu)
+//         AppBaseController [Authorize(AppAuth)] gerektirir; KDS anonim çalışmalı.
+//         Bu nedenle doğrudan Controller'dan türetiliyor, [AllowAnonymous] korunuyor.
 // ============================================================================
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
-using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Shared.Common;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Hubs;
+using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Shared.Common;
 
-namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
+namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
 {
-    [AllowAnonymous]
+    [Area("App")]                   // [SC-3] /App/Kitchen/Display rotasını aktif eder
+    [AllowAnonymous]                // KDS ekranı giriş gerektirmez
     public class KitchenController : Controller
     {
         private readonly RestaurantDbContext _db;
@@ -24,23 +32,22 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             _hub = hub;
         }
 
-        // ─────────────────────────────────────────────────────────────
-        // GET /Kitchen/Display
-        // ─────────────────────────────────────────────────────────────
+        // ── GET /App/Kitchen/Display ──────────────────────────────────────────
         public async Task<IActionResult> Display()
         {
             var orders = await _db.Orders
                 .Where(o => o.OrderStatus == OrderStatus.Open)
                 .Include(o => o.Table)
                 .Include(o => o.OrderItems
-                    .Where(oi => oi.OrderItemStatus == OrderItemStatus.Pending || oi.OrderItemStatus == OrderItemStatus.Preparing))
+                    .Where(oi => oi.OrderItemStatus == OrderItemStatus.Pending
+                              || oi.OrderItemStatus == OrderItemStatus.Preparing))
                     .ThenInclude(oi => oi.MenuItem)
                 .OrderBy(o => o.OrderOpenedAt)
                 .ToListAsync();
 
             orders = orders.Where(o => o.OrderItems.Any()).ToList();
 
-            // ── [KDS-COOKIE] TenantId'yi cookie olarak yaz ───────────────────
+            // ── [KDS-COOKIE] TenantId'yi cookie olarak yaz ──────────────────
             // RestaurantHub [AllowAnonymous] bağlantılarında Claims boş gelir.
             // Cookie'den TenantId okunarak KDS doğru tenant grubuna eklenir.
             var tenantId = orders.FirstOrDefault()?.TenantId;
@@ -48,20 +55,17 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
             {
                 Response.Cookies.Append("ros-tenant", tenantId, new CookieOptions
                 {
-                    HttpOnly = false,                         // JS ile okunabilsin
-                    Secure = false,                         // Geliştirme ortamı
+                    HttpOnly = false,                    // JS ile okunabilsin
+                    Secure = false,                    // Geliştirme ortamı
                     SameSite = SameSiteMode.Strict,
                     Expires = DateTimeOffset.UtcNow.AddHours(8)
                 });
             }
-            // ─────────────────────────────────────────────────────────────────
 
             return View(orders);
         }
 
-        // ─────────────────────────────────────────────────────────────
-        // POST /Kitchen/UpdateStatus
-        // ─────────────────────────────────────────────────────────────
+        // ── POST /App/Kitchen/UpdateStatus ────────────────────────────────────
         [HttpPost]
         public async Task<IActionResult> UpdateStatus([FromBody] KdsStatusUpdateDto dto)
         {
@@ -90,12 +94,12 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
 
             var tableName = item.Order?.Table?.TableName ?? $"Adisyon #{item.OrderId}";
             var menuItemName = item.MenuItem?.MenuItemName ?? "Ürün";
-
-            // KitchenController [AllowAnonymous] → ITenantService.TenantId null döner.
-            // Order.TenantId doğrudan kullanılır.
             var tenantId = item.Order?.TenantId ?? "";
 
-            item.OrderItemStatus = parsedNew == OrderItemStatus.Ready ? OrderItemStatus.Served : parsedNew;
+            item.OrderItemStatus = parsedNew == OrderItemStatus.Ready
+                ? OrderItemStatus.Served
+                : parsedNew;
+
             await _db.SaveChangesAsync();
 
             await _hub.Clients.Group(tenantId).SendAsync("OrderItemStatusChanged", new

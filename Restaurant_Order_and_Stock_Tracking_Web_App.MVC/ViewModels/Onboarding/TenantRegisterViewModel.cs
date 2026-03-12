@@ -1,4 +1,10 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿// ============================================================================
+//  ViewModels/Onboarding/TenantRegisterViewModel.cs
+//
+//  SPRINT C DEĞİŞİKLİKLERİ:
+//  [SC-5] PhoneNumber alanı eklendi — Trial koruması için tekil numara kontrolü
+// ============================================================================
+using System.ComponentModel.DataAnnotations;
 
 namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.ViewModels.Onboarding;
 
@@ -26,6 +32,13 @@ public class TenantRegisterViewModel
     [EmailAddress(ErrorMessage = "Geçerli bir e-posta adresi giriniz.")]
     [Display(Name = "E-posta")]
     public string? Email { get; set; }
+
+    // [SC-5] Trial koruması — tekil telefon numarası zorunluluğu
+    [Required(ErrorMessage = "Telefon numarası zorunludur.")]
+    [Phone(ErrorMessage = "Geçerli bir telefon numarası giriniz.")]
+    [StringLength(20, ErrorMessage = "Telefon numarası en fazla 20 karakter olabilir.")]
+    [Display(Name = "Telefon Numarası")]
+    public string PhoneNumber { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Şifre zorunludur.")]
     [StringLength(100, MinimumLength = 8, ErrorMessage = "Şifre en az 8 karakter olmalıdır.")]

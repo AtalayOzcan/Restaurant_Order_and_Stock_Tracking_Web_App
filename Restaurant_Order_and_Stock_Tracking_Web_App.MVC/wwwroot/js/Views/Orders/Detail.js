@@ -691,31 +691,67 @@
 // Mutfak "Hazır" dediğinde garson, sayfayı yenilemeden "Servis
 // Edildi" butonunu görür (location.reload ile sayfa güncellenir).
 // ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// [SPRINT B.2] SignalR — Detail sayfası tam revizyon
+//
+// DEĞİŞİKLİKLER:
+//   [B2-1] withAutomaticReconnect array genişletildi → [0,2000,5000,10000,30000]
+//   [B2-2] onreconnecting / onreconnected / onclose callback'leri eklendi
+//   [B2-3] 'OrderReady' → 'OrderReadyForPickup' (C# KitchenController ile eşleşti)
+//   [B2-4] conn.off() → conn.on() pattern'ı uygulandı (memory leak kapatıldı)
+// ═══════════════════════════════════════════════════════════
 (function initDetailSignalR() {
     if (typeof signalR === 'undefined') return;
 
     const cfg = JSON.parse(document.getElementById('orderConfigData').textContent);
     const currentOrderId = parseInt(cfg.orderId);
 
+    // [B2-1] Reconnect dizisi: 0ms → 2s → 5s → 10s → 30s
+    // 5 denemeden sonra otomatik yeniden bağlanma durur; onclose devreye girer.
     const conn = new signalR.HubConnectionBuilder()
         .withUrl('/hubs/restaurant')
-        .withAutomaticReconnect([0, 2000, 5000])
+        .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
         .configureLogging(signalR.LogLevel.Warning)
         .build();
 
-    // Mutfak bu adisyondaki bir kalemi Hazır yaptı → sayfayı yenile
-    conn.on('OrderReady', function (payload) {
+    // [B2-2] Bağlantı durumu callback'leri
+    conn.onreconnecting(err => {
+        console.warn('[Detail SignalR] Yeniden bağlanıyor…', err);
+    });
+
+    conn.onreconnected(connectionId => {
+        console.info('[Detail SignalR] Yeniden bağlandı. ConnectionId:', connectionId);
+    });
+
+    conn.onclose(err => {
+        // Tüm yeniden bağlanma denemeleri tükendi → kullanıcıyı bilgilendir
+        console.error('[Detail SignalR] Bağlantı kalıcı olarak kesildi.', err);
+    });
+
+    // [B2-3] 'OrderReady' → 'OrderReadyForPickup'
+    //   Eski isim ('OrderReady') C# tarafında hiç kullanılmıyordu;
+    //   KitchenController sadece 'OrderReadyForPickup' fırlatıyor.
+    // [B2-4] conn.off() ile önceki handler'lar temizleniyor (double-bind engeli)
+    conn.off('OrderReadyForPickup');
+    conn.on('OrderReadyForPickup', function (payload) {
         if (parseInt(payload.orderId) === currentOrderId) location.reload();
     });
 
     // Başka terminalden Served yapıldı → yenile
+    conn.off('OrderServed');
     conn.on('OrderServed', function (payload) {
         if (parseInt(payload.orderId) === currentOrderId) location.reload();
     });
 
     async function start() {
-        try { await conn.start(); }
-        catch { setTimeout(start, 5000); }
+        try {
+            await conn.start();
+            console.info('[Detail SignalR] Bağlandı.');
+        } catch (err) {
+            console.error('[Detail SignalR] Başlangıç hatası, 5s sonra tekrar denenecek:', err);
+            setTimeout(start, 5000);
+        }
     }
+
     start();
 })();

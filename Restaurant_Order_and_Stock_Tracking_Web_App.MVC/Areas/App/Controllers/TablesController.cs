@@ -9,6 +9,11 @@
 //            area parametresi gerekmez; ancak okunabilirlik için
 //            explicit area eklendi. ServeReadyItemsDto sınıfı aynı
 //            namespace içinde korundu.
+//
+//  SPRINT B.2 — Fire-and-Forget Düzeltmesi:
+//  [B2-5] ILogger<TablesController> inject edildi
+//  [B2-6] MergeOrder   → tüm `_ = _hub…` satırları await + try-catch + LogError'a çevrildi
+//  [B2-7] ServeReadyItems → aynı dönüşüm
 // ════════════════════════════════════════════════════════════════════════════
 
 using Microsoft.AspNetCore.Authorization;
@@ -32,15 +37,18 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
         private readonly RestaurantDbContext _db;
         private readonly IHubContext<RestaurantHub> _hub;
         private readonly ITenantService _tenantService;
+        private readonly ILogger<TablesController> _logger;         // [B2-5]
 
         public TablesController(
             RestaurantDbContext db,
             IHubContext<RestaurantHub> hub,
-            ITenantService tenantService)
+            ITenantService tenantService,
+            ILogger<TablesController> logger)                       // [B2-5]
         {
             _db = db;
             _hub = hub;
             _tenantService = tenantService;
+            _logger = logger;                                        // [B2-5]
         }
 
         // ── GET /App/Tables ───────────────────────────────────────────────────
@@ -128,7 +136,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
                 {
                     success = true,
                     message = $"'{dto.TableName.Trim()}' başarıyla eklendi.",
-                    // [S5-URL] Aynı controller → area explicit ama opsiyonel
                     redirectUrl = Url.Action(nameof(Index), "Tables", new { area = "App" })
                 });
             }
@@ -283,9 +290,31 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
                     await _db.SaveChangesAsync();
                     await transaction.CommitAsync();
 
+                    // [B2-6] Fire-and-forget → await + try-catch + LogError
                     var tg = _tenantService.TenantId ?? "";
-                    _ = _hub.Clients.Group(tg).SendAsync("RemoveOrderCard", new { orderId = oldOrderId });
-                    _ = _hub.Clients.Group(tg).SendAsync("OrderUpdated", new { orderId = oldOrderId });
+                    try
+                    {
+                        await _hub.Clients.Group(tg).SendAsync("RemoveOrderCard", new { orderId = oldOrderId });
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex,
+                            "[TablesController] SignalR 'RemoveOrderCard' gönderilemedi — " +
+                            "TenantGroup: {TenantGroup}, OrderId: {OrderId}",
+                            tg, oldOrderId);
+                    }
+
+                    try
+                    {
+                        await _hub.Clients.Group(tg).SendAsync("OrderUpdated", new { orderId = oldOrderId });
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex,
+                            "[TablesController] SignalR 'OrderUpdated' gönderilemedi — " +
+                            "TenantGroup: {TenantGroup}, OrderId: {OrderId}",
+                            tg, oldOrderId);
+                    }
 
                     return Json(new
                     {
@@ -333,9 +362,31 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
                 await _db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
+                // [B2-6] Fire-and-forget → await + try-catch + LogError
                 var tg2 = _tenantService.TenantId ?? "";
-                _ = _hub.Clients.Group(tg2).SendAsync("RemoveOrderCard", new { orderId = sourceOrder.OrderId });
-                _ = _hub.Clients.Group(tg2).SendAsync("OrderUpdated", new { orderId = targetOrder.OrderId });
+                try
+                {
+                    await _hub.Clients.Group(tg2).SendAsync("RemoveOrderCard", new { orderId = sourceOrder.OrderId });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "[TablesController] SignalR 'RemoveOrderCard' gönderilemedi — " +
+                        "TenantGroup: {TenantGroup}, OrderId: {OrderId}",
+                        tg2, sourceOrder.OrderId);
+                }
+
+                try
+                {
+                    await _hub.Clients.Group(tg2).SendAsync("OrderUpdated", new { orderId = targetOrder.OrderId });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "[TablesController] SignalR 'OrderUpdated' gönderilemedi — " +
+                        "TenantGroup: {TenantGroup}, OrderId: {OrderId}",
+                        tg2, targetOrder.OrderId);
+                }
 
                 return Json(new
                 {
@@ -382,23 +433,45 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
             var tg = _tenantService.TenantId ?? "";
             var tableName = order.Table?.TableName ?? $"#{order.TableId}";
 
+            // [B2-7] Fire-and-forget → await + try-catch + LogError
             // Garson rozeti kaldır
-            _ = _hub.Clients.Group(tg).SendAsync("OrderServed", new
+            try
             {
-                orderId = order.OrderId,
-                tableId = dto.TableId,
-                tableName
-            });
+                await _hub.Clients.Group(tg).SendAsync("OrderServed", new
+                {
+                    orderId = order.OrderId,
+                    tableId = dto.TableId,
+                    tableName
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "[TablesController] SignalR 'OrderServed' gönderilemedi — " +
+                    "TenantGroup: {TenantGroup}, OrderId: {OrderId}",
+                    tg, order.OrderId);
+            }
 
             // KDS: hâlâ Pending/Preparing kalem varsa kartı güncelle, yoksa kaldır
             bool hasKitchenItems = order.OrderItems.Any(oi =>
                 oi.OrderItemStatus == OrderItemStatus.Pending ||
                 oi.OrderItemStatus == OrderItemStatus.Preparing);
 
-            if (hasKitchenItems)
-                _ = _hub.Clients.Group(tg).SendAsync("OrderUpdated", new { orderId = order.OrderId });
-            else
-                _ = _hub.Clients.Group(tg).SendAsync("RemoveOrderCard", new { orderId = order.OrderId });
+            try
+            {
+                if (hasKitchenItems)
+                    await _hub.Clients.Group(tg).SendAsync("OrderUpdated", new { orderId = order.OrderId });
+                else
+                    await _hub.Clients.Group(tg).SendAsync("RemoveOrderCard", new { orderId = order.OrderId });
+            }
+            catch (Exception ex)
+            {
+                var eventName = hasKitchenItems ? "OrderUpdated" : "RemoveOrderCard";
+                _logger.LogError(ex,
+                    "[TablesController] SignalR '{EventName}' gönderilemedi — " +
+                    "TenantGroup: {TenantGroup}, OrderId: {OrderId}",
+                    eventName, tg, order.OrderId);
+            }
 
             return Json(new { success = true, message = $"{readyItems.Count} ürün servis edildi." });
         }
@@ -418,6 +491,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
             table.WaiterCalledAt = null;
             await _db.SaveChangesAsync();
 
+            // DismissWaiter zaten await kullanıyordu — değişiklik yok
             await _hub.Clients
                 .Group(_tenantService.TenantId ?? "")
                 .SendAsync("WaiterDismissed", new { tableName = table.TableName });

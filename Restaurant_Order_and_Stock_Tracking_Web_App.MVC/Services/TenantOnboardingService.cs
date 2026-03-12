@@ -1,16 +1,9 @@
 ﻿// ============================================================================
 //  Services/TenantOnboardingService.cs
-//  SaaS Onboarding — Yeni Restoran Atomik Kayıt Servisi
 //
-//  İşlem sırası (tamamı tek BeginTransactionAsync içinde):
-//    1. Restoran adından URL-safe TenantId slug üret  (ibo-kafe-a1b2)
-//    2. Subdomain benzersizliğini kontrol et
-//    3. Admin rolünü güvence altına al (yoksa oluştur)
-//    4. Tenants tablosuna kayıt at
-//    5. TenantConfig oluştur
-//    6. ApplicationUser oluştur + Admin rolü ata
-//    7. Commit → başarı döndür
-//    Herhangi bir adımda hata → Rollback → hata mesajı döndür
+//  SPRINT C DEĞİŞİKLİKLERİ:
+//  [SC-5] Adım 2'ye telefon tekrarı kontrolü eklendi (PostgreSQL uyumlu EF Core sorgu)
+//  [SC-6] AdminUser oluşturmada PhoneNumber alanı set ediliyor
 // ============================================================================
 
 using Microsoft.AspNetCore.Identity;
@@ -42,27 +35,34 @@ public class TenantOnboardingService : ITenantOnboardingService
     public async Task<(bool Success, string? TenantId, string? Error)> CreateTenantAsync(
         TenantOnboardingDto dto)
     {
-        // ── Transaction başlat ────────────────────────────────────────────
         await using var tx = await _db.Database.BeginTransactionAsync();
 
         try
         {
             // ── Adım 1: TenantId slug üret ────────────────────────────────
-            // 'İbo Kafe' → 'ibo-kafe' + '-' + Guid'in ilk 8 karakteri
-            // Kısa GUID son eki çakışma olasılığını ortadan kaldırır.
             var baseSlug = GenerateSlug(dto.RestaurantName);
-            var suffix = Guid.NewGuid().ToString("N")[..8];   // 8 hex karakter
-            var tenantId = $"{baseSlug}-{suffix}";              // ibo-kafe-a1b2c3d4
+            var suffix = Guid.NewGuid().ToString("N")[..8];
+            var tenantId = $"{baseSlug}-{suffix}";
 
-            // ── Adım 2: Subdomain benzersizliği ───────────────────────────
+            // ── Adım 2: Benzersizlik kontrolleri ──────────────────────────
+
+            // Subdomain
             var subdomainExists = await _db.Tenants
                 .AnyAsync(t => t.Subdomain == dto.Subdomain);
             if (subdomainExists)
                 return (false, null, $"'{dto.Subdomain}' subdomain'i zaten kullanımda. Farklı bir subdomain seçin.");
 
-            // Kullanıcı adı çakışması
+            // Kullanıcı adı
             if (await _userManager.FindByNameAsync(dto.AdminUsername) != null)
                 return (false, null, $"'{dto.AdminUsername}' kullanıcı adı zaten alınmış. Farklı bir kullanıcı adı seçin.");
+
+            // [SC-5] Telefon numarası tekrarı — Trial koruması
+            // IdentityUser.PhoneNumber sütununa PostgreSQL'de case-sensitive eşleşme yeterli.
+            // EF Core → Npgsql bu sorguyu parameterized olarak üretir; SQL injection riski yok.
+            var phoneAlreadyUsed = await _db.Users
+                .AnyAsync(u => u.PhoneNumber == dto.PhoneNumber);
+            if (phoneAlreadyUsed)
+                return (false, null, "Bu telefon numarası ile zaten bir deneme sürümü kullanılmış.");
 
             // ── Adım 3: Admin rolünü güvence altına al ───────────────────
             if (!await _roleManager.RoleExistsAsync("Admin"))
@@ -104,8 +104,9 @@ public class TenantOnboardingService : ITenantOnboardingService
                 FullName = dto.FullName,
                 Email = dto.Email,
                 EmailConfirmed = true,
+                PhoneNumber = dto.PhoneNumber,   // [SC-6] Trial koruması için kayıt
                 CreatedAt = DateTime.UtcNow,
-                TenantId = tenantId,   // FK — Global Query Filter için zorunlu
+                TenantId = tenantId,
             };
 
             var createResult = await _userManager.CreateAsync(adminUser, dto.Password);
@@ -136,10 +137,8 @@ public class TenantOnboardingService : ITenantOnboardingService
     }
 
     // ── Yardımcı: Restoran adından URL-safe slug üret ─────────────────────
-    // 'İbo Kafe & Restoran!'  →  'ibo-kafe-restoran'
     private static string GenerateSlug(string input)
     {
-        // 1. Unicode normalleştir ve aksan karakterlerini ASCII'ye çevir
         var normalized = input.Normalize(NormalizationForm.FormD);
         var sb = new StringBuilder();
         foreach (var c in normalized)
@@ -149,35 +148,22 @@ public class TenantOnboardingService : ITenantOnboardingService
                 sb.Append(c);
         }
 
-        // 2. Türkçe özgün karakterleri elle çevir (normalizasyonun kapsamadıkları)
         var result = sb.ToString()
-            .Replace('ı', 'i')
-            .Replace('İ', 'i')
-            .Replace('ğ', 'g')
-            .Replace('Ğ', 'g')
-            .Replace('ş', 's')
-            .Replace('Ş', 's')
-            .Replace('ö', 'o')
-            .Replace('Ö', 'o')
-            .Replace('ü', 'u')
-            .Replace('Ü', 'u')
-            .Replace('ç', 'c')
-            .Replace('Ç', 'c');
+            .Replace('ı', 'i').Replace('İ', 'i')
+            .Replace('ğ', 'g').Replace('Ğ', 'g')
+            .Replace('ş', 's').Replace('Ş', 's')
+            .Replace('ö', 'o').Replace('Ö', 'o')
+            .Replace('ü', 'u').Replace('Ü', 'u')
+            .Replace('ç', 'c').Replace('Ç', 'c');
 
-        // 3. Küçük harf, alfanümerik dışı karakterleri tire'ye çevir
         result = result.ToLowerInvariant();
-        result = Regex.Replace(result, @"[^a-z0-9\s-]", "");   // özel karakter sil
-        result = Regex.Replace(result, @"\s+", "-");             // boşluk → tire
-        result = Regex.Replace(result, @"-+", "-");              // çoklu tire → tek tire
-        result = result.Trim('-');                               // baş/son tire sil
+        result = Regex.Replace(result, @"[^a-z0-9\s-]", "");
+        result = Regex.Replace(result, @"\s+", "-");
+        result = Regex.Replace(result, @"-+", "-");
+        result = result.Trim('-');
 
-        // 4. Boş kaldıysa güvenli fallback
-        if (string.IsNullOrEmpty(result))
-            result = "restoran";
-
-        // 5. Uzunluk sınırı (Guid suffix + tire için yer bırak)
-        if (result.Length > 40)
-            result = result[..40].TrimEnd('-');
+        if (string.IsNullOrEmpty(result)) result = "restoran";
+        if (result.Length > 40) result = result[..40].TrimEnd('-');
 
         return result;
     }

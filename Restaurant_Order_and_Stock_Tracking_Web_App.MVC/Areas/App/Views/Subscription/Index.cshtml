@@ -1,0 +1,433 @@
+﻿@*
+    ════════════════════════════════════════════════════════════════════════
+    Areas/App/Views/Subscription/Index.cshtml  —  Paywall Ekranı
+    SPRINT C [SC-8]: Deneme süresi biten kullanıcılar bu sayfaya yönlenir.
+    ════════════════════════════════════════════════════════════════════════
+*@
+@{
+    ViewData["Title"] = "Abonelik Planları";
+    Layout = "_AppLayout";
+
+    var restaurantName = ViewBag.RestaurantName as string ?? "";
+    var trialEndsAt = ViewBag.TrialEndsAt as DateTime?;
+    var expiredDays = trialEndsAt.HasValue
+        ? (int)(DateTime.UtcNow - trialEndsAt.Value).TotalDays
+        : 0;
+}
+
+@section Styles {
+    <style>
+        @@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+
+        :root {
+            --bg:           #0a0a0f;
+            --surface:      #13131e;
+            --surface2:     #1a1a28;
+            --border:       rgba(255,255,255,.07);
+            --border2:      rgba(255,255,255,.14);
+            --accent:       #f97316;
+            --accent-glow:  rgba(249,115,22,.30);
+            --purple:       #a855f7;
+            --purple-glow:  rgba(168,85,247,.30);
+            --green:        #22c55e;
+            --text:         #f0ece8;
+            --text2:        #9994a8;
+            --text3:        #5a5668;
+            --font:         'Outfit', sans-serif;
+            --r:            20px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: var(--font);
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+
+        /* ── Sayfa gövdesi ── */
+        .paywall-wrap {
+            min-height: calc(100vh - 72px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 48px 24px;
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(249,115,22,.12), transparent),
+                var(--bg);
+        }
+
+        /* ── Üst başlık ── */
+        .paywall-header {
+            text-align: center;
+            margin-bottom: 56px;
+            max-width: 560px;
+        }
+
+        .paywall-icon {
+            font-size: 56px;
+            line-height: 1;
+            margin-bottom: 20px;
+            display: block;
+            filter: drop-shadow(0 0 24px rgba(249,115,22,.5));
+            animation: pulse-icon 2.4s ease-in-out infinite;
+        }
+
+        @@keyframes pulse-icon {
+            0%, 100% { transform: scale(1);    filter: drop-shadow(0 0 24px rgba(249,115,22,.5)); }
+            50%       { transform: scale(1.06); filter: drop-shadow(0 0 40px rgba(249,115,22,.8)); }
+        }
+
+        .paywall-header h1 {
+            font-size: clamp(1.75rem, 4vw, 2.4rem);
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 14px;
+            background: linear-gradient(135deg, #fff 30%, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .paywall-header p {
+            font-size: 1.05rem;
+            color: var(--text2);
+            line-height: 1.6;
+        }
+
+        .paywall-header p strong {
+            color: var(--text);
+        }
+
+        .expired-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(239,68,68,.12);
+            border: 1px solid rgba(239,68,68,.25);
+            color: #f87171;
+            font-size: .8rem;
+            font-weight: 600;
+            padding: 5px 14px;
+            border-radius: 99px;
+            margin-bottom: 20px;
+            letter-spacing: .5px;
+            text-transform: uppercase;
+        }
+
+        /* ── Kart ızgarası ── */
+        .plans-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            width: 100%;
+            max-width: 760px;
+            margin-bottom: 40px;
+        }
+
+        /* ── Tek plan kartı ── */
+        .plan-card {
+            position: relative;
+            border-radius: var(--r);
+            padding: 36px 32px 32px;
+            background: rgba(255,255,255,.04);
+            border: 1px solid var(--border);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            transition: transform .25s, border-color .25s, box-shadow .25s;
+            overflow: hidden;
+        }
+
+        .plan-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            opacity: 0;
+            transition: opacity .3s;
+            pointer-events: none;
+        }
+
+        .plan-card:hover {
+            transform: translateY(-6px);
+        }
+
+        /* Aylık kart */
+        .plan-card.monthly::before {
+            background: radial-gradient(circle at 50% 0%, rgba(249,115,22,.08), transparent 60%);
+        }
+        .plan-card.monthly:hover {
+            border-color: rgba(249,115,22,.4);
+            box-shadow: 0 0 40px rgba(249,115,22,.12), 0 20px 48px rgba(0,0,0,.4);
+        }
+        .plan-card.monthly::before { opacity: 1; }
+
+        /* Yıllık kart (önerilen) */
+        .plan-card.yearly {
+            background: rgba(168,85,247,.06);
+            border-color: rgba(168,85,247,.25);
+        }
+        .plan-card.yearly::before {
+            background: radial-gradient(circle at 50% 0%, rgba(168,85,247,.10), transparent 60%);
+            opacity: 1;
+        }
+        .plan-card.yearly:hover {
+            border-color: rgba(168,85,247,.5);
+            box-shadow: 0 0 40px rgba(168,85,247,.15), 0 20px 48px rgba(0,0,0,.4);
+        }
+
+        /* Öneri rozeti */
+        .plan-badge {
+            display: inline-block;
+            font-size: .72rem;
+            font-weight: 700;
+            letter-spacing: .6px;
+            text-transform: uppercase;
+            padding: 4px 12px;
+            border-radius: 99px;
+            margin-bottom: 20px;
+        }
+
+        .plan-badge.badge-orange {
+            background: rgba(249,115,22,.15);
+            color: var(--accent);
+            border: 1px solid rgba(249,115,22,.25);
+        }
+
+        .plan-badge.badge-purple {
+            background: rgba(168,85,247,.18);
+            color: #c084fc;
+            border: 1px solid rgba(168,85,247,.30);
+        }
+
+        /* Plan adı */
+        .plan-name {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            color: var(--text);
+        }
+
+        .plan-desc {
+            font-size: .875rem;
+            color: var(--text2);
+            margin-bottom: 28px;
+            line-height: 1.5;
+        }
+
+        /* Fiyat */
+        .plan-price {
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .price-amount {
+            font-size: 3rem;
+            font-weight: 900;
+            line-height: 1;
+            color: var(--text);
+        }
+
+        .price-currency {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text2);
+            margin-bottom: 6px;
+        }
+
+        .price-period {
+            font-size: .85rem;
+            color: var(--text3);
+            margin-bottom: 4px;
+            margin-left: 2px;
+        }
+
+        .price-saving {
+            font-size: .8rem;
+            color: var(--green);
+            font-weight: 600;
+            margin-bottom: 28px;
+            min-height: 18px;
+        }
+
+        /* Özellik listesi */
+        .plan-features {
+            list-style: none;
+            margin-bottom: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .plan-features li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: .9rem;
+            color: var(--text2);
+        }
+
+        .plan-features li .feat-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(34,197,94,.12);
+            border: 1px solid rgba(34,197,94,.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .65rem;
+            color: var(--green);
+            flex-shrink: 0;
+        }
+
+        /* CTA butonu */
+        .btn-plan {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            font-family: var(--font);
+            font-size: 1rem;
+            font-weight: 700;
+            text-align: center;
+            cursor: pointer;
+            border: none;
+            text-decoration: none;
+            transition: filter .2s, transform .15s;
+        }
+
+        .btn-plan:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-plan:active { transform: translateY(0); }
+
+        .btn-orange {
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            color: #fff;
+            box-shadow: 0 4px 24px rgba(249,115,22,.35);
+        }
+
+        .btn-purple {
+            background: linear-gradient(135deg, #a855f7, #7c3aed);
+            color: #fff;
+            box-shadow: 0 4px 24px rgba(168,85,247,.35);
+        }
+
+        /* ── Alt not ── */
+        .paywall-footer {
+            text-align: center;
+            color: var(--text3);
+            font-size: .85rem;
+            line-height: 1.7;
+        }
+
+        .paywall-footer a {
+            color: var(--text2);
+            text-decoration: none;
+            border-bottom: 1px solid var(--border2);
+            padding-bottom: 1px;
+            transition: color .2s;
+        }
+
+        .paywall-footer a:hover { color: var(--text); }
+
+        /* ── Responsive ── */
+        @@media (max-width: 640px) {
+            .plans-grid { grid-template-columns: 1fr; }
+            .plan-card  { padding: 28px 24px 24px; }
+        }
+    </style>
+}
+
+<div class="paywall-wrap">
+
+    {{-- ── Başlık ── --}}
+    <div class="paywall-header">
+        <span class="paywall-icon">⏱️</span>
+
+        <div class="expired-badge">
+            ● Deneme Süresi Sona Erdi
+        </div>
+
+        <h1>Sistemi Kullanmaya<br>Devam Et</h1>
+        <p>
+            <strong>@restaurantName</strong> hesabınızın 30 günlük ücretsiz deneme süresi
+            @if (expiredDays > 0)
+            {
+                <text><strong>@expiredDays gün önce</strong> sona erdi.</text>
+            }
+            else
+            {
+                <text>sona erdi.</text>
+            }
+            <br>
+            Aşağıdaki planlardan birini seçerek tüm özelliklere sınırsız erişin.
+        </p>
+    </div>
+
+    {{-- ── Plan kartları ── --}}
+    <div class="plans-grid">
+
+        {{-- Aylık plan --}}
+        <div class="plan-card monthly">
+            <span class="plan-badge badge-orange">Aylık</span>
+            <div class="plan-name">Starter</div>
+            <div class="plan-desc">Küçük ve orta ölçekli restoranlar için ideal başlangıç paketi.</div>
+
+            <div class="plan-price">
+                <span class="price-currency">₺</span>
+                <span class="price-amount">799</span>
+                <span class="price-period">/ ay</span>
+            </div>
+            <div class="price-saving">&nbsp;</div>
+
+            <ul class="plan-features">
+                <li><span class="feat-icon">✓</span> Sınırsız masa yönetimi</li>
+                <li><span class="feat-icon">✓</span> Mutfak ekranı (KDS)</li>
+                <li><span class="feat-icon">✓</span> Gerçek zamanlı siparişler</li>
+                <li><span class="feat-icon">✓</span> 5 personel hesabı</li>
+                <li><span class="feat-icon">✓</span> Temel raporlar</li>
+            </ul>
+
+            <a href="#" class="btn-plan btn-orange">Bu Planı Seç</a>
+        </div>
+
+        {{-- Yıllık plan --}}
+        <div class="plan-card yearly">
+            <span class="plan-badge badge-purple">✦ Önerilen — Yıllık</span>
+            <div class="plan-name">Pro</div>
+            <div class="plan-desc">Büyümek isteyen restoranlar için tüm özellikler bir arada.</div>
+
+            <div class="plan-price">
+                <span class="price-currency">₺</span>
+                <span class="price-amount">599</span>
+                <span class="price-period">/ ay</span>
+            </div>
+            <div class="price-saving">🎉 Yıllık ödemede %25 tasarruf · ₺7.188 / yıl</div>
+
+            <ul class="plan-features">
+                <li><span class="feat-icon">✓</span> Starter'daki her şey</li>
+                <li><span class="feat-icon">✓</span> Sınırsız personel hesabı</li>
+                <li><span class="feat-icon">✓</span> QR Self-Order menüsü</li>
+                <li><span class="feat-icon">✓</span> Masa birleştirme & transfer</li>
+                <li><span class="feat-icon">✓</span> Gelişmiş stok & raporlar</li>
+                <li><span class="feat-icon">✓</span> Öncelikli destek</li>
+            </ul>
+
+            <a href="#" class="btn-plan btn-purple">Bu Planı Seç →</a>
+        </div>
+
+    </div>
+
+    {{-- ── Alt not ── --}}
+    <div class="paywall-footer">
+        Ödeme entegrasyonu yakında aktif olacak. Şu an için
+        <a href="mailto:destek@restaurantos.com">destek@restaurantos.com</a> adresine yazabilirsiniz.<br>
+        Hesabınızdan çıkmak için
+        <a asp-area="App" asp-controller="Auth" asp-action="Logout">buraya tıklayın</a>.
+    </div>
+
+</div>

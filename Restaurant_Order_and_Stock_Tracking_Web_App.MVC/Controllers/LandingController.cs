@@ -62,7 +62,8 @@ public class LandingController : Controller
             AdminUsername: model.Username,
             Password: model.Password,
             FullName: model.FullName,
-            Email: model.Email
+            Email: model.Email,
+            PhoneNumber: model.PhoneNumber   // [SC-5] eklendi
         );
 
         var (success, tenantId, error) = await _onboardingService.CreateTenantAsync(dto);
