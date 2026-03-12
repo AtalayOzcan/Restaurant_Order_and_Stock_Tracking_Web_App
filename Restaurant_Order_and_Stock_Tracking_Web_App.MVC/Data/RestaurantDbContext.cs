@@ -142,6 +142,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                     .HasForeignKey(u => u.TenantId)
                     .OnDelete(DeleteBehavior.Restrict)
                     .IsRequired(false);
+                entity.HasIndex(u => u.TenantId)
+                    .HasDatabaseName("ix_users_tenantid");
+                entity.HasIndex(u => u.PhoneNumber)
+                    .HasDatabaseName("ix_users_phonenumber");
             });
 
             // ════════════════════════════════════════════════════════════════
@@ -250,6 +254,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.HasQueryFilter(o =>
                     _tenantService.TenantId == null ||
                     o.TenantId == _tenantService.TenantId);
+                entity.HasIndex(o => new { o.TenantId, o.OrderStatus })
+                    .HasDatabaseName("ix_orders_tenantid_status");
             });
 
             // ════════════════════════════════════════════════════════════════
@@ -295,6 +301,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.HasQueryFilter(o =>
                     _tenantService.TenantId == null ||
                     o.MenuItem.TenantId == _tenantService.TenantId);
+                entity.HasIndex(o => o.OrderId)
+                    .HasDatabaseName("ix_order_items_orderid");
             });
 
             // ════════════════════════════════════════════════════════════════
@@ -394,6 +402,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.HasQueryFilter(s =>
                     _tenantService.TenantId == null ||
                     s.TenantId == _tenantService.TenantId);
+                entity.HasIndex(s => new { s.TenantId, s.IsClosed })
+                    .HasDatabaseName("ix_shift_logs_tenantid_isclosed");
             });
         }
     }
