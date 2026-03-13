@@ -678,7 +678,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
 
             if (item == null || order == null)
                 return new(false, "Kalem veya adisyon bulunamadı.");
-            if (order.OrderStatus != OrderStatus.Open)  // [ENUM]
+            if (order.OrderStatus != OrderStatus.Open)
                 return new(false, "Kapalı adisyonda iptal yapılamaz.");
 
             int activeQty = item.OrderItemQuantity - item.CancelledQuantity;
@@ -692,23 +692,56 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
             try
             {
                 decimal refund = item.OrderItemUnitPrice * dto.CancelQty;
+                bool tracksStock = item.MenuItem?.TrackStock == true;
+                bool isWasted = tracksStock && (dto.IsWasted ?? false);
+                bool isFullCancel = dto.CancelQty >= cancelable; // [A] Tam iptal mı?
 
-                item.CancelledQuantity += dto.CancelQty;
-                item.CancelReason = string.IsNullOrWhiteSpace(dto.CancelReason) ? null : dto.CancelReason.Trim();
-                item.OrderItemLineTotal = item.OrderItemUnitPrice * (item.OrderItemQuantity - item.CancelledQuantity);
+                // ── [A] TAM İPTAL — orijinal satırı Cancelled yap ────────────────────
+                // [B] KISMİ İPTAL — orijinal satırı küçült, split satırı aşağıda ekle
+                if (isFullCancel)
+                {
+                    // Tam iptal: ESKİ davranış korunur.
+                    // CancelledQuantity'yi tam doldur, durumu Cancelled yap.
+                    item.CancelledQuantity += dto.CancelQty;
+                    item.CancelReason = dto.CancelReason?.Trim();
+                    item.OrderItemLineTotal = item.OrderItemUnitPrice
+                                              * (item.OrderItemQuantity - item.CancelledQuantity);
+                    item.OrderItemStatus = OrderItemStatus.Cancelled;
+                    item.IsWasted = tracksStock ? isWasted : null; // tek satır, güvenli
+                }
+                else
+                {
+                    // [FIX] KISMİ İPTAL — ROW SPLIT
+                    // 1. Orijinal satırın Quantity'sini düşür (CancelledQuantity DOKUNMA)
+                    item.OrderItemQuantity -= dto.CancelQty;
+                    item.OrderItemLineTotal = item.OrderItemUnitPrice * item.OrderItemQuantity;
+                    // IsWasted, CancelReason, OrderItemStatus orijinal satırda DEĞİŞMEZ
+                    // → Önceki iptallerin flag'i korunur.
 
-                if (item.OrderItemQuantity - item.CancelledQuantity <= 0)
-                    item.OrderItemStatus = OrderItemStatus.Cancelled; // [ENUM]
+                    // 2. Yeni "Cancelled" satırı oluştur — bu iptal türünü izole taşır
+                    var splitRow = new OrderItem
+                    {
+                        OrderId = item.OrderId,
+                        MenuItemId = item.MenuItemId,
+                        OrderItemQuantity = dto.CancelQty,
+                        CancelledQuantity = dto.CancelQty,        // tamamı iptal
+                        PaidQuantity = 0,
+                        OrderItemUnitPrice = item.OrderItemUnitPrice,
+                        OrderItemLineTotal = 0m,                   // iptal satırı gelir üretmez
+                        OrderItemNote = item.OrderItemNote,
+                        OrderItemStatus = OrderItemStatus.Cancelled,
+                        OrderItemAddedAt = item.OrderItemAddedAt,
+                        CancelReason = dto.CancelReason?.Trim(),
+                        IsWasted = tracksStock ? isWasted : null, // [FIX] izole flag
+                    };
+                    _db.OrderItems.Add(splitRow);
+                }
 
                 order.OrderTotalAmount = Math.Max(0, order.OrderTotalAmount - refund);
 
-                bool tracksStock = item.MenuItem?.TrackStock == true;
-                bool isWasted = false;
-
+                // ── Stok Hareketi — CancelQty kadar, seçilen türde ─────────────────────
                 if (tracksStock)
                 {
-                    isWasted = dto.IsWasted ?? false;
-                    item.IsWasted = isWasted;
                     int prevStock = item.MenuItem!.StockQuantity;
 
                     if (!isWasted)
@@ -718,7 +751,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                             item.MenuItem.IsAvailable = true;
                     }
 
-                    // [F-02] MovementCategory: type-safe enum — Note.StartsWith bağımlılığı kaldırıldı
                     _db.StockLogs.Add(new StockLog
                     {
                         MenuItemId = item.MenuItem!.MenuItemId,
@@ -733,31 +765,26 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                         OrderId = isWasted ? dto.OrderId : null,
                         UnitPrice = item.OrderItemUnitPrice,
                         CreatedAt = DateTime.UtcNow,
-                        // [F-02] Enum ataması: stoka iade → ReturnFromCancel, zayi → OrderWaste
                         MovementCategory = isWasted
                             ? MovementCategory.OrderWaste
                             : MovementCategory.ReturnFromCancel
                     });
                 }
-                else
-                {
-                    item.IsWasted = null;
-                }
 
                 await _db.SaveChangesAsync();
 
-                // Kalan tutar sıfırlandıysa otomatik kapat
+                // ── Kalan tutar sıfırlandıysa otomatik kapat ──────────────────────────
                 var freshPaid = await _db.Payments
                     .Where(p => p.OrderId == order.OrderId)
                     .SumAsync(p => p.PaymentsAmount);
 
                 bool orderAutoClose = false;
-                if (order.OrderStatus == OrderStatus.Open && // [ENUM]
+                if (order.OrderStatus == OrderStatus.Open &&
                     order.OrderTotalAmount - freshPaid <= 0.001m &&
                     freshPaid > 0)
                 {
                     var tableForClose = await _db.Tables.FindAsync(order.TableId);
-                    order.OrderStatus = OrderStatus.Paid; // [ENUM]
+                    order.OrderStatus = OrderStatus.Paid;
                     order.OrderClosedAt = DateTime.UtcNow;
                     if (tableForClose != null) tableForClose.TableStatus = 0;
                     await _db.SaveChangesAsync();
