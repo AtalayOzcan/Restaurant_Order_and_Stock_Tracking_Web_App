@@ -49,7 +49,7 @@ public class AuthController : Controller
     // ── POST /Admin/Auth/Login ───────────────────────────────────────────────
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
+    public async Task<IActionResult> Login(LoginAdminViewModel model, string? returnUrl = null)
     {
         ViewBag.ReturnUrl = returnUrl;
 

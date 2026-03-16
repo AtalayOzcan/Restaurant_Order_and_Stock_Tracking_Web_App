@@ -80,10 +80,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
             // 🚀 COOKIE TAZELEME: Bulduğumuz TenantId'yi tarayıcıya tekrar mühürle
             Response.Cookies.Append("ros-tenant", resolvedId, new CookieOptions
             {
-                HttpOnly = false, // JS fetch okuyabilsin diye false
-                Secure = !_env.IsDevelopment(),
-                SameSite = SameSiteMode.Lax,
-                Expires = DateTimeOffset.UtcNow.AddDays(365) // 1 Yıl kalıcı
+                HttpOnly = false,                                // SignalR JS için zorunlu — değiştirme!
+                Secure = !_env.IsDevelopment(),               // Prod: HTTPS only | Dev: HTTP geçer
+                SameSite = SameSiteMode.Lax,                    // QR cross-site uyumluluğu
+                Expires = DateTimeOffset.UtcNow.AddDays(30),  // 30 gün kalıcı (eski: 365 gün)
+                Path = "/"                                  // Tüm path'lerde geçerli
             });
 
             // JS ve SignalR için ViewData'ya gönder

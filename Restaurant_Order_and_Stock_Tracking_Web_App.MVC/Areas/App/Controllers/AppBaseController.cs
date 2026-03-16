@@ -6,6 +6,10 @@
 //         - Tenant.TrialEndsAt < DateTime.UtcNow → /App/Subscription/Index yönlendir
 //         - Sonsuz döngü koruması: SubscriptionController ve AuthController muaf
 //         - PlanType == "trial" olmayan (ücretli) tenant'lar bypass edilir
+//
+//  SPRINT 4 — [IMP-6] Impersonation Paywall Bypass
+//         - IsImpersonation=true ise tüm paywall/trial kontrolleri atlanır
+//         - SysAdmin pasif veya süresi dolmuş restoranları da yönetebilir
 // ============================================================================
 
 using Microsoft.AspNetCore.Authorization;
@@ -28,10 +32,19 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
             ActionExecutionDelegate next)
         {
             // ── Sonsuz döngü koruması ────────────────────────────────────────
-            // SubscriptionController'a gidilirken kontrol yapma (zaten oradayız).
-            // AuthController'a gidilirken yapma (kullanıcı çıkış yapabilmeli).
             var controllerName = context.RouteData.Values["controller"]?.ToString();
             if (controllerName is "Subscription" or "Auth")
+            {
+                await next();
+                return;
+            }
+
+            // ── [IMP-6] Impersonation Bypass ─────────────────────────────────
+            // SysAdmin impersonation ile girmiş → tenant'ın trial/aktif durumuna
+            // bakılmaz. SysAdmin pasif veya süresi dolmuş bir restorana da girebilmeli.
+            var isImpersonation = context.HttpContext.User
+                .FindFirstValue("IsImpersonation") == "true";
+            if (isImpersonation)
             {
                 await next();
                 return;

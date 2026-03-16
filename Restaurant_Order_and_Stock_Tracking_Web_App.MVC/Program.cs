@@ -28,6 +28,18 @@
 //         Workspace Login formatı: "{tenantSlug}_{kısaAd}"
 //         İzin verilen: a-z, A-Z, 0-9, tire (-), alt tire (_)
 //         Kaldırılan: @ + . (e-posta stili karakterler)
+//
+//  SPRINT 1 — MİMARİ REFACTORING:
+//  [S1-1] AddMemoryCache → DashboardService IMemoryCache için
+//  [S1-2] IDashboardService, IStockService kayıtları
+//
+//  SPRINT 3 — GÜVENLİK:
+//  [SEC-EX]      GlobalExceptionMiddleware → AJAX/View ayrımlı hata yanıtı
+//  [SEC-HEADERS] X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy
+//  [SEC-RL]      LoginPolicy, RegisterPolicy, QrMenuPolicy eklendi
+//
+//  SPRINT 4 — IMPERSONATION:
+//  [IMP-2] ICurrentUserService → audit log kimlik servisi
 // ════════════════════════════════════════════════════════════════════════════
 
 using Microsoft.AspNetCore.Authentication;
@@ -81,9 +93,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
                 // Identity varsayılanı "@", "+" ve "." gibi e-posta karakterlerine
                 // izin verir. Workspace Login formatımız "{tenantSlug}_{kısaAd}"
                 // yalnızca harf, rakam, tire ve alt tire kullanır; fazlası yasak.
-                //
-                // Bu kısıtlama hem tutarlılığı zorunlu kılar hem de yanlışlıkla
-                // e-posta formatında username oluşturulmasını engeller.
                 options.User.AllowedUserNameCharacters =
                     "abcdefghijklmnopqrstuvwxyz" +
                     "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
@@ -174,17 +183,33 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
             builder.Services.AddScoped<Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders.IOrderService,
                 Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders.OrderService>();
 
+            // ════════════════════════════════════════════════════════════════
+            //  [S1-1/S1-2] Sprint 1 Refactoring — Servis Katmanı
+            // ════════════════════════════════════════════════════════════════
+            builder.Services.AddMemoryCache();
+            builder.Services.AddScoped<IDashboardService, DashboardService>();
+            builder.Services.AddScoped<IStockService, StockService>();
+
+            // ── [IMP-2] Sprint 4 — Impersonation Audit Log Kimlik Servisi ──
+            builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
             builder.Services.AddControllersWithViews();
 
             // ── SignalR ──────────────────────────────────────────────────
             builder.Services.AddSignalR();
 
             // ════════════════════════════════════════════════════════════════
-            //  [G-06] Rate Limiting — CallWaiter Spam Koruması
+            //  [G-06] Rate Limiting
+            //
+            //  PolicyName       Algoritma      Limit     Pencere
+            //  WaiterCallPolicy SlidingWindow  2 istek   60 sn
+            //  LoginPolicy      FixedWindow    10 istek  60 sn
+            //  RegisterPolicy   FixedWindow    3 istek   60 sn
+            //  QrMenuPolicy     SlidingWindow  30 istek  60 sn
             // ════════════════════════════════════════════════════════════════
             builder.Services.AddRateLimiter(options =>
             {
-                // ── Mevcut: Garson Çağırma — QR Menüden spam koruması ────────────────
+                // ── Mevcut: Garson Çağırma — QR Menüden spam koruması ─────
                 options.AddSlidingWindowLimiter(
                     policyName: "WaiterCallPolicy",
                     configureOptions: limiter =>
@@ -196,9 +221,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
                         limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
                     });
 
-                // ── [SEC-RL-1] Login Brute-Force Koruması ─────────────────────────────
-                // Identity lockout (5 deneme/15dk) zaten var; bu katman sunucu
-                // kaynaklarını korur ve lockout'tan önce devreye girer.
+                // ── [SEC-RL-1] Login Brute-Force Koruması ─────────────────
                 options.AddFixedWindowLimiter(
                     policyName: "LoginPolicy",
                     configureOptions: limiter =>
@@ -209,9 +232,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
                         limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
                     });
 
-                // ── [SEC-RL-2] Tenant Kayıt Spam Koruması ─────────────────────────────
-                // Her kayıt DB yazımı + e-posta gönderimi tetikler; bot saldırısına açık.
-                // 3 istek/60sn: normal kullanıcı için yeterli, bot için engelleyici.
+                // ── [SEC-RL-2] Tenant Kayıt Spam Koruması ─────────────────
                 options.AddFixedWindowLimiter(
                     policyName: "RegisterPolicy",
                     configureOptions: limiter =>
@@ -222,9 +243,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
                         limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
                     });
 
-                // ── [SEC-RL-3] QR Menü Okuma Koruması ─────────────────────────────────
-                // Sliding window: kısa süreli spike'ları da yakalar.
-                // 30 istek/60sn: normal müşteri için rahat, scraper için sınırlayıcı.
+                // ── [SEC-RL-3] QR Menü Okuma Koruması ─────────────────────
                 options.AddSlidingWindowLimiter(
                     policyName: "QrMenuPolicy",
                     configureOptions: limiter =>
@@ -236,11 +255,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
                         limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
                     });
 
-                // ── Merkezi 429 Yanıtı ────────────────────────────────────────────────
-                // Tüm policy'ler bu tek OnRejected handler'ı paylaşır.
-                // AJAX/fetch isteği → JSON yanıt (JS parse edebilir).
-                // Normal View isteği → düz metin 429 (tarayıcı görür).
-                // Retry-After: istemciye ne zaman tekrar deneyeceğini bildirir.
+                // ── Merkezi 429 Yanıtı ────────────────────────────────────
                 options.OnRejected = async (context, cancellationToken) =>
                 {
                     var ctx = context.HttpContext;
@@ -272,13 +287,56 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
 
             var app = builder.Build();
 
+            // ════════════════════════════════════════════════════════════════
+            //  [SEC-EX] Sprint 3 — Global Exception Handling
+            //
+            //  ESKİ (kaldırıldı):
+            //    app.UseExceptionHandler("/Landing/Index")  ← sadece prod,
+            //    AJAX'ta HTML 500 dönüyor, exception loglanmıyor.
+            //
+            //  YENİ:
+            //    GlobalExceptionMiddleware → AJAX → JSON, View → /Error
+            //    Her exception ILogger.LogError ile structured log.
+            //    UseStatusCodePagesWithReExecute → 404/403 → ErrorController
+            // ════════════════════════════════════════════════════════════════
+            app.UseMiddleware<Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Middlewares.GlobalExceptionMiddleware>();
+            app.UseStatusCodePagesWithReExecute("/Error/{0}");
+
             if (!app.Environment.IsDevelopment())
-            {
-                app.UseExceptionHandler("/Landing/Index");
                 app.UseHsts();
-            }
 
             app.UseHttpsRedirection();
+
+            // ════════════════════════════════════════════════════════════════
+            //  [SEC-HEADERS] Sprint 3 — Güvenlik Başlıkları
+            //  UseHttpsRedirection'dan sonra, UseRouting'den önce.
+            // ════════════════════════════════════════════════════════════════
+            app.Use(async (ctx, next) =>
+            {
+                var h = ctx.Response.Headers;
+
+                // Clickjacking: iframe gömme engeli
+                h["X-Frame-Options"] = "DENY";
+
+                // MIME sniffing: tarayıcı Content-Type'a uysun
+                h["X-Content-Type-Options"] = "nosniff";
+
+                // Referrer: dış sitelere sadece origin gönder
+                h["Referrer-Policy"] = "strict-origin-when-cross-origin";
+
+                // Permissions: kamera/mikrofon/konum kapat
+                h["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
+
+                // XSS Protection: legacy tarayıcılar için
+                h["X-XSS-Protection"] = "1; mode=block";
+
+                // Sunucu kimliğini gizle
+                h.Remove("Server");
+                h.Remove("X-Powered-By");
+
+                await next();
+            });
+
             app.UseRouting();
             app.UseRateLimiter();
             app.UseAuthentication();
@@ -290,19 +348,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
             //  [AREAS-ROUTES] Route Tanımları — Sıralama Kritik!
             //
             //  [FIX-405] Landing route, Admin route'undan ÖNCE tanımlanmalıdır.
-            //
-            //  Sorun: .NET 9 endpoint routing'de Admin route'u
-            //  "Admin/{controller}/{action}" pattern'i /Admin/Landing/Register
-            //  URL'ini eşleştirir (controller=Landing, area=Admin).
-            //  LandingController [Area("Admin")] içermediği için action
-            //  bulunamaz; .NET 9 bu durumda artık 404 yerine 405 döndürür.
-            //
-            //  Çözüm: LandingController'a ait tüm URL'leri (/Landing/...)
-            //  önce bu route yakalar → Admin route hiç devreye girmez.
             // ════════════════════════════════════════════════════════════════
 
             // [ROUTE-0] Landing — Public, AllowAnonymous, area yok
-            // Admin route'undan ÖNCE olması zorunludur.
             app.MapControllerRoute(
                 name: "landing",
                 pattern: "Landing/{action=Index}",

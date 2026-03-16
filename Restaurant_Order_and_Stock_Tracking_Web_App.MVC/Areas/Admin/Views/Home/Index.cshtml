@@ -1,13 +1,19 @@
 ﻿@* ============================================================================
    Areas/Admin/Views/Home/Index.cshtml
    GÖREV 4 — SysAdmin Dashboard Ana Sayfası
-   
+
    Layout: _AdminLayout.cshtml (Areas/Admin/Views/Shared/)
-   
+
    Yapı:
    • 4 İstatistik Kartı (Flexbox/Grid, yan yana)
    • Sol: Chart.js Restoran Büyüme Grafiği
    • Sağ: Restoran Listesi Tablosu + "Yeni Restoran Ekle" Butonu
+
+   SPRINT 4 — [IMP-5] "Bu Restorana Gir" Butonu
+   • Aktif tenant satırlarına impersonation butonu eklendi.
+   • Butona tıklanınca POST /Admin/Impersonation/Begin → token alınır
+     → yeni sekme /App/Auth/Impersonate?token=... açılır.
+   • AdminAuth oturumu bu sekmede hiç bozulmaz.
    ============================================================================ *@
 
 @model Restaurant_Order_and_Stock_Tracking_Web_App.MVC.ViewModels.Admin.AdminDashboardViewModel
@@ -16,7 +22,7 @@
 
     // Chart.js için JSON verisi — Razor → JS
     var labelsJson = System.Text.Json.JsonSerializer.Serialize(Model.GrowthLabels);
-    var dataJson = System.Text.Json.JsonSerializer.Serialize(Model.GrowthData);
+    var dataJson   = System.Text.Json.JsonSerializer.Serialize(Model.GrowthData);
 }
 
 @section Styles {
@@ -54,15 +60,11 @@
         }
 
         @@media (max-width: 900px) {
-            .stat-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
+            .stat-grid { grid-template-columns: repeat(2, 1fr); }
         }
 
         @@media (max-width: 500px) {
-            .stat-grid {
-                grid-template-columns: 1fr;
-            }
+            .stat-grid { grid-template-columns: 1fr; }
         }
 
         .stat-card {
@@ -86,30 +88,17 @@
             .stat-card::before {
                 content: '';
                 position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
+                top: 0; left: 0; right: 0;
                 height: 2px;
                 background: var(--stat-accent, #F97316);
                 opacity: 0.6;
                 border-radius: 12px 12px 0 0;
             }
 
-            .stat-card.green {
-                --stat-accent: #22C55E;
-            }
-
-            .stat-card.gray {
-                --stat-accent: #6B7280;
-            }
-
-            .stat-card.blue {
-                --stat-accent: #3B82F6;
-            }
-
-            .stat-card.orange {
-                --stat-accent: #F97316;
-            }
+            .stat-card.green  { --stat-accent: #22C55E; }
+            .stat-card.gray   { --stat-accent: #6B7280; }
+            .stat-card.blue   { --stat-accent: #3B82F6; }
+            .stat-card.orange { --stat-accent: #F97316; }
 
         .stat-top {
             display: flex;
@@ -125,23 +114,9 @@
             letter-spacing: 0.05em;
         }
 
-        .stat-icon {
-            font-size: 20px;
-            opacity: 0.8;
-        }
-
-        .stat-value {
-            font-size: 34px;
-            font-weight: 800;
-            color: var(--stat-accent, #F97316);
-            line-height: 1;
-            letter-spacing: -1px;
-        }
-
-        .stat-sub {
-            font-size: 12px;
-            color: var(--text-muted, #6B7280);
-        }
+        .stat-icon   { font-size: 20px; opacity: 0.8; }
+        .stat-value  { font-size: 34px; font-weight: 800; color: var(--stat-accent, #F97316); line-height: 1; letter-spacing: -1px; }
+        .stat-sub    { font-size: 12px; color: var(--text-muted, #6B7280); }
 
         /* ── İki Sütun Orta Alan ─────────────────────────────────────────── */
         .mid-grid {
@@ -152,12 +127,10 @@
         }
 
         @@media (max-width: 800px) {
-            .mid-grid {
-                grid-template-columns: 1fr;
-            }
+            .mid-grid { grid-template-columns: 1fr; }
         }
 
-        /* ── Panel (ortak kart kabı) ─────────────────────────────────────── */
+        /* ── Panel ───────────────────────────────────────────────────────── */
         .panel {
             background: var(--surface, #161A21);
             border: 1px solid var(--border, #2A303C);
@@ -182,15 +155,10 @@
             gap: 8px;
         }
 
-        .panel-body {
-            padding: 20px;
-        }
+        .panel-body { padding: 20px; }
 
         /* ── Grafik ──────────────────────────────────────────────────────── */
-        .chart-container {
-            position: relative;
-            height: 240px;
-        }
+        .chart-container { position: relative; height: 240px; }
 
         /* ── Yeni Restoran Butonu ────────────────────────────────────────── */
         .btn-new {
@@ -243,18 +211,10 @@
                 vertical-align: middle;
             }
 
-            .tenant-table tr:last-child td {
-                border-bottom: none;
-            }
+            .tenant-table tr:last-child td { border-bottom: none; }
+            .tenant-table tbody tr:hover td { background: rgba(255,255,255,0.02); }
 
-            .tenant-table tbody tr:hover td {
-                background: rgba(255,255,255,0.02);
-            }
-
-        .tenant-name {
-            font-weight: 600;
-            color: var(--text, #E8EAF0);
-        }
+        .tenant-name      { font-weight: 600; color: var(--text, #E8EAF0); }
 
         .tenant-subdomain {
             font-family: 'Courier New', monospace;
@@ -274,25 +234,9 @@
             letter-spacing: 0.03em;
         }
 
-        .badge-active {
-            background: rgba(34,197,94,0.12);
-            color: #22C55E;
-            border: 1px solid rgba(34,197,94,0.2);
-        }
-
-        .badge-inactive {
-            background: rgba(107,114,128,0.12);
-            color: #9CA3AF;
-            border: 1px solid rgba(107,114,128,0.2);
-        }
-
-        .badge-plan {
-            background: rgba(59,130,246,0.1);
-            color: #60A5FA;
-            border: 1px solid rgba(59,130,246,0.15);
-            font-size: 11px;
-            padding: 2px 7px;
-        }
+        .badge-active   { background: rgba(34,197,94,0.12);   color: #22C55E; border: 1px solid rgba(34,197,94,0.2); }
+        .badge-inactive { background: rgba(107,114,128,0.12); color: #9CA3AF; border: 1px solid rgba(107,114,128,0.2); }
+        .badge-plan     { background: rgba(59,130,246,0.1);   color: #60A5FA; border: 1px solid rgba(59,130,246,0.15); font-size: 11px; padding: 2px 7px; }
 
         .empty-row td {
             text-align: center;
@@ -301,10 +245,74 @@
             font-size: 13px;
         }
 
-        .date-cell {
-            color: var(--text-muted, #6B7280);
-            font-size: 12.5px;
+        .date-cell { color: var(--text-muted, #6B7280); font-size: 12.5px; }
+
+        /* ── [IMP-5] Impersonation Butonu ────────────────────────────────── */
+        .btn-impersonate {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: transparent;
+            color: #60A5FA;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 5px 11px;
+            border-radius: 7px;
+            border: 1px solid rgba(59,130,246,0.3);
+            cursor: pointer;
+            transition: all 150ms ease;
+            white-space: nowrap;
         }
+
+            .btn-impersonate:hover:not(:disabled) {
+                background: rgba(59,130,246,0.12);
+                border-color: rgba(59,130,246,0.6);
+                box-shadow: 0 0 10px rgba(59,130,246,0.15);
+            }
+
+            .btn-impersonate:disabled {
+                opacity: 0.4;
+                cursor: not-allowed;
+            }
+
+            .btn-impersonate.loading {
+                opacity: 0.6;
+                cursor: wait;
+            }
+
+        /* ── Toast Bildirimi ─────────────────────────────────────────────── */
+        #imp-toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 200ms ease, transform 200ms ease;
+            pointer-events: none;
+            z-index: 9999;
+            max-width: 320px;
+        }
+
+            #imp-toast.show {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+            #imp-toast.success {
+                background: rgba(34,197,94,0.15);
+                color: #22C55E;
+                border: 1px solid rgba(34,197,94,0.3);
+            }
+
+            #imp-toast.error {
+                background: rgba(239,68,68,0.15);
+                color: #F87171;
+                border: 1px solid rgba(239,68,68,0.3);
+            }
     </style>
 }
 
@@ -394,13 +402,14 @@
                             <th>Plan</th>
                             <th>Kayıt Tarihi</th>
                             <th>Durum</th>
+                            <th>İşlemler</th>
                         </tr>
                     </thead>
                     <tbody>
                         @if (!Model.Tenants.Any())
                         {
                             <tr class="empty-row">
-                                <td colspan="5">Henüz kayıtlı restoran yok.</td>
+                                <td colspan="6">Henüz kayıtlı restoran yok.</td>
                             </tr>
                         }
                         else
@@ -430,6 +439,26 @@
                                             <span class="badge badge-inactive">Pasif</span>
                                         }
                                     </td>
+                                    <td>
+                                        @* ── [IMP-5] Bu Restorana Gir Butonu ──────────────────────
+                                           Sadece aktif tenant'larda gösterilir.
+                                           Pasif hesaplarda impersonation anlamsız (sistem zaten kilitli).
+                                        ── *@
+                                        @if (t.IsActive)
+                                        {
+                                            <button class="btn-impersonate"
+                                                    data-tenant-id="@t.TenantId"
+                                                    data-tenant-name="@t.Name"
+                                                    onclick="startImpersonation(this)"
+                                                    title="@t.Name restoranına SysAdmin olarak gir">
+                                                🔑 Gir
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span style="font-size:12px;color:var(--text-muted,#6B7280);">—</span>
+                                        }
+                                    </td>
                                 </tr>
                             }
                         }
@@ -445,43 +474,124 @@
 
 </div>
 <!-- / dash-wrap -->
+
+<!-- ── [IMP-5] Toast bildirimi ──────────────────────────────────────────── -->
+<div id="imp-toast"></div>
+
+@* CSRF token — JS fetch'te kullanılır *@
+@Html.AntiForgeryToken()
+
 @section Scripts {
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script>
+        // ══════════════════════════════════════════════════════════════════════
+        //  [IMP-5] Impersonation — "Bu Restorana Gir" JS Akışı
+        //
+        //  1. Butona tıklanır → buton disabled + "loading" sınıfı
+        //  2. POST /Admin/Impersonation/Begin → { impersonateUrl, expiresInSecs }
+        //  3. Başarıysa: yeni sekme açılır, toast gösterilir
+        //  4. Hata varsa: toast hata mesajı, buton eski haline döner
+        //
+        //  AdminAuth oturumu bu sekmede hiç bozulmaz.
+        // ══════════════════════════════════════════════════════════════════════
+
+        // CSRF token'ı formdan al
+        const _csrfToken = document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+
+        async function startImpersonation(btn) {
+            const tenantId   = btn.dataset.tenantId;
+            const tenantName = btn.dataset.tenantName;
+
+            if (!tenantId) return;
+
+            // Çift tıklamayı önle
+            btn.disabled = true;
+            btn.classList.add('loading');
+            btn.textContent = '⏳ Bağlanıyor...';
+
+            try {
+                const res = await fetch('@Url.Action("Begin", "Impersonation", new { area = "Admin" })', {
+                    method:  'POST',
+                    headers: {
+                        'Content-Type':                'application/json',
+                        'RequestVerificationToken':    _csrfToken,
+                        'X-Requested-With':            'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({ targetTenantId: tenantId })
+                });
+
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    throw new Error(data.message ?? 'Bağlantı kurulamadı.');
+                }
+
+                // Yeni sekme aç — AdminAuth bu sekmede canlı kalır
+                window.open(data.impersonateUrl, '_blank');
+
+                showToast(`${tenantName} restoranına bağlanılıyor (yeni sekme açıldı)`, 'success');
+
+            } catch (err) {
+                showToast(err.message ?? 'Beklenmeyen hata oluştu.', 'error');
+            } finally {
+                // Butonu eski haline getir
+                btn.disabled = false;
+                btn.classList.remove('loading');
+                btn.innerHTML = '🔑 Gir';
+            }
+        }
+
+        // ── Toast yardımcısı ──────────────────────────────────────────────────
+        let _toastTimer = null;
+
+        function showToast(message, type) {
+            const toast = document.getElementById('imp-toast');
+            if (!toast) return;
+
+            clearTimeout(_toastTimer);
+            toast.textContent = message;
+            toast.className   = `show ${type}`;  // 'success' veya 'error'
+
+            _toastTimer = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 4000);
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  Chart.js — Büyüme Grafiği (değişmedi)
+        // ══════════════════════════════════════════════════════════════════════
         (function () {
             'use strict';
 
             var labels = @Html.Raw(labelsJson);
             var data   = @Html.Raw(dataJson);
 
-            var ctx = document.getElementById('growthChart').getContext('2d');
-
-            // Gradient dolgu
+            var ctx      = document.getElementById('growthChart').getContext('2d');
             var gradient = ctx.createLinearGradient(0, 0, 0, 240);
-            gradient.addColorStop(0,   'rgba(249,115,22,0.35)');
-            gradient.addColorStop(1,   'rgba(249,115,22,0.0)');
+            gradient.addColorStop(0, 'rgba(249,115,22,0.35)');
+            gradient.addColorStop(1, 'rgba(249,115,22,0.0)');
 
             new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Yeni Restoran',
-                        data: data,
-                        borderColor:     '#F97316',
-                        backgroundColor: gradient,
-                        borderWidth:     2.5,
+                        label:               'Yeni Restoran',
+                        data:                data,
+                        borderColor:         '#F97316',
+                        backgroundColor:     gradient,
+                        borderWidth:         2.5,
                         pointBackgroundColor: '#F97316',
-                        pointBorderColor:     '#0D0F12',
-                        pointBorderWidth:     2,
-                        pointRadius:          5,
-                        pointHoverRadius:     7,
-                        fill: true,
-                        tension: 0.4,
+                        pointBorderColor:    '#0D0F12',
+                        pointBorderWidth:    2,
+                        pointRadius:         5,
+                        pointHoverRadius:    7,
+                        fill:                true,
+                        tension:             0.4,
                     }]
                 },
                 options: {
-                    responsive: true,
+                    responsive:          true,
                     maintainAspectRatio: false,
                     plugins: {
                         legend: { display: false },
@@ -493,9 +603,7 @@
                             bodyColor:       '#E8EAF0',
                             padding:         10,
                             callbacks: {
-                                label: function(ctx) {
-                                    return ' ' + ctx.parsed.y + ' restoran';
-                                }
+                                label: function (ctx) { return ' ' + ctx.parsed.y + ' restoran'; }
                             }
                         }
                     },
@@ -506,12 +614,12 @@
                         },
                         y: {
                             beginAtZero: true,
-                            grid:  { color: 'rgba(255,255,255,0.05)' },
+                            grid:        { color: 'rgba(255,255,255,0.05)' },
                             ticks: {
-                                color: '#6B7280',
-                                font:  { size: 11 },
+                                color:    '#6B7280',
+                                font:     { size: 11 },
                                 stepSize: 1,
-                                callback: function(v) { return Number.isInteger(v) ? v : null; }
+                                callback: function (v) { return Number.isInteger(v) ? v : null; }
                             }
                         }
                     }

@@ -8,33 +8,6 @@
 //  [RESTRICT]    StockLog → MenuItem   OnDelete: Cascade → Restrict
 //                Ürün silindiğinde stok geçmişi KORUNUR (audit kaydı)
 //
-//  SPRINT 2 — [CONC-1] PostgreSQL xmin Concurrency Token
-//  ─────────────────────────────────────────────────────────────────────────
-//  Amaç: Race condition ve Lost Update (son yazan kazanır) sorunlarını önle.
-//
-//  PostgreSQL'de her satırın xmin (transaction ID) sütunu, satır her
-//  UPDATE edildiğinde otomatik olarak değişir. EF Core bu sütunu
-//  Concurrency Token olarak kullanabilir.
-//
-//  Nasıl çalışır:
-//    1. EF Core satırı okurken xmin değerini de okur.
-//    2. SaveChangesAsync() çağrısında UPDATE WHERE id=X AND xmin=<eski_xmin>
-//       sorgusunu üretir.
-//    3. Başka bir TX bu satırı aradaki sürede değiştirmişse xmin değişmiş
-//       olur → WHERE koşulu 0 satır etkiler → EF Core DbUpdateConcurrencyException
-//       fırlatır.
-//    4. Servis katmanı bu exception'ı yakalar ve kullanıcıya "işlemi tekrarlayın"
-//       mesajı döndürür.
-//
-//  Migration GEREKMİYOR:
-//    xmin PostgreSQL'in sistem sütunudur, şemada tanımlanmaz.
-//    Npgsql.EntityFrameworkCore.PostgreSQL paketi gereklidir (zaten kullanılıyor).
-//
-//  Korunan entity'ler:
-//    MenuItem  → StockQuantity race condition (en kritik)
-//    Order     → OrderTotalAmount çift yazma koruması
-//    OrderItem → CancelledQuantity çift iptal koruması
-//
 //  KORUNAN:
 //  - Tüm Global Query Filter'lar (Multi-Tenancy)
 //  - ShiftLog konfigürasyonu
@@ -62,6 +35,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
         public DbSet<ShiftLog> ShiftLogs { get; set; }
         public DbSet<Tenant> Tenants { get; set; }
         public DbSet<TenantConfig> TenantConfigs { get; set; }
+
+        // ── [IMP-1] Impersonation token'ları ─────────────────────────────────
+        public DbSet<ImpersonationToken> ImpersonationTokens { get; set; }
 
         // ── ITenantService ────────────────────────────────────────────────────
         private readonly ITenantService _tenantService;
@@ -93,7 +69,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
             // ════════════════════════════════════════════════════════════════
             var orderStatusConverter = new ValueConverter<OrderStatus, string>(
                 enumVal => enumVal.ToString().ToLowerInvariant(),          // C# → DB
-                dbStr => Enum.Parse<OrderStatus>(dbStr, true)              // DB → C#
+                dbStr => Enum.Parse<OrderStatus>(dbStr, true)              // DB → C# 
             );
 
             // ════════════════════════════════════════════════════════════════
@@ -221,13 +197,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
 
             // ════════════════════════════════════════════════════════════════
             //  MenuItem — Global Query Filter
-            //
-            //  [CONC-1] UseXminAsConcurrencyToken()
-            //  Korunan senaryo: İki eş zamanlı sipariş aynı anda StockQuantity
-            //  düşmeye çalışırsa son yazan kazanır (Lost Update) → negatif stok.
-            //  xmin token ile: ilk TX commit eder → xmin değişir → ikinci TX'in
-            //  SaveChangesAsync() 0 satır etkiler → DbUpdateConcurrencyException
-            //  fırlar → OrderService catch eder → kullanıcıya hata mesajı döner.
             // ════════════════════════════════════════════════════════════════
             modelBuilder.Entity<MenuItem>(entity =>
             {
@@ -255,20 +224,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                 entity.HasQueryFilter(m =>
                     _tenantService.TenantId == null ||
                     m.TenantId == _tenantService.TenantId);
-
-                // [CONC-1] xmin concurrency token — PostgreSQL sistem sütunu,
-                // migration gerekmez. Npgsql paketi ile kullanılabilir.
-                entity.Property<uint>("xmin")
-                    .HasColumnType("xid")
-                    .IsRowVersion();
             });
 
             // ════════════════════════════════════════════════════════════════
             //  Order — Global Query Filter + [ENUM-CONV-1] Value Converter
-            //
-            //  [CONC-1] UseXminAsConcurrencyToken()
-            //  Korunan senaryo: İki eş zamanlı ödeme aynı anda OrderTotalAmount
-            //  veya OrderStatus alanını güncellemeye çalışırsa çakışma yakalanır.
             // ════════════════════════════════════════════════════════════════
             modelBuilder.Entity<Order>(entity =>
             {
@@ -300,21 +259,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                     o.TenantId == _tenantService.TenantId);
                 entity.HasIndex(o => new { o.TenantId, o.OrderStatus })
                     .HasDatabaseName("ix_orders_tenantid_status");
-
-                // [CONC-1] xmin concurrency token
-                entity.Property<uint>("xmin")
-                    .HasColumnType("xid")
-                    .IsRowVersion();
             });
 
             // ════════════════════════════════════════════════════════════════
             //  OrderItem — [ENUM-CONV-2] Value Converter
             //  [WARN-1 DÜZELTME] MenuItem üzerinden Global Query Filter
-            //
-            //  [CONC-1] UseXminAsConcurrencyToken()
-            //  Korunan senaryo: CancelledQuantity çift iptal koruması.
-            //  İki eş zamanlı iptal isteği aynı satırı güncellerken
-            //  ikinci TX DbUpdateConcurrencyException alır.
             // ════════════════════════════════════════════════════════════════
             modelBuilder.Entity<OrderItem>(entity =>
             {
@@ -357,11 +306,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                     o.MenuItem.TenantId == _tenantService.TenantId);
                 entity.HasIndex(o => o.OrderId)
                     .HasDatabaseName("ix_order_items_orderid");
-
-                // [CONC-1] xmin concurrency token
-                entity.Property<uint>("xmin")
-                    .HasColumnType("xid")
-                    .IsRowVersion();
             });
 
             // ════════════════════════════════════════════════════════════════
@@ -463,6 +407,33 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data
                     s.TenantId == _tenantService.TenantId);
                 entity.HasIndex(s => new { s.TenantId, s.IsClosed })
                     .HasDatabaseName("ix_shift_logs_tenantid_isclosed");
+            });
+
+            // ════════════════════════════════════════════════════════════════
+            //  ImpersonationToken — [IMP-1] Sprint 4 Güvenlik
+            //
+            //  Migration GEREKİR: dotnet ef migrations add AddImpersonationTokens
+            // ════════════════════════════════════════════════════════════════
+            modelBuilder.Entity<ImpersonationToken>(entity =>
+            {
+                entity.ToTable("impersonation_tokens");
+                entity.HasKey(t => t.TokenId);
+                entity.Property(t => t.TokenId)
+                    .HasDefaultValueSql("gen_random_uuid()")
+                    .IsRequired();
+                entity.Property(t => t.SysAdminId).HasMaxLength(450).IsRequired();
+                entity.Property(t => t.TargetTenantId).HasMaxLength(100).IsRequired();
+                entity.Property(t => t.TargetRole).HasMaxLength(50).HasDefaultValue("Admin").IsRequired();
+                entity.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()").IsRequired();
+                entity.Property(t => t.ExpiresAt).IsRequired();
+                entity.Property(t => t.UsedAt).IsRequired(false);
+                entity.Property(t => t.UsedFromIp).HasMaxLength(45).IsRequired(false);
+
+                entity.HasIndex(t => new { t.UsedAt, t.ExpiresAt })
+                    .HasDatabaseName("ix_impersonation_tokens_active");
+
+                entity.HasIndex(t => t.SysAdminId)
+                    .HasDatabaseName("ix_impersonation_tokens_sysadmin");
             });
         }
     }
