@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models;
@@ -47,9 +48,13 @@ public class AuthController : AppBaseController
     }
 
     // ── POST /App/Auth/Login ───────────────────────────────────────────────
+    // [SEC-RL-1] LoginPolicy: 60 saniyede 10 istek — brute-force koruması.
+    // Identity lockout (5 deneme/15dk) zaten var; bu katman ondan önce
+    // devreye girer ve sunucu kaynaklarını tüketimden korur.
     [HttpPost]
     [AllowAnonymous]
     [ValidateAntiForgeryToken]
+    [EnableRateLimiting("LoginPolicy")]
     public async Task<IActionResult> Login(LoginViewModel model, string? returnUrl = null)
     {
         ViewBag.ReturnUrl = returnUrl;

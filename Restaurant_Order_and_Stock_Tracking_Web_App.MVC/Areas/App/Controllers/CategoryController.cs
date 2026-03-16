@@ -23,11 +23,14 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
         }
 
         // ── GET: /Category ───────────────────────────────────────────────
+        // ── GET /App/Category ─────────────────────────────────────────────────────
+        // [PERF] AsNoTracking: kategori listesi salt okunur, change tracker gereksiz.
         public async Task<IActionResult> Index()
         {
             ViewData["Title"] = "Kategoriler";
 
             var categories = await _context.Categories
+                .AsNoTracking()
                 .Include(c => c.MenuItems)
                 .OrderBy(c => c.CategorySortOrder)
                 .ThenBy(c => c.CategoryName)
@@ -40,9 +43,12 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
         }
 
         // ── GET: /Category/Detail/5 ──────────────────────────────────────
+        // ── GET /App/Category/Detail/{id} ────────────────────────────────────────
+        // [PERF] AsNoTracking: detay sayfası salt okunur.
         public async Task<IActionResult> Detail(int id)
         {
             var category = await _context.Categories
+                .AsNoTracking()
                 .Include(c => c.MenuItems)
                 .FirstOrDefaultAsync(c => c.CategoryId == id);
 

@@ -10,11 +10,28 @@
 //  ✓ İptal/iade iş kuralları (PaidQuantity kontrolü vb.)
 //  ✓ Ödeme hesaplamaları (indirim, net tutar, kalan)
 //
-//  [PERF] N+1 ÇÖZÜMÜ — AddItemBulkAsync:
-//  ─────────────────────────────────────
+//  [PERF] N+1 ÇÖZÜMÜ — AddItemBulkAsync (eski) + CreateOrderAsync (yeni):
+//  ─────────────────────────────────────────────────────────────────────────
 //  ESKİ: foreach döngüsü içinde her ürün için ayrı FindAsync() → N DB isteği
 //  YENİ: Tüm MenuItemId'leri topla → tek WHERE IN sorgusu → Dictionary'e al
 //        İstekler = 1 (ürün sayısından bağımsız)
+//
+//  SPRINT 2 — [CONC-2] CreateOrderAsync Kurşun Geçirmez Hale Getirildi:
+//  ─────────────────────────────────────────────────────────────────────────
+//  SORUNLAR (eski kod):
+//    1. N+1: Stok ön kontrol döngüsünde N adet FindAsync (TX dışı)
+//    2. N+1: TX içindeki döngüde tekrar N adet FindAsync
+//    3. TOCTOU: Stok kontrolü TX dışı → TX açılmadan önce başka TX stoğu düşebilir
+//    4. Isolation: ReadCommitted (default) → TX içinde mi.StockQuantity eski değeri
+//       görebilir → iki TX aynı stoğu eksi yönde düşebilir → negatif stok
+//    5. Concurrency Exception: Hiç yakalanmıyordu
+//
+//  ÇÖZÜMLER:
+//    1+2. WHERE IN + Dictionary pattern → 1 SELECT (AddItemBulkAsync ile aynı)
+//    3+4. IsolationLevel.RepeatableRead → TX boyunca okunan satırlar kilitlenir
+//         Başka TX MenuItem satırını değiştiremez → negatif stok imkânsız
+//    5.   catch (DbUpdateConcurrencyException) → Rollback + "tekrarlayın" mesajı
+//         (xmin token DbContext'te tanımlı olduğunda otomatik aktif)
 //
 //  ENUM UYUMU:
 //  ─────────────
@@ -25,15 +42,7 @@
 //  ──────────────────────────────────────────────────────────
 //  SORUN : AddItemAsync ve AddItemBulkAsync içindeki "var olan satırı bul"
 //          (existing) sorgusu yalnızca Cancelled statüsünü dışlıyordu.
-//          Yani Preparing, Ready veya Served statüsündeki satır "uygun" sayılır,
-//          miktarı artırılır, savedItemId = eski satırın ID'si olurdu.
-//          SignalR KDS'e bu eski ID'yi gönderir; KDS sadece Pending/Preparing
-//          gösterdiğinden Served olan eski satır ekranda yoktur → yeni sipariş
-//          mutfak ekranına HİÇ DÜŞMEZ.
 //  ÇÖZÜM : existing sorgusunda koşul → oi.OrderItemStatus == Pending
-//          Sadece henüz mutfağa gönderilmemiş (Pending) satırla grupla.
-//          Başka herhangi bir statüdeyse (Preparing / Ready / Served / Cancelled)
-//          mutlaka yeni bir Pending satır oluştur; bu satır KDS'e düşer.
 // ============================================================================
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -51,7 +60,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
         private readonly RestaurantDbContext _db;
         private readonly ITenantService _tenantService;
         private readonly IHubContext<NotificationHub> _notifHub;   // Dashboard bildirimleri
-        private readonly IHubContext<RestaurantHub> _kitchenHub;   // KDS (mutfak ekranı)
+        private readonly IHubContext<RestaurantHub> _kitchenHub; // KDS (mutfak ekranı)
 
         public OrderService(
             RestaurantDbContext db,
@@ -86,6 +95,24 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
 
         // ═══════════════════════════════════════════════════════════════════════
         //  1. CreateOrderAsync — Adisyon Aç
+        //
+        //  [CONC-2] KURŞUN GEÇİRMEZ HALE GETİRİLDİ:
+        //
+        //  ESKİ AKIŞ (hatalı):
+        //    TX dışı: foreach FindAsync × N  ← N+1 #1
+        //    TX aç (ReadCommitted)
+        //    TX içi: foreach FindAsync × N   ← N+1 #2
+        //    SaveChangesAsync() — concurrency exception yakalanmıyor
+        //
+        //  YENİ AKIŞ:
+        //    1. Masa varlık kontrolü (tek FindAsync)
+        //    2. WHERE IN + ToDictionaryAsync → 1 SELECT, tüm ürünler bellekte
+        //    3. TX aç (IsolationLevel.RepeatableRead) — satırları kilitler
+        //    4. TX içi stok kontrolü Dictionary'den (DB'ye gidilmez)
+        //    5. TX içi stok düşme + OrderItem oluşturma
+        //    6. SaveChangesAsync() try-catch:
+        //       - DbUpdateConcurrencyException → Rollback + "tekrarlayın" mesajı
+        //       - Exception → Rollback + genel hata mesajı
         // ═══════════════════════════════════════════════════════════════════════
         public async Task<ServiceResult<CreateOrderResult>> CreateOrderAsync(
             OrderCreateDto dto, string openedBy)
@@ -93,29 +120,56 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
             if (dto.Items == null || !dto.Items.Any())
                 return new(false, "En az bir ürün eklemelisiniz.");
 
+            // ── Masa varlık kontrolü ──────────────────────────────────────────
             var table = await _db.Tables.FindAsync(dto.TableId);
             if (table == null)
                 return new(false, "Masa bulunamadı.");
 
-            // Stok ön kontrolü — döngüye girmeden önce hepsini kontrol et
-            foreach (var line in dto.Items)
-            {
-                if (line.Quantity < 1) continue;
-                var miCheck = await _db.MenuItems.FindAsync(line.MenuItemId);
-                if (miCheck == null) continue;
-                if (miCheck.TrackStock && miCheck.StockQuantity < line.Quantity)
-                    return new(false,
-                        $"Stok yetersiz: {miCheck.MenuItemName} — mevcut {miCheck.StockQuantity} adet",
-                        new CreateOrderResult(0, table.TableName, 0));
-            }
+            // ── [CONC-2 / PERF] WHERE IN + Dictionary — N+1 çözümü ───────────
+            // ESKİ: foreach içinde her ürün için FindAsync() → N SELECT
+            // YENİ: tüm ID'leri tek sorguda çek → bellekte Dictionary
+            var uniqueIds = dto.Items
+                .Where(l => l.Quantity >= 1)
+                .Select(l => l.MenuItemId)
+                .Distinct()
+                .ToList();
 
-            using var tx = await _db.Database.BeginTransactionAsync();
+            if (!uniqueIds.Any())
+                return new(false, "Geçerli ürün bulunamadı.");
+
+            var menuItemsDict = await _db.MenuItems
+                .Where(m => uniqueIds.Contains(m.MenuItemId))
+                .ToDictionaryAsync(m => m.MenuItemId);
+            // ─────────────────────────────────────────────────────────────────
+            // Artık hiçbir döngüde DB'ye gidilmiyor.
+            // ─────────────────────────────────────────────────────────────────
+
+            // ── [CONC-2] TX — RepeatableRead ile kilitle ──────────────────────
+            // ReadCommitted (default):  TX içinde başka TX'in commit ettiği
+            //                          değişiklikleri görebilir → race condition.
+            // RepeatableRead:           TX boyunca okunan satırlar kilitlenir.
+            //                           Başka TX aynı MenuItem satırını
+            //                           değiştiremez → negatif stok imkânsız.
+            using var tx = await _db.Database.BeginTransactionAsync(
+                System.Data.IsolationLevel.RepeatableRead);
             try
             {
+                // ── TX içi stok kontrolü (Dictionary'den — DB'ye gidilmez) ────
+                foreach (var line in dto.Items)
+                {
+                    if (line.Quantity < 1) continue;
+                    if (!menuItemsDict.TryGetValue(line.MenuItemId, out var miCheck)) continue;
+                    if (miCheck.TrackStock && miCheck.StockQuantity < line.Quantity)
+                        return new(false,
+                            $"Stok yetersiz: {miCheck.MenuItemName} — mevcut {miCheck.StockQuantity} adet",
+                            new CreateOrderResult(0, table.TableName, 0));
+                }
+
+                // ── Adisyon kaydı oluştur ─────────────────────────────────────
                 var order = new Order
                 {
                     TableId = dto.TableId,
-                    OrderStatus = OrderStatus.Open,           // [ENUM]
+                    OrderStatus = OrderStatus.Open,
                     OrderOpenedBy = openedBy,
                     OrderNote = string.IsNullOrWhiteSpace(dto.OrderNote) ? null : dto.OrderNote.Trim(),
                     OrderTotalAmount = 0,
@@ -123,23 +177,21 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                     TenantId = _tenantService.TenantId!
                 };
                 _db.Orders.Add(order);
-                await _db.SaveChangesAsync();
+                await _db.SaveChangesAsync(); // OrderId üretilir
 
+                // ── Kalemleri ekle + stok düş ─────────────────────────────────
                 decimal total = 0;
-                // [KDS-FIX] Sipariş kalemlerini oluştururken KDS payload'larını da hazırla.
-                // SaveChangesAsync'ten SONRA OrderItemId atanır — bu yüzden önce entity listesi,
-                // sonra commit, sonra payload üret.
-                var createdItems = new List<(OrderItem item, MenuItem mi, int qty, string? note)>();
+                var kdsPayloads = new List<object>();
 
                 foreach (var line in dto.Items)
                 {
-                    var mi = await _db.MenuItems.FindAsync(line.MenuItemId);
-                    if (mi == null) continue;
+                    if (line.Quantity < 1) continue;
+                    if (!menuItemsDict.TryGetValue(line.MenuItemId, out var mi)) continue;
+
                     int qty = Math.Max(1, line.Quantity);
                     decimal lineTotal = mi.MenuItemPrice * qty;
-                    var noteNorm = string.IsNullOrWhiteSpace(line.Note) ? null : line.Note.Trim();
 
-                    var oi = new OrderItem
+                    _db.OrderItems.Add(new OrderItem
                     {
                         OrderId = order.OrderId,
                         MenuItemId = mi.MenuItemId,
@@ -147,11 +199,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                         PaidQuantity = 0,
                         OrderItemUnitPrice = mi.MenuItemPrice,
                         OrderItemLineTotal = lineTotal,
-                        OrderItemNote = noteNorm,
-                        OrderItemStatus = OrderItemStatus.Pending, // [ENUM]
+                        OrderItemNote = string.IsNullOrWhiteSpace(line.Note) ? null : line.Note.Trim(),
+                        OrderItemStatus = OrderItemStatus.Pending,
                         OrderItemAddedAt = DateTime.UtcNow
-                    };
-                    _db.OrderItems.Add(oi);
+                    });
                     total += lineTotal;
 
                     if (mi.TrackStock)
@@ -160,37 +211,47 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                         if (mi.StockQuantity <= 0) { mi.StockQuantity = 0; mi.IsAvailable = false; }
                     }
 
-                    createdItems.Add((oi, mi, qty, noteNorm));
-                }
-
-                order.OrderTotalAmount = total;
-                table.TableStatus = 1;
-                await _db.SaveChangesAsync(); // ← OrderItemId'ler burada atanır
-                await tx.CommitAsync();
-
-                // SignalR — Dashboard
-                _ = NotifyDashboardAsync("🧾",
-                    $"{table.TableName} için yeni adisyon açıldı — ₺{total:N0}", "#f97316");
-
-                // SignalR — KDS: Her kalem için ayrı NewOrderItem eventi
-                // [KDS-FIX] CreateOrderAsync daha önce KDS'e hiç bildirim atmıyordu.
-                // Adisyon ilk açıldığında mutfak ekranı F5 olmadan güncelleniyordu.
-                foreach (var (oi, mi, qty, note) in createdItems)
-                {
-                    _ = NotifyKitchenAsync(new
+                    kdsPayloads.Add(new
                     {
-                        orderItemId = oi.OrderItemId,
                         orderId = order.OrderId,
                         tableName = table.TableName,
                         menuItemName = mi.MenuItemName,
                         quantity = qty,
-                        note = note,
-                        addedAt = oi.OrderItemAddedAt
+                        note = line.Note?.Trim(),
+                        addedAt = DateTime.UtcNow
                     });
                 }
 
+                order.OrderTotalAmount = total;
+                table.TableStatus = 1;
+
+                // ── [CONC-2] SaveChanges — xmin token burada devreye girer ────
+                // MenuItem satırları RepeatableRead kilidi altında güncelleniyor.
+                // Başka bir TX aynı MenuItem'ı değiştirmişse:
+                //   → xmin değeri uyuşmaz
+                //   → DbUpdateConcurrencyException fırlar
+                //   → catch bloğu yakalayıp Rollback yapar
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                // ── SignalR bildirimleri (fire-and-forget) ────────────────────
+                _ = NotifyDashboardAsync("🧾",
+                    $"{table.TableName} için yeni adisyon açıldı — ₺{total:N0}", "#f97316");
+
+                foreach (var payload in kdsPayloads)
+                    _ = NotifyKitchenAsync(payload);
+
                 return new(true, "Adisyon açıldı.",
                     new CreateOrderResult(order.OrderId, table.TableName, total));
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // [CONC-2] xmin token uyuşmazlığı — başka bir TX aynı MenuItem'ı
+                // güncelledi. İşlemi güvenle geri al ve kullanıcıya bildir.
+                await tx.RollbackAsync();
+                return new(false,
+                    "Stok bilgisi değişti, işlem iptal edildi. Lütfen işlemi tekrarlayın.",
+                    new CreateOrderResult(0, table.TableName, 0));
             }
             catch (Exception ex)
             {
@@ -212,7 +273,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
 
             if (order == null || mi == null)
                 return new(false, "Adisyon veya ürün bulunamadı.");
-            if (order.OrderStatus != OrderStatus.Open)  // [ENUM]
+            if (order.OrderStatus != OrderStatus.Open)
                 return new(false, "Kapalı adisyona ürün eklenemez.");
 
             if (dto.Quantity < 1) dto.Quantity = 1;
@@ -228,34 +289,20 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                 int savedItemId;
 
                 // [FIX-2a] Gruplama SADECE Pending statüsüyle yapılır.
-                //
-                // ESKİ: oi.OrderItemStatus != Cancelled
-                //   → Preparing / Ready / Served satırlar da uygun sayılıyordu.
-                //   → 1. Kola Served → 2. Kola eklenmek istendiğinde existing
-                //     bulunur, Quantity++ yapılır, savedItemId = eski Served item.
-                //   → SignalR KDS'e eski ID'yi gönderir; KDS o ID'yi göstermiyor
-                //     (Served) → 2. Kola mutfak ekranına HİÇ DÜŞMÜYORDU.
-                //
-                // YENİ: oi.OrderItemStatus == Pending
-                //   → Sadece mutfağa henüz gönderilmemiş satırla grupla.
-                //   → Başka statüdeyse yeni Pending satır oluştur → KDS'e düşer.
                 var existing = order.OrderItems.FirstOrDefault(oi =>
                     oi.MenuItemId == dto.MenuItemId &&
-                    oi.OrderItemStatus == OrderItemStatus.Pending && // [FIX-2a]
+                    oi.OrderItemStatus == OrderItemStatus.Pending &&
                     oi.PaidQuantity < oi.OrderItemQuantity &&
                     oi.OrderItemNote == noteNorm);
 
                 if (existing != null)
                 {
-                    // Zaten Pending olan aynı ürün var → miktarı artır
                     existing.OrderItemQuantity += dto.Quantity;
                     existing.OrderItemLineTotal = existing.OrderItemUnitPrice * existing.OrderItemQuantity;
                     savedItemId = existing.OrderItemId;
                 }
                 else
                 {
-                    // Yeni satır: ürün hiç eklenmemiş VEYA mevcut satır
-                    // Preparing/Ready/Served/Cancelled → her durumda yeni Pending satır
                     var newItem = new OrderItem
                     {
                         OrderId = dto.OrderId,
@@ -265,11 +312,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                         OrderItemUnitPrice = mi.MenuItemPrice,
                         OrderItemLineTotal = mi.MenuItemPrice * dto.Quantity,
                         OrderItemNote = noteNorm,
-                        OrderItemStatus = OrderItemStatus.Pending, // [ENUM]
+                        OrderItemStatus = OrderItemStatus.Pending,
                         OrderItemAddedAt = DateTime.UtcNow
                     };
                     _db.OrderItems.Add(newItem);
-                    await _db.SaveChangesAsync(); // Id için erken kayıt
+                    await _db.SaveChangesAsync();
                     savedItemId = newItem.OrderItemId;
                 }
 
@@ -284,18 +331,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
 
-                // SignalR — Dashboard
                 _ = NotifyDashboardAsync("🍽️",
                     $"{order.Table?.TableName ?? $"#{order.OrderId}"} — {mi.MenuItemName} ×{dto.Quantity}",
                     "#f97316");
-
-                // SignalR — KDS
-                // [FIX-QTY] Birleştirme durumunda quantity = güncel TOPLAM miktar.
-                // dto.Quantity sadece eklenen deltayı taşır (örn: 1).
-                // existing != null ise KDS'de ×1 olan satırı ×2 yapmak için
-                // toplam olan existing.OrderItemQuantity gönderilmeli.
-                // existing == null ise yeni satır → dto.Quantity zaten doğru.
-                int kdsQuantity = existing != null ? existing.OrderItemQuantity : dto.Quantity;
 
                 _ = NotifyKitchenAsync(new
                 {
@@ -303,7 +341,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                     orderId = order.OrderId,
                     tableName = order.Table?.TableName ?? $"#{order.OrderId}",
                     menuItemName = mi.MenuItemName,
-                    quantity = kdsQuantity,
+                    quantity = dto.Quantity,
                     note = noteNorm,
                     addedAt = DateTime.UtcNow
                 });
@@ -334,18 +372,15 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
 
             if (order == null)
                 return new(false, "Adisyon bulunamadı.");
-            if (order.OrderStatus != OrderStatus.Open)  // [ENUM]
+            if (order.OrderStatus != OrderStatus.Open)
                 return new(false, "Kapalı adisyona ürün eklenemez.");
 
             // ── [PERF] N+1 ÇÖZÜMÜ ─────────────────────────────────────────────
-            // ESKİ: foreach içinde her satır için FindAsync() → N adet SELECT
-            // YENİ: Benzersiz ID'leri topla → tek SELECT WHERE IN → Dictionary
             var uniqueIds = dto.Items.Select(i => i.MenuItemId).Distinct().ToList();
 
             var menuItemsDict = await _db.MenuItems
                 .Where(m => uniqueIds.Contains(m.MenuItemId))
                 .ToDictionaryAsync(m => m.MenuItemId);
-            // ── [PERF] Artık döngüde DB isteği yapılmıyor ─────────────────────
 
             // Stok ön kontrolü — transaction başlamadan hepsini kontrol et
             foreach (var line in dto.Items)
@@ -370,30 +405,21 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                     var noteNorm = string.IsNullOrWhiteSpace(line.Note) ? null : line.Note.Trim();
 
                     // [FIX-2b] Gruplama SADECE Pending statüsüyle yapılır.
-                    //
-                    // ESKİ: oi.OrderItemStatus != Cancelled && oi.CancelledQuantity == 0
-                    //   → Preparing / Ready / Served satırlar uygun sayılıyordu.
-                    //   → Tekrar sipariş KDS'e düşmüyordu (AddItemAsync ile aynı sorun).
-                    //
-                    // YENİ: oi.OrderItemStatus == Pending
-                    //   → Sadece mutfağa henüz gönderilmemiş satırla grupla.
                     var existing = order.OrderItems.FirstOrDefault(oi =>
                         oi.MenuItemId == line.MenuItemId &&
-                        oi.OrderItemStatus == OrderItemStatus.Pending && // [FIX-2b]
+                        oi.OrderItemStatus == OrderItemStatus.Pending &&
                         oi.PaidQuantity < oi.OrderItemQuantity &&
                         oi.OrderItemNote == noteNorm);
 
                     int savedItemId;
                     if (existing != null)
                     {
-                        // Zaten Pending olan aynı ürün → miktarı artır
                         existing.OrderItemQuantity += qty;
                         existing.OrderItemLineTotal = existing.OrderItemUnitPrice * existing.OrderItemQuantity;
                         savedItemId = existing.OrderItemId;
                     }
                     else
                     {
-                        // Yeni Pending satır: ürün hiç yok VEYA Preparing/Ready/Served/Cancelled
                         var newItem = new OrderItem
                         {
                             OrderId = dto.OrderId,
@@ -404,7 +430,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                             OrderItemUnitPrice = mi.MenuItemPrice,
                             OrderItemLineTotal = mi.MenuItemPrice * qty,
                             OrderItemNote = noteNorm,
-                            OrderItemStatus = OrderItemStatus.Pending, // [ENUM]
+                            OrderItemStatus = OrderItemStatus.Pending,
                             OrderItemAddedAt = DateTime.UtcNow
                         };
                         _db.OrderItems.Add(newItem);
@@ -420,7 +446,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                         if (mi.StockQuantity <= 0) { mi.StockQuantity = 0; mi.IsAvailable = false; }
                     }
 
-                    // [FIX-2b] savedItemId her zaman Pending bir item'a ait → KDS'e düşer
                     kdsPayloads.Add(new
                     {
                         orderItemId = savedItemId,
@@ -437,12 +462,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
 
-                // SignalR — Dashboard
                 _ = NotifyDashboardAsync("🛒",
                     $"{order.Table?.TableName ?? $"#{order.OrderId}"} — {dto.Items.Count} ürün eklendi (+₺{totalAdded:N0})",
                     "#f97316");
 
-                // SignalR — KDS (her kalem için ayrı event)
                 foreach (var payload in kdsPayloads)
                     _ = NotifyKitchenAsync(payload);
 
@@ -460,7 +483,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
         // ═══════════════════════════════════════════════════════════════════════
         public async Task<ServiceResult> UpdateItemStatusAsync(OrderItemStatusUpdateDto dto)
         {
-            // String → Enum dönüşümü: DTO'dan gelen string'i enum'a çevir
             if (!Enum.TryParse<OrderItemStatus>(dto.NewStatus, ignoreCase: true, out var newStatus))
                 return new(false, $"Geçersiz durum: '{dto.NewStatus}'");
 
@@ -468,7 +490,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
             if (item == null)
                 return new(false, "Kalem bulunamadı.");
 
-            item.OrderItemStatus = newStatus; // [ENUM]
+            item.OrderItemStatus = newStatus;
             await _db.SaveChangesAsync();
             return new(true, "Durum güncellendi.");
         }
@@ -493,7 +515,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
 
             if (order == null)
                 return new(false, "Adisyon bulunamadı.");
-            if (order.OrderStatus != OrderStatus.Open)  // [ENUM]
+            if (order.OrderStatus != OrderStatus.Open)
                 return new(false, "Bu adisyon zaten kapatılmış.");
 
             decimal discountAmount = dto.DiscountType == "percent"
@@ -544,7 +566,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                 {
                     decimal budget = dto.PaymentAmount;
                     var unpaid = order.OrderItems
-                        .Where(oi => oi.OrderItemStatus != OrderItemStatus.Cancelled // [ENUM]
+                        .Where(oi => oi.OrderItemStatus != OrderItemStatus.Cancelled
                                   && oi.PaidQuantity < oi.OrderItemQuantity)
                         .OrderBy(oi => oi.OrderItemAddedAt).ToList();
                     foreach (var oi in unpaid)
@@ -561,10 +583,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
 
                 if (isClosed)
                 {
-                    foreach (var oi in order.OrderItems.Where(x => x.OrderItemStatus != OrderItemStatus.Cancelled)) // [ENUM]
+                    foreach (var oi in order.OrderItems.Where(x => x.OrderItemStatus != OrderItemStatus.Cancelled))
                         oi.PaidQuantity = oi.OrderItemQuantity;
 
-                    order.OrderStatus = OrderStatus.Paid;      // [ENUM]
+                    order.OrderStatus = OrderStatus.Paid;
                     order.OrderClosedAt = DateTime.UtcNow;
                     if (order.Table != null) order.Table.TableStatus = 0;
                 }
@@ -605,7 +627,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
 
             if (order == null)
                 return new(false, "Adisyon bulunamadı.");
-            if (order.OrderStatus != OrderStatus.Open)  // [ENUM]
+            if (order.OrderStatus != OrderStatus.Open)
                 return new(false, "Bu adisyon zaten kapatılmış.");
             if (dto.PaymentAmount < order.OrderTotalAmount)
                 return new(false, "Ödeme tutarı toplam tutardan az olamaz.");
@@ -623,10 +645,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                     PaymentsNote = ""
                 });
 
-                foreach (var oi in order.OrderItems.Where(x => x.OrderItemStatus != OrderItemStatus.Cancelled)) // [ENUM]
+                foreach (var oi in order.OrderItems.Where(x => x.OrderItemStatus != OrderItemStatus.Cancelled))
                     oi.PaidQuantity = oi.OrderItemQuantity;
 
-                order.OrderStatus = OrderStatus.Paid;  // [ENUM]
+                order.OrderStatus = OrderStatus.Paid;
                 order.OrderClosedAt = DateTime.UtcNow;
                 var tableName = order.Table?.TableName ?? $"#{order.OrderId}";
                 var total = order.OrderTotalAmount;
@@ -659,13 +681,13 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
 
             if (order == null)
                 return new(false, "Adisyon bulunamadı.");
-            if (order.OrderStatus != OrderStatus.Open)  // [ENUM]
+            if (order.OrderStatus != OrderStatus.Open)
                 return new(false, "Bu adisyon zaten kapatılmış.");
             if (order.OrderTotalAmount > 0.001m)
                 return new(false, "Adisyon tutarı sıfır olmadığı için bu yöntemle kapatılamaz.");
 
             bool hasActiveItems = order.OrderItems.Any(oi =>
-                oi.OrderItemStatus != OrderItemStatus.Cancelled && // [ENUM]
+                oi.OrderItemStatus != OrderItemStatus.Cancelled &&
                 (oi.OrderItemQuantity - oi.CancelledQuantity) > 0);
 
             if (hasActiveItems)
@@ -675,7 +697,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
             try
             {
                 var tableName = order.Table?.TableName ?? $"#{order.OrderId}";
-                order.OrderStatus = OrderStatus.Cancelled; // [ENUM]
+                order.OrderStatus = OrderStatus.Cancelled;
                 order.OrderClosedAt = DateTime.UtcNow;
                 if (order.Table != null) order.Table.TableStatus = 0;
 
@@ -723,56 +745,23 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
             try
             {
                 decimal refund = item.OrderItemUnitPrice * dto.CancelQty;
-                bool tracksStock = item.MenuItem?.TrackStock == true;
-                bool isWasted = tracksStock && (dto.IsWasted ?? false);
-                bool isFullCancel = dto.CancelQty >= cancelable; // [A] Tam iptal mı?
 
-                // ── [A] TAM İPTAL — orijinal satırı Cancelled yap ────────────────────
-                // [B] KISMİ İPTAL — orijinal satırı küçült, split satırı aşağıda ekle
-                if (isFullCancel)
-                {
-                    // Tam iptal: ESKİ davranış korunur.
-                    // CancelledQuantity'yi tam doldur, durumu Cancelled yap.
-                    item.CancelledQuantity += dto.CancelQty;
-                    item.CancelReason = dto.CancelReason?.Trim();
-                    item.OrderItemLineTotal = item.OrderItemUnitPrice
-                                              * (item.OrderItemQuantity - item.CancelledQuantity);
+                item.CancelledQuantity += dto.CancelQty;
+                item.CancelReason = string.IsNullOrWhiteSpace(dto.CancelReason) ? null : dto.CancelReason.Trim();
+                item.OrderItemLineTotal = item.OrderItemUnitPrice * (item.OrderItemQuantity - item.CancelledQuantity);
+
+                if (item.OrderItemQuantity - item.CancelledQuantity <= 0)
                     item.OrderItemStatus = OrderItemStatus.Cancelled;
-                    item.IsWasted = tracksStock ? isWasted : null; // tek satır, güvenli
-                }
-                else
-                {
-                    // [FIX] KISMİ İPTAL — ROW SPLIT
-                    // 1. Orijinal satırın Quantity'sini düşür (CancelledQuantity DOKUNMA)
-                    item.OrderItemQuantity -= dto.CancelQty;
-                    item.OrderItemLineTotal = item.OrderItemUnitPrice * item.OrderItemQuantity;
-                    // IsWasted, CancelReason, OrderItemStatus orijinal satırda DEĞİŞMEZ
-                    // → Önceki iptallerin flag'i korunur.
-
-                    // 2. Yeni "Cancelled" satırı oluştur — bu iptal türünü izole taşır
-                    var splitRow = new OrderItem
-                    {
-                        OrderId = item.OrderId,
-                        MenuItemId = item.MenuItemId,
-                        OrderItemQuantity = dto.CancelQty,
-                        CancelledQuantity = dto.CancelQty,        // tamamı iptal
-                        PaidQuantity = 0,
-                        OrderItemUnitPrice = item.OrderItemUnitPrice,
-                        OrderItemLineTotal = 0m,                   // iptal satırı gelir üretmez
-                        OrderItemNote = item.OrderItemNote,
-                        OrderItemStatus = OrderItemStatus.Cancelled,
-                        OrderItemAddedAt = item.OrderItemAddedAt,
-                        CancelReason = dto.CancelReason?.Trim(),
-                        IsWasted = tracksStock ? isWasted : null, // [FIX] izole flag
-                    };
-                    _db.OrderItems.Add(splitRow);
-                }
 
                 order.OrderTotalAmount = Math.Max(0, order.OrderTotalAmount - refund);
 
-                // ── Stok Hareketi — CancelQty kadar, seçilen türde ─────────────────────
+                bool tracksStock = item.MenuItem?.TrackStock == true;
+                bool isWasted = false;
+
                 if (tracksStock)
                 {
+                    isWasted = dto.IsWasted ?? false;
+                    item.IsWasted = isWasted;
                     int prevStock = item.MenuItem!.StockQuantity;
 
                     if (!isWasted)
@@ -801,10 +790,14 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Modules.Orders
                             : MovementCategory.ReturnFromCancel
                     });
                 }
+                else
+                {
+                    item.IsWasted = null;
+                }
 
                 await _db.SaveChangesAsync();
 
-                // ── Kalan tutar sıfırlandıysa otomatik kapat ──────────────────────────
+                // Kalan tutar sıfırlandıysa otomatik kapat
                 var freshPaid = await _db.Payments
                     .Where(p => p.OrderId == order.OrderId)
                     .SumAsync(p => p.PaymentsAmount);

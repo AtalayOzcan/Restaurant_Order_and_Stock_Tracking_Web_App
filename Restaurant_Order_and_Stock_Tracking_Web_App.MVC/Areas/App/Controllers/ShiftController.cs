@@ -53,15 +53,21 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
         }
 
         // ── GET /App/Shift ────────────────────────────────────────────────────
+        // ── GET /App/Shift ────────────────────────────────────────────────────────
+        // [PERF] AsNoTracking: vardiya listesi salt okunur, sadece görüntüleniyor.
         public async Task<IActionResult> Index(int page = 1)
         {
             const int pageSize = 20;
 
+            // Aktif vardiya: sayfada "Kapat" butonu göstermek için tracked gerekebilir
+            // ancak bu bilgi sadece görüntüleme amaçlı → AsNoTracking güvenli.
             var activeShift = await _db.ShiftLogs
+                .AsNoTracking()
                 .Include(s => s.OpenedByUser)
                 .FirstOrDefaultAsync(s => !s.IsClosed);
 
             var query = _db.ShiftLogs
+                .AsNoTracking()
                 .Include(s => s.OpenedByUser)
                 .Include(s => s.ClosedByUser)
                 .OrderByDescending(s => s.OpenedAt);

@@ -184,6 +184,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
             // ════════════════════════════════════════════════════════════════
             builder.Services.AddRateLimiter(options =>
             {
+                // ── Mevcut: Garson Çağırma — QR Menüden spam koruması ────────────────
                 options.AddSlidingWindowLimiter(
                     policyName: "WaiterCallPolicy",
                     configureOptions: limiter =>
@@ -195,13 +196,77 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
                         limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
                     });
 
+                // ── [SEC-RL-1] Login Brute-Force Koruması ─────────────────────────────
+                // Identity lockout (5 deneme/15dk) zaten var; bu katman sunucu
+                // kaynaklarını korur ve lockout'tan önce devreye girer.
+                options.AddFixedWindowLimiter(
+                    policyName: "LoginPolicy",
+                    configureOptions: limiter =>
+                    {
+                        limiter.Window = TimeSpan.FromSeconds(60);
+                        limiter.PermitLimit = 10;
+                        limiter.QueueLimit = 0;
+                        limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+                    });
+
+                // ── [SEC-RL-2] Tenant Kayıt Spam Koruması ─────────────────────────────
+                // Her kayıt DB yazımı + e-posta gönderimi tetikler; bot saldırısına açık.
+                // 3 istek/60sn: normal kullanıcı için yeterli, bot için engelleyici.
+                options.AddFixedWindowLimiter(
+                    policyName: "RegisterPolicy",
+                    configureOptions: limiter =>
+                    {
+                        limiter.Window = TimeSpan.FromSeconds(60);
+                        limiter.PermitLimit = 3;
+                        limiter.QueueLimit = 0;
+                        limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+                    });
+
+                // ── [SEC-RL-3] QR Menü Okuma Koruması ─────────────────────────────────
+                // Sliding window: kısa süreli spike'ları da yakalar.
+                // 30 istek/60sn: normal müşteri için rahat, scraper için sınırlayıcı.
+                options.AddSlidingWindowLimiter(
+                    policyName: "QrMenuPolicy",
+                    configureOptions: limiter =>
+                    {
+                        limiter.Window = TimeSpan.FromSeconds(60);
+                        limiter.PermitLimit = 30;
+                        limiter.SegmentsPerWindow = 6;
+                        limiter.QueueLimit = 0;
+                        limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+                    });
+
+                // ── Merkezi 429 Yanıtı ────────────────────────────────────────────────
+                // Tüm policy'ler bu tek OnRejected handler'ı paylaşır.
+                // AJAX/fetch isteği → JSON yanıt (JS parse edebilir).
+                // Normal View isteği → düz metin 429 (tarayıcı görür).
+                // Retry-After: istemciye ne zaman tekrar deneyeceğini bildirir.
                 options.OnRejected = async (context, cancellationToken) =>
                 {
-                    context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                    context.HttpContext.Response.ContentType = "application/json";
-                    await context.HttpContext.Response.WriteAsync(
-                        "{\"success\":false,\"message\":\"Çok sık istek gönderildi. Lütfen bekleyin.\"}",
-                        cancellationToken);
+                    var ctx = context.HttpContext;
+                    ctx.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                    ctx.Response.Headers["Retry-After"] = "60";
+
+                    bool isAjax =
+                        ctx.Request.Headers["X-Requested-With"] == "XMLHttpRequest" ||
+                        ctx.Request.Headers["Accept"]
+                            .ToString()
+                            .Contains("application/json", StringComparison.OrdinalIgnoreCase);
+
+                    if (isAjax)
+                    {
+                        ctx.Response.ContentType = "application/json; charset=utf-8";
+                        await ctx.Response.WriteAsync(
+                            "{\"success\":false,\"message\":\"Çok fazla istek gönderdiniz. Lütfen biraz bekleyin.\"}",
+                            cancellationToken);
+                    }
+                    else
+                    {
+                        ctx.Response.ContentType = "text/plain; charset=utf-8";
+                        await ctx.Response.WriteAsync(
+                            "Çok fazla istek gönderdiniz. Lütfen biraz bekleyin.",
+                            cancellationToken);
+                    }
                 };
             });
 

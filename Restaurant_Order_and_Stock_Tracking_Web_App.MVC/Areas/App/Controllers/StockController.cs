@@ -1,4 +1,24 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿// ============================================================================
+//  Areas/App/Controllers/StockController.cs
+//
+//  REFACTORING: UpdateStock() 80 satır if/else → IStockService (8 satır)
+//
+//  ESKİ DURUM (kaldırıldı):
+//    UpdateStock() → 80 satır iş mantığı doğrudan action içinde
+//    → direct / fire / movement modları controller'da
+//    → StockLog yazımı controller'da
+//    → Test edilemez
+//
+//  YENİ DURUM:
+//    UpdateStock() → IStockService.UpdateStockAsync() → 8 satır
+//    Diğer tüm action'lar (Index, GetHistory, ToggleTrack, GenerateStockPdfReport)
+//    değiştirilmedi — sadece UpdateStock refactor edildi.
+//
+//  PROGRAM.CS'E EKLENMESİ GEREKEN:
+//    builder.Services.AddScoped<IStockService, StockService>();
+// ============================================================================
+
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
@@ -17,17 +37,20 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
     public class StockController : AppBaseController
     {
         private readonly RestaurantDbContext _context;
+        private readonly ITenantService _tenantService;
+        private readonly IStockService _stockService;
 
-        private readonly ITenantService _tenantService;  // [SEC-06] ikinci savunma hattı
-
-
-        public StockController(RestaurantDbContext context, ITenantService tenantService)
+        public StockController(
+            RestaurantDbContext context,
+            ITenantService tenantService,
+            IStockService stockService)
         {
             _context = context;
-            _tenantService = tenantService;  // [SEC-06]
+            _tenantService = tenantService;
+            _stockService = stockService;
         }
 
-        // ── GET: /Stock ──────────────────────────────────────────────
+        // ── GET: /App/Stock ──────────────────────────────────────────────────
         public async Task<IActionResult> Index(bool showAll = false)
         {
             ViewData["Title"] = "Stok Yönetimi";
@@ -96,7 +119,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
                     oi.OrderItemAddedAt >= thirtyDaysAgo &&
                     oi.OrderItemStatus != OrderItemStatus.Cancelled)
                 .GroupBy(oi => oi.MenuItemId)
-                .Select(g => new { MenuItemId = g.Key, Consumed = g.Sum(oi => oi.OrderItemQuantity - oi.CancelledQuantity) })
+                .Select(g => new
+                {
+                    MenuItemId = g.Key,
+                    Consumed = g.Sum(oi => oi.OrderItemQuantity - oi.CancelledQuantity)
+                })
                 .ToDictionaryAsync(g => g.MenuItemId, g => g.Consumed);
 
             ViewData["ConsumedMap"] = consumed;
@@ -104,121 +131,38 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
             return View(displayItems);
         }
 
-        // ── POST: /Stock/UpdateStock ─────────────────────────────────
-        // Eski: çok sayıda ayrı parametre (menuItemId, updateMode, newStockValue, ...)
-        // Yeni: tek [FromBody] StockUpdateDto
+        // ── POST: /App/Stock/UpdateStock ─────────────────────────────────────
+        // REFACTORED: 80 satır if/else → IStockService'e taşındı (8 satır)
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateStock([FromBody] StockUpdateDto dto)
         {
-            var item = await _context.MenuItems
-                .FirstOrDefaultAsync(m => m.MenuItemId == dto.MenuItemId);
+            var tenantId = _tenantService.TenantId ?? string.Empty;
+            var result = await _stockService.UpdateStockAsync(dto, tenantId);
 
-            if (item == null)
-                return Json(new { success = false, message = "Ürün bulunamadı." });
+            if (!result.Success)
+                return Json(new { success = false, message = result.Message });
 
-            if (item.TenantId != _tenantService.TenantId)
-                return Json(new { success = false, message = "Bu ürüne erişim yetkiniz yok." });
-
-            int previousStock = item.StockQuantity;
-            int newStock;
-            string movementType;
-            int quantityChange;
-
-            if (dto.UpdateMode == "direct")
-            {
-                if (dto.NewStockValue == null || dto.NewStockValue < 0)
-                    return Json(new { success = false, message = "Geçerli bir stok değeri giriniz." });
-
-                newStock = dto.NewStockValue.Value;
-                quantityChange = newStock - previousStock;
-                movementType = "Düzeltme";
-            }
-            else if (dto.UpdateMode == "fire")
-            {
-                // ── 🔥 Stok Kaynaklı Fire / Zayi Çıkışı ──────────────────────
-                // BUG 1+2 DÜZELTMESİ: Depoda bozulan/kırılan ürünler bu moddan girilir.
-                // SourceType="StokKaynaklı" → fire raporuna doğru kategoride düşer.
-                if (dto.MovementQuantity == null || dto.MovementQuantity <= 0)
-                    return Json(new { success = false, message = "Fire miktarını giriniz." });
-
-                if (string.IsNullOrWhiteSpace(dto.Note))
-                    return Json(new { success = false, message = "Fire nedenini açıklamak zorunludur (örn: 'Fare kolaları delmiş')." });
-
-                quantityChange = -dto.MovementQuantity.Value;   // her zaman çıkış
-                movementType = "Çıkış";
-                newStock = previousStock + quantityChange; // eksi yönde
-
-                if (newStock < 0)
-                    return Json(new { success = false, message = "Stok sıfırın altına düşemez. Mevcut stok: " + previousStock });
-            }
-            else
-            {
-                if (dto.MovementQuantity == null || dto.MovementQuantity <= 0)
-                    return Json(new { success = false, message = "Geçerli bir miktar giriniz." });
-
-                if (string.IsNullOrWhiteSpace(dto.Note))
-                    return Json(new { success = false, message = "Hareket bazlı işlem için açıklama zorunludur." });
-
-                if (dto.MovementDirection == "in")
-                {
-                    quantityChange = dto.MovementQuantity.Value;
-                    movementType = "Giriş";
-                }
-                else
-                {
-                    quantityChange = -dto.MovementQuantity.Value;
-                    movementType = "Çıkış";
-                }
-
-                newStock = previousStock + quantityChange;
-                if (newStock < 0)
-                    return Json(new { success = false, message = "Stok miktarı sıfırın altına düşemez." });
-            }
-
-            if (dto.AlertThreshold.HasValue && dto.AlertThreshold.Value >= 0)
-                item.AlertThreshold = dto.AlertThreshold.Value;
-            if (dto.CriticalThreshold.HasValue && dto.CriticalThreshold.Value >= 0)
-                item.CriticalThreshold = dto.CriticalThreshold.Value;
-
-            item.StockQuantity = newStock;
-
-            // ── StockLog: SourceType ve UnitPrice eklendi ─────────────────────
-            // BUG 1: "StokKaynaklı" SourceType ile fire kaydı ayrışır
-            // BUG 5: UnitPrice alanı, raporlarda doğru tutar hesabı sağlar
-            _context.StockLogs.Add(new StockLog
-            {
-                MenuItemId = item.MenuItemId,
-                MovementType = movementType,
-                QuantityChange = quantityChange,
-                PreviousStock = previousStock,
-                NewStock = newStock,
-                Note = dto.Note?.Trim(),
-                SourceType = dto.UpdateMode == "fire" ? "StokKaynaklı" : null,
-                OrderId = null,   // stok hareketi — adisyon bağlantısı yok
-                UnitPrice = item.MenuItemPrice,
-                CreatedAt = DateTime.UtcNow
-            });
-
-            await _context.SaveChangesAsync();
-
+            var d = result.Data!;
             return Json(new
             {
                 success = true,
-                newStock,
-                status = GetStatusString(item),
-                statusLabel = GetStatusLabel(item),
-                statusPill = GetStatusPillClass(item),
-                alertThreshold = item.AlertThreshold,
-                criticalThreshold = item.CriticalThreshold,
-                message = $"Stok güncellendi. Yeni stok: {newStock}"
+                newStock = d.NewStock,
+                status = d.Status,
+                statusLabel = d.StatusLabel,
+                statusPill = d.StatusPill,
+                alertThreshold = d.AlertThreshold,
+                criticalThreshold = d.CriticalThreshold,
+                message = result.Message
             });
         }
 
-        // ── GET: /Stock/GetHistory/5 ─────────────────────────────────
+        // ── GET: /App/Stock/GetHistory/{id} ──────────────────────────────────
         [HttpGet]
         public async Task<IActionResult> GetHistory(int id)
         {
-            var item = await _context.MenuItems.FirstOrDefaultAsync(m => m.MenuItemId == id); // [G-01]
+            var item = await _context.MenuItems
+                .FirstOrDefaultAsync(m => m.MenuItemId == id);
+
             if (item == null)
                 return Json(new { success = false, message = "Ürün bulunamadı." });
 
@@ -238,22 +182,27 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
                     l.PreviousStock,
                     l.NewStock,
                     note = l.Note ?? "—",
-                    // BUG 1: Geçmiş modalında fire türü de gösterilir
                     sourceType = l.SourceType ?? "",
                     orderId = l.OrderId
                 })
                 .ToListAsync();
 
-            return Json(new { success = true, itemName = item.MenuItemName, sku = $"SKU-{item.MenuItemId:D4}", logs });
+            return Json(new
+            {
+                success = true,
+                itemName = item.MenuItemName,
+                sku = $"SKU-{item.MenuItemId:D4}",
+                logs
+            });
         }
 
-        // ── POST: /Stock/ToggleTrack ──────────────────────────────────
-        // Eski: int menuItemId, bool trackStock — düz parametre
-        // Yeni: [FromBody] StockToggleTrackDto
+        // ── POST: /App/Stock/ToggleTrack ─────────────────────────────────────
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> ToggleTrack([FromBody] StockToggleTrackDto dto)
         {
-            var item = await _context.MenuItems.FirstOrDefaultAsync(m => m.MenuItemId == dto.MenuItemId); // [G-01]
+            var item = await _context.MenuItems
+                .FirstOrDefaultAsync(m => m.MenuItemId == dto.MenuItemId);
+
             if (item == null)
                 return Json(new { success = false, message = "Ürün bulunamadı." });
 
@@ -267,11 +216,13 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
                 status = GetStatusString(item),
                 statusLabel = GetStatusLabel(item),
                 statusPill = GetStatusPillClass(item),
-                message = item.TrackStock ? "Stok takibi aktif edildi." : "Stok takibi kapatıldı."
+                message = item.TrackStock
+                    ? "Stok takibi aktif edildi."
+                    : "Stok takibi kapatıldı."
             });
         }
 
-        // ── GET: /Stock/GenerateStockPdfReport ───────────────────────
+        // ── GET: /App/Stock/GenerateStockPdfReport ───────────────────────────
         [HttpGet]
         public async Task<IActionResult> GenerateStockPdfReport(
             string? search = null,
@@ -294,7 +245,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
                 .ThenBy(m => m.MenuItemName)
                 .ToListAsync();
 
-            // Filtrele
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var sq = search.ToLower();
@@ -320,8 +270,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
 
             var reportDate = DateTime.Now;
             var restaurantName = "Restoran Stok Raporu";
-
-            // Renk sabitleri
             var headerBg = "#1e293b";
             var rowEven = "#f8fafc";
             var rowOdd = "#ffffff";
@@ -339,7 +287,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
                     page.Margin(28);
                     page.DefaultTextStyle(x => x.FontSize(9).FontFamily("Arial"));
 
-                    // ── HEADER ──────────────────────────────────────────────
                     page.Header().Column(col =>
                     {
                         col.Item().Row(row =>
@@ -359,12 +306,10 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
                                     .FontSize(9).FontColor("#64748b").AlignRight();
                             });
                         });
-
                         col.Item().PaddingTop(6).LineHorizontal(1.5f).LineColor("#1e293b");
                         col.Item().PaddingBottom(6);
                     });
 
-                    // ── FOOTER ──────────────────────────────────────────────
                     page.Footer().AlignCenter().Text(text =>
                     {
                         text.Span("Sayfa ").FontSize(8).FontColor("#94a3b8");
@@ -375,22 +320,19 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
                             .FontSize(8).FontColor("#94a3b8");
                     });
 
-                    // ── CONTENT ─────────────────────────────────────────────
                     page.Content().Table(table =>
                     {
-                        // Sütun genişlikleri
                         table.ColumnsDefinition(cols =>
                         {
-                            cols.RelativeColumn(3.5f); // Ürün Adı
-                            cols.RelativeColumn(1.5f); // SKU
-                            cols.RelativeColumn(2f);   // Kategori
-                            cols.RelativeColumn(1.5f); // Güncel Stok
-                            cols.RelativeColumn(1.5f); // Uyarı Eşiği
-                            cols.RelativeColumn(1.5f); // Kritik Eşik
-                            cols.RelativeColumn(2f);   // Durum
+                            cols.RelativeColumn(3.5f);
+                            cols.RelativeColumn(1.5f);
+                            cols.RelativeColumn(2f);
+                            cols.RelativeColumn(1.5f);
+                            cols.RelativeColumn(1.5f);
+                            cols.RelativeColumn(1.5f);
+                            cols.RelativeColumn(2f);
                         });
 
-                        // Başlık satırı
                         static IContainer HeaderCell(IContainer c) =>
                             c.Background("#1e293b").Padding(7).AlignMiddle();
 
@@ -412,7 +354,6 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
                                 .Text("Stok Durumu").Bold().FontColor(Colors.White).FontSize(9);
                         });
 
-                        // Veri satırları (zebra striping)
                         for (int i = 0; i < allItems.Count; i++)
                         {
                             var item = allItems[i];
@@ -456,12 +397,13 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
             return File(pdfBytes, "application/pdf", fileName);
         }
 
-        // ── Private helpers ───────────────────────────────────────────
+        // ── Private helpers — Stok durum hesaplama ───────────────────────────
         private static bool IsCritical(MenuItem m) =>
             m.TrackStock && m.CriticalThreshold > 0 && m.StockQuantity <= m.CriticalThreshold;
 
         private static bool IsLow(MenuItem m) =>
-            m.TrackStock && m.AlertThreshold > 0 && m.StockQuantity <= m.AlertThreshold && !IsCritical(m);
+            m.TrackStock && m.AlertThreshold > 0 &&
+            m.StockQuantity <= m.AlertThreshold && !IsCritical(m);
 
         private static string GetStatusString(MenuItem m)
         {

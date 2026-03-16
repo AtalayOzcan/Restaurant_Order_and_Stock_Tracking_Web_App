@@ -15,6 +15,7 @@
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Services;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.ViewModels.Onboarding;
 
@@ -47,8 +48,11 @@ public class LandingController : Controller
     // ── POST /Landing/Register ─────────────────────────────────────────────
     // [SB-6] Başarılı kayıt → Success action'a yönlendir.
     //        TempData ile Firma Kodu, restoran adı ve admin adı taşınır.
+    // [SEC-RL-2] RegisterPolicy: 60 saniyede 3 istek — tenant kayıt spam koruması.
+    // Her kayıt DB yazımı tetikler; bot saldırısına karşı sınırlandırıldı.
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [EnableRateLimiting("RegisterPolicy")]
     public async Task<IActionResult> Register(TenantRegisterViewModel model)
     {
         ViewData["Title"] = "Restoranınızı Kaydedin";

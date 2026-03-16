@@ -13,19 +13,26 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
     {
         private readonly RestaurantDbContext _context;
         private readonly IHubContext<RestaurantHub> _hub;
+        private readonly ILogger<QrMenuController> _logger;
 
         private static readonly HashSet<string> _validLangs =
             new(StringComparer.OrdinalIgnoreCase) { "tr", "en", "ar", "ru" };
 
-        public QrMenuController(RestaurantDbContext context, IHubContext<RestaurantHub> hub)
+        public QrMenuController(
+            RestaurantDbContext context,
+            IHubContext<RestaurantHub> hub,
+            ILogger<QrMenuController> logger)
         {
             _context = context;
             _hub = hub;
+            _logger = logger;
         }
 
         // ── GET /QrMenu/{tenantId}/Index/{tableName} ──────────────────────────────
         // [YENİ] URL'ye tenantId eklendi!
+        // [SEC-RL-3] QrMenuPolicy: 60 saniyede 30 istek — scraping/DDoS koruması.
         [HttpGet]
+        [EnableRateLimiting("QrMenuPolicy")]
         [Route("QrMenu/{tenantId}/Index/{tableName}")]
         public async Task<IActionResult> Index(string tenantId, string tableName)
         {
@@ -88,7 +95,9 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         }
 
         // ── GET /QrMenu/{tenantId}/Detail/{id}?tableName={tableName} ─────────────────────
+        // [SEC-RL-3] QrMenuPolicy: Index ile aynı policy — ürün detay scraping koruması.
         [HttpGet]
+        [EnableRateLimiting("QrMenuPolicy")]
         [Route("QrMenu/{tenantId}/Detail/{id}")]
         public async Task<IActionResult> Detail(string tenantId, int id, string? tableName)
         {
@@ -153,8 +162,11 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
                     tableName = table.TableName,
                     calledAtUtc = table.WaiterCalledAt!.Value.ToString("o")
                 });
-                // 👇 BU ÇOK ÖNEMLİ: Visual Studio ekranına mesajı kime attığımızı yazdıracak
-                Console.WriteLine($"🚨 [QR MENU] {roomId} odasına '{table.TableName}' için mesaj ATEŞLENDİ!");
+                // [SEC-3] Console.WriteLine → ILogger.LogDebug
+                // Production'da LogLevel.Debug kapalıysa sıfır overhead.
+                _logger.LogDebug(
+                    "[QrMenu] {RoomId} odasina WaiterCalled mesaji gonderildi. Masa: {TableName}",
+                    roomId, table.TableName);
             }
 
             return Ok(new { success = true, alreadyCalled = false, message = "Garson çağrıldı." });
@@ -162,7 +174,8 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Controllers
         }
 
         // [YENİ] JSON Payload'una TenantId eklendi!
-    } public class CallWaiterRequest
+    }
+    public class CallWaiterRequest
     {
         public string TenantId { get; set; } = string.Empty;
         public string TableName { get; set; } = string.Empty;

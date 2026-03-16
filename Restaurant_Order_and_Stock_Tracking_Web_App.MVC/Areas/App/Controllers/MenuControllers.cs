@@ -30,11 +30,14 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
         }
 
         // ── GET: /Menu ──────────────────────────────────────────────────
+        // ── GET /App/Menu ─────────────────────────────────────────────────────────
+        // [PERF] AsNoTracking: menü listeleme sayfası salt okunur.
         public async Task<IActionResult> Index()
         {
             ViewData["Title"] = "Menü Ürünleri";
 
             var menuItems = await _context.MenuItems
+                .AsNoTracking()
                 .Where(m => !m.IsDeleted)
                 .Include(m => m.Category)
                 .OrderBy(m => m.Category.CategorySortOrder)
@@ -43,6 +46,7 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
                 .ToListAsync();
 
             ViewData["Categories"] = await _context.Categories
+                .AsNoTracking()
                 .Where(c => c.IsActive)
                 .OrderBy(c => c.CategorySortOrder)
                 .ThenBy(c => c.CategoryName)
@@ -54,17 +58,21 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers
             return View(menuItems);
         }
 
-        // ── GET: /Menu/Detail/5 ─────────────────────────────────────────
+        // ── GET /App/Menu/Detail/{id} ─────────────────────────────────────────────
+        // [PERF] AsNoTracking: detay sayfası salt okunur.
         public async Task<IActionResult> Detail(int id)
         {
             var item = await _context.MenuItems
+                .AsNoTracking()
                 .Include(m => m.Category)
                 .FirstOrDefaultAsync(m => m.MenuItemId == id);
+
             if (item == null) return NotFound();
 
             ViewData["Title"] = $"{item.MenuItemName} — Detay";
             ViewData["HasLowStock"] = await _context.MenuItems
                 .AnyAsync(m => !m.IsDeleted && m.TrackStock && m.StockQuantity < 5);
+
             return View(item);
         }
 
