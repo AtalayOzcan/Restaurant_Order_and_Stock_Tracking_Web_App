@@ -108,6 +108,12 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Services
             var from = _config["Email:SenderAddress"] ?? user;
             var fromName = _config["Email:SenderName"] ?? "RestaurantOS";
 
+            // ── GEÇICI DEBUG ─────────────────────────────────────────────
+            _logger.LogWarning(
+                "[EMAIL-DEBUG] Host:{Host} Port:{Port} User:{User} PassLen:{Len} PassEmpty:{Empty}",
+                host, port, user, password.Length, string.IsNullOrEmpty(password));
+            // ─────────────────────────────────────────────────────────────
+
             using var client = new SmtpClient(host, port)
             {
                 Credentials = new NetworkCredential(user, password),

@@ -73,6 +73,15 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
 
             var builder = WebApplication.CreateBuilder(args);
 
+            // ── .env dosyasını oku ────────────────────────────────────────
+            // TraversePath(): mevcut dizinden başlayıp üst klasörleri tarar.
+            // Visual Studio'da çalışma dizini bin/Debug/net9.0 olduğundan
+            // parametresiz Load() .env'i bulamaz — TraversePath zorunlu.
+            // Production'da gerçek sistem env var'ları .env'i override eder.
+            DotNetEnv.Env.TraversePath().Load();
+            builder.Configuration.AddEnvironmentVariables();
+            // ─────────────────────────────────────────────────────────────
+
             builder.Services.AddDbContext<RestaurantDbContext>(options =>
                 options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 

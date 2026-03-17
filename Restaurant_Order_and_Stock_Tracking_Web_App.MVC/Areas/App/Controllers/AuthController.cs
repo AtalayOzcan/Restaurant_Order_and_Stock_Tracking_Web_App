@@ -394,7 +394,7 @@ public class AuthController : AppBaseController
             TempData["ResetFirmaKodu"] = firmaKodu;
 
             _logger.LogInformation("[RESET] Grant token üretildi. TenantId: {TenantId}", firmaKodu);
-            return RedirectToAction(nameof(ResetPassword));
+            return RedirectToAction(nameof(ResetPassword), new { area = "App" });
         }
 
         ViewBag.FirmaKodu = firmaKodu;
@@ -416,7 +416,7 @@ public class AuthController : AppBaseController
     public IActionResult ResetPassword()
     {
         if (TempData["ResetToken"] is not string token || string.IsNullOrEmpty(token))
-            return RedirectToAction(nameof(ForgotPassword));
+            return RedirectToAction(nameof(ForgotPassword), new { area = "App" });
 
         TempData.Keep(); // POST'a kadar TempData korunsun
         ViewBag.ResetToken = token;
@@ -445,7 +445,7 @@ public class AuthController : AppBaseController
         {
             _logger.LogWarning("[RESET] Geçersiz veya süresi dolmuş token. TenantId: {TenantId}", firmaKodu);
             TempData["ResetError"] = "Şifre sıfırlama oturumunuzun süresi dolmuş. Lütfen tekrar başlayın.";
-            return RedirectToAction(nameof(ForgotPassword));
+            return RedirectToAction(nameof(ForgotPassword), new { area = "App" });
         }
 
         if (newPassword != confirmPassword)
@@ -485,7 +485,7 @@ public class AuthController : AppBaseController
         await _userManager.UpdateSecurityStampAsync(user);
         _logger.LogInformation("[RESET] Şifre başarıyla sıfırlandı. TenantId: {TenantId}", firmaKodu);
         TempData["ResetSuccess"] = "Şifreniz başarıyla güncellendi. Giriş yapabilirsiniz.";
-        return RedirectToAction(nameof(Login));
+        return RedirectToAction(nameof(Login), new { area = "App" });
     }
 
     // ══════════════════════════════════════════════════════════════════════
