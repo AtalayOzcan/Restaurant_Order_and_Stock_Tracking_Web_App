@@ -1,0 +1,218 @@
+﻿@* ──────────────────────────────────────────────────────────────────────────
+   Areas/App/Views/Auth/VerifyResetOtp.cshtml
+   SPRINT 6 — [FP] Şifre Sıfırlama OTP Doğrulama
+
+   Sprint 5'ten fark:
+     - Email hidden input kaldırıldı (form'da taşınmıyor)
+     - Sadece firmaKodu taşınıyor
+     - Maskelenmiş email gösterimi (ViewBag.MaskedEmail)
+     - Cooldown sayacı + tekrar gönder butonu eklendi
+────────────────────────────────────────────────────────────────────────── *@
+@{
+    Layout = null;
+    ViewData["Title"] = "Kod Doğrulama";
+    var firmaKodu   = ViewBag.FirmaKodu as string ?? "";
+    var maskedEmail = ViewBag.MaskedEmail as string ?? "kayıtlı yönetici";
+    var cdSec       = (int)(ViewBag.CooldownSec ?? 0);
+}
+<!DOCTYPE html>
+<html lang="tr" data-theme="dark">
+<head>
+    <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RestaurantOS — Kod Doğrulama</title>
+    <script>(function(){var t=localStorage.getItem('ros-theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;1,700;1,800&family=Lato:wght@300;400;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="~/css/theme.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/auth.css" asp-append-version="true" />
+    <style>
+        .otp-wrap { display: flex; gap: 10px; justify-content: center; margin: 24px 0; }
+        .otp-digit {
+            width: 52px; height: 60px;
+            border-radius: 10px;
+            border: 1.5px solid var(--border, #2A303C);
+            background: var(--surface-2, #0D1117);
+            color: var(--text, #E8EAF0);
+            font-size: 28px; font-weight: 700;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            transition: border-color .15s;
+        }
+        .otp-digit:focus {
+            outline: none;
+            border-color: #F97316;
+            box-shadow: 0 0 0 3px rgba(249,115,22,.15);
+        }
+        .otp-digit.is-invalid { border-color: #EF4444; }
+        .btn-resend {
+            width: 100%;
+            background: transparent;
+            color: var(--text-muted, #6B7280);
+            border: 1px solid var(--border, #2A303C);
+            border-radius: 10px;
+            padding: 11px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 8px;
+            font-family: inherit;
+            transition: all .15s;
+        }
+        .btn-resend:hover:not(:disabled) { border-color: #F97316; color: #F97316; }
+        .btn-resend:disabled { opacity: .4; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="auth-bg" aria-hidden="true">
+        <div class="auth-orb auth-orb-1"></div>
+        <div class="auth-orb auth-orb-2"></div>
+        <div class="auth-orb auth-orb-3"></div>
+        <div class="auth-grid"></div>
+    </div>
+
+    <div class="auth-wrap">
+        <a class="auth-back" asp-area="App" asp-controller="Auth" asp-action="ForgotPassword">
+            <span class="auth-back-arrow">←</span> Geri
+        </a>
+
+        <div class="auth-card">
+            <div class="auth-logo">
+                <span class="auth-logo-icon" aria-hidden="true">🍽</span>
+                <span class="auth-logo-text">RestaurantOS</span>
+                <span class="auth-logo-sub">Şifre Sıfırlama — Kod Doğrulama</span>
+            </div>
+
+            <h1 class="auth-title">Gelen kutunuzu kontrol edin</h1>
+            <p class="auth-subtitle" style="text-align:center">
+                <strong style="color:var(--text,#E8EAF0)">@maskedEmail</strong>
+                adresine 6 haneli doğrulama kodu gönderdik.
+            </p>
+
+            @* Hata mesajı *@
+            @if (ViewBag.Error is string errMsg)
+            {
+                <div class="auth-alert" role="alert" style="margin-bottom:12px">@errMsg</div>
+            }
+
+            @* OTP doğrulama formu — sadece firmaKodu taşınıyor *@
+            <form id="otpForm"
+                  method="post"
+                  asp-area="App"
+                  asp-controller="Auth"
+                  asp-action="VerifyResetOtp">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="firmaKodu" value="@firmaKodu" />
+
+                <div class="otp-wrap">
+                    @for (int i = 0; i < 6; i++)
+                    {
+                        <input type="text"
+                               inputmode="numeric"
+                               maxlength="1"
+                               class="otp-digit"
+                               id="d@(i)"
+                               data-index="@i"
+                               autocomplete="@(i == 0 ? "one-time-code" : "off")" />
+                    }
+                </div>
+                <input type="hidden" name="code" id="codeHidden" />
+
+                <button type="submit"
+                        class="auth-btn auth-btn--primary"
+                        style="width:100%">
+                    Doğrula
+                </button>
+            </form>
+
+            @* Tekrar gönder — cooldown aktifken disabled *@
+            <form method="post"
+                  asp-area="App"
+                  asp-controller="Auth"
+                  asp-action="ForgotPassword"
+                  style="margin-top:0">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="firmaKodu" value="@firmaKodu" />
+                <button type="submit"
+                        class="btn-resend"
+                        id="btnResend"
+                        @(cdSec > 0 ? "disabled" : "")>
+                    @if (cdSec > 0)
+                    {
+                        <span>Tekrar gönder (<span id="cdDisplay">@cdSec</span>s)</span>
+                    }
+                    else
+                    {
+                        <span>Tekrar kod gönder</span>
+                    }
+                </button>
+            </form>
+
+            @if (cdSec > 0)
+            {
+                <p style="text-align:center;font-size:12px;color:var(--text-muted,#6B7280);margin-top:10px">
+                    Yeni kod için
+                    <strong style="color:#F97316"><span id="cdTxt">@cdSec</span> saniye</strong>
+                    bekleyin
+                </p>
+            }
+        </div>
+    </div>
+
+    <script>
+        // ── 6 kutucuk OTP girişi ──────────────────────────────────────────
+        const digits = Array.from({ length: 6 }, (_, i) => document.getElementById('d' + i));
+        const hidden = document.getElementById('codeHidden');
+
+        digits.forEach((inp, idx) => {
+            inp.addEventListener('input', () => {
+                inp.value = inp.value.replace(/\D/g, '').slice(-1);
+                if (inp.value && idx < 5) digits[idx + 1].focus();
+                hidden.value = digits.map(d => d.value).join('');
+                digits.forEach(d => d.classList.remove('is-invalid'));
+            });
+            inp.addEventListener('keydown', e => {
+                if (e.key === 'Backspace' && !inp.value && idx > 0)
+                    digits[idx - 1].focus();
+            });
+            inp.addEventListener('paste', e => {
+                e.preventDefault();
+                const pasted = (e.clipboardData || window.clipboardData)
+                    .getData('text').replace(/\D/g, '').slice(0, 6);
+                pasted.split('').forEach((ch, i) => { if (digits[i]) digits[i].value = ch; });
+                const next = digits.findIndex(d => !d.value);
+                (next !== -1 ? digits[next] : digits[5]).focus();
+                hidden.value = digits.map(d => d.value).join('');
+            });
+        });
+
+        digits[0].focus();
+
+        document.getElementById('otpForm').addEventListener('submit', function (e) {
+            if (hidden.value.length < 6) {
+                e.preventDefault();
+                digits.forEach(d => d.classList.add('is-invalid'));
+            }
+        });
+
+        // ── Cooldown sayacı ───────────────────────────────────────────────
+        let cd = @cdSec;
+        if (cd > 0) {
+            const iv = setInterval(() => {
+                cd--;
+                const el1 = document.getElementById('cdDisplay');
+                const el2 = document.getElementById('cdTxt');
+                if (el1) el1.textContent = cd;
+                if (el2) el2.textContent = cd;
+                if (cd <= 0) {
+                    clearInterval(iv);
+                    const btn = document.getElementById('btnResend');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = 'Tekrar kod gönder';
+                    }
+                    const hint = document.querySelector('p[style*="cdTxt"]');
+                    if (hint) hint.remove();
+                }
+            }, 1000);
+        }
+    </script>
+</body>
+</html>

@@ -145,7 +145,7 @@
                         <input type="checkbox" asp-for="RememberMe" />
                         Beni Hatırla (30 gün)
                     </label>
-                    <a class="auth-forgot" href="#">Şifremi Unuttum?</a>
+                    <a class="auth-forgot" asp-area="App" asp-controller="Auth" asp-action="ForgotPassword">Şifremi Unuttum?</a>
                 </div>
 
                 @* ── Submit ── *@

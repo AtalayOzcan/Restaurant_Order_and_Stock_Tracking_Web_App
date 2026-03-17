@@ -62,3 +62,6 @@ Thumbs.db
 # Publish output
 # =========================
 publish/
+
+# Env dosyaları
+.env

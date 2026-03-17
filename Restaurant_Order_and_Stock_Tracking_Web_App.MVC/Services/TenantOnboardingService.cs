@@ -4,6 +4,11 @@
 //  SPRINT C DEĞİŞİKLİKLERİ:
 //  [SC-5] Adım 2'ye telefon tekrarı kontrolü eklendi (PostgreSQL uyumlu EF Core sorgu)
 //  [SC-6] AdminUser oluşturmada PhoneNumber alanı set ediliyor
+//
+//  SPRINT 5 — [OTP-3] E-posta doğrulama desteği
+//  [OTP-3] AdminUser.EmailConfirmed = false (OTP öncesi pasif)
+//  [OTP-3] Tenant.IsActive = false (OTP doğrulanınca aktif edilir)
+//          Aktifleştirme: LandingController.VerifyEmail POST tarafından yapılır.
 // ============================================================================
 
 using Microsoft.AspNetCore.Identity;
@@ -75,7 +80,7 @@ public class TenantOnboardingService : ITenantOnboardingService
                 Name = dto.RestaurantName,
                 Subdomain = dto.Subdomain,
                 PlanType = "trial",
-                IsActive = true,
+                IsActive = false,  // [OTP-3] OTP doğrulanana kadar pasif
                 CreatedAt = DateTime.UtcNow,
                 TrialEndsAt = DateTime.UtcNow.AddDays(30),
                 RestaurantType = RestaurantType.CasualDining,
@@ -103,7 +108,7 @@ public class TenantOnboardingService : ITenantOnboardingService
                 UserName = $"{tenantId}_{dto.AdminUsername.Trim()}",
                 FullName = dto.FullName,
                 Email = dto.Email,
-                EmailConfirmed = true,
+                EmailConfirmed = false,  // [OTP-3] OTP doğrulanana kadar pasif
                 PhoneNumber = dto.PhoneNumber,   // [SC-6] Trial koruması için kayıt
                 CreatedAt = DateTime.UtcNow,
                 TenantId = tenantId,

@@ -40,6 +40,16 @@
 //
 //  SPRINT 4 — IMPERSONATION:
 //  [IMP-2] ICurrentUserService → audit log kimlik servisi
+//
+//  SPRINT 5 — OTP E-POSTA DOĞRULAMA:
+//  [OTP-8] IOtpService, IEmailSender, IEmailChannel, EmailBackgroundService
+//  [OTP-8] OtpVerifyPolicy rate limiter (10 istek/dk)
+//  appsettings.json'a eklenecek:
+//    "Email": {
+//      "SmtpHost": "smtp.gmail.com",  "SmtpPort": "587",
+//      "SmtpUser": "GMAIL_ADRESINIZ", "SmtpPassword": "APP_PASSWORD",
+//      "SenderAddress": "noreply@restaurantos.com", "SenderName": "RestaurantOS"
+//    }
 // ════════════════════════════════════════════════════════════════════════════
 
 using Microsoft.AspNetCore.Authentication;
@@ -193,6 +203,12 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
             // ── [IMP-2] Sprint 4 — Impersonation Audit Log Kimlik Servisi ──
             builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
+            // ── [OTP-8] Sprint 5 — OTP E-posta Doğrulama ─────────────────
+            builder.Services.AddScoped<IOtpService, OtpService>();
+            builder.Services.AddSingleton<IEmailChannel, EmailChannel>();
+            builder.Services.AddScoped<IEmailSender, GmailEmailSender>();
+            builder.Services.AddHostedService<EmailBackgroundService>();
+
             builder.Services.AddControllersWithViews();
 
             // ── SignalR ──────────────────────────────────────────────────
@@ -251,6 +267,30 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC
                         limiter.Window = TimeSpan.FromSeconds(60);
                         limiter.PermitLimit = 30;
                         limiter.SegmentsPerWindow = 6;
+                        limiter.QueueLimit = 0;
+                        limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+                    });
+
+                // ── [OTP-8] OTP Doğrulama Koruması ────────────────────────
+                options.AddFixedWindowLimiter(
+                    policyName: "OtpVerifyPolicy",
+                    configureOptions: limiter =>
+                    {
+                        limiter.Window = TimeSpan.FromSeconds(60);
+                        limiter.PermitLimit = 10;
+                        limiter.QueueLimit = 0;
+                        limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+                    });
+
+                // ── [FP-1] Şifremi Unuttum Spam Koruması ──────────────────
+                // IP başına 3 istek/60sn — SMTP spam + enumeration engeli
+                // Tenant cooldown 2. katman olarak IOtpService içinde çalışır.
+                options.AddFixedWindowLimiter(
+                    policyName: "ForgotPasswordPolicy",
+                    configureOptions: limiter =>
+                    {
+                        limiter.Window = TimeSpan.FromSeconds(60);
+                        limiter.PermitLimit = 3;
                         limiter.QueueLimit = 0;
                         limiter.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
                     });

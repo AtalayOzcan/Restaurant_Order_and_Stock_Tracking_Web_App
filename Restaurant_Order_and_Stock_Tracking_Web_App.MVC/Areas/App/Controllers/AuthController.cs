@@ -1,26 +1,21 @@
 ﻿// ════════════════════════════════════════════════════════════════════════════
 //  Areas/App/Controllers/AuthController.cs
-//  Yol: Areas/App/Controllers/AuthController.cs
 //
-//  SPRINT C — [SC-2] Workspace Login Akışı (Güncellendi)
-//
-//  AŞAMA 1 — Tenant Doğrulama + Timing Attack Koruması
-//  AŞAMA 2 — Kullanıcı Adı Birleştirme (TenantId_Username)
-//  AŞAMA 3 — Standart Identity Doğrulama (Prefixli arama)
-//
-//  SPRINT 4 — [IMP-4] Impersonation Giriş ve Çıkış Action'ları
-//  Impersonate    : Token doğrulayıp AppAuth cookie set eder (atomik UPDATE)
-//  EndImpersonation: AppAuth cookie siler, /Admin paneline yönlendirir
+//  SPRINT C — [SC-2] Workspace Login Akışı
+//  SPRINT 4 — [IMP-4] Impersonation Giriş ve Çıkış
+//  SPRINT 5 — [OTP-5] Şifre Sıfırlama (ForgotPassword, VerifyResetOtp, ResetPassword)
 // ════════════════════════════════════════════════════════════════════════════
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Data;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Models;
+using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Services;
 using Restaurant_Order_and_Stock_Tracking_Web_App.MVC.ViewModels.Auth;
 using System.Security.Claims;
 
@@ -29,19 +24,33 @@ namespace Restaurant_Order_and_Stock_Tracking_Web_App.MVC.Areas.App.Controllers;
 [Area("App")]
 public class AuthController : AppBaseController
 {
+    // ── Bağımlılıklar ─────────────────────────────────────────────────────
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly RestaurantDbContext _db;
     private readonly ILogger<AuthController> _logger;
+    private readonly IOtpService _otpService;
+    private readonly IEmailSender _emailSender;
+    private readonly IMemoryCache _cache;
 
     public AuthController(
         UserManager<ApplicationUser> userManager,
         RestaurantDbContext db,
-        ILogger<AuthController> logger)
+        ILogger<AuthController> logger,
+        IOtpService otpService,
+        IEmailSender emailSender,
+        IMemoryCache cache)
     {
         _userManager = userManager;
         _db = db;
         _logger = logger;
+        _otpService = otpService;
+        _emailSender = emailSender;
+        _cache = cache;
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  LOGIN / LOGOUT
+    // ══════════════════════════════════════════════════════════════════════
 
     // ── GET /App/Auth/Login ────────────────────────────────────────────────
     [AllowAnonymous]
@@ -55,7 +64,6 @@ public class AuthController : AppBaseController
     }
 
     // ── POST /App/Auth/Login ───────────────────────────────────────────────
-    // [SEC-RL-1] LoginPolicy: 60 saniyede 10 istek — brute-force koruması.
     [HttpPost]
     [AllowAnonymous]
     [ValidateAntiForgeryToken]
@@ -67,9 +75,7 @@ public class AuthController : AppBaseController
         if (!ModelState.IsValid)
             return View(model);
 
-        // ════════════════════════════════════════════════════════════════
-        //  AŞAMA 1 — Tenant Doğrulama + Timing Attack Koruması
-        // ════════════════════════════════════════════════════════════════
+        // ── AŞAMA 1: Tenant doğrulama + timing attack koruması ────────────
         var tenant = await _db.Tenants
             .AsNoTracking()
             .FirstOrDefaultAsync(t => t.TenantId == model.FirmaKodu);
@@ -86,15 +92,11 @@ public class AuthController : AppBaseController
             return View(model);
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  AŞAMA 2 — Kullanıcı Adı Birleştirme (Prefix Oluşturma)
-        // ════════════════════════════════════════════════════════════════
+        // ── AŞAMA 2: Kullanıcı adı birleştirme ────────────────────────────
         var fullUsername = $"{model.FirmaKodu.Trim()}_{model.Username.Trim()}";
         var normalizedFullUsername = _userManager.NormalizeName(fullUsername);
 
-        // ════════════════════════════════════════════════════════════════
-        //  AŞAMA 3 — Standart Identity Doğrulama
-        // ════════════════════════════════════════════════════════════════
+        // ── AŞAMA 3: Identity doğrulama ────────────────────────────────────
         var user = await _userManager.Users.FirstOrDefaultAsync(u =>
             u.TenantId == model.FirmaKodu &&
             u.NormalizedUserName == normalizedFullUsername);
@@ -128,10 +130,9 @@ public class AuthController : AppBaseController
             return View(model);
         }
 
-        // ── Başarılı Giriş ─────────────────────────────────────────────
+        // ── Başarılı giriş ─────────────────────────────────────────────────
         await _userManager.ResetAccessFailedCountAsync(user);
         await _userManager.UpdateSecurityStampAsync(user);
-
         user.LastLoginAt = DateTime.UtcNow;
         await _userManager.UpdateAsync(user);
 
@@ -142,7 +143,6 @@ public class AuthController : AppBaseController
             new("FullName",                user.FullName),
             new("TenantId",                user.TenantId ?? ""),
         };
-
         foreach (var role in roles)
             claims.Add(new Claim(ClaimTypes.Role, role));
 
@@ -173,16 +173,11 @@ public class AuthController : AppBaseController
         return RedirectToAction(nameof(Login), new { area = "App" });
     }
 
+    // ══════════════════════════════════════════════════════════════════════
+    //  IMPERSONATION  [IMP-4]
+    // ══════════════════════════════════════════════════════════════════════
+
     // ── GET /App/Auth/Impersonate?token={uuid} ────────────────────────────
-    // [IMP-4] Token doğrula → AppAuth cookie set → Admin rolüyle tenant'a gir.
-    //
-    // GÜVENLİK:
-    //   Atomik UPDATE: token bul + kullanıldı işaretle tek sorguda yapılır.
-    //   Race condition imkânsız — iki eş zamanlı istek gelirse biri 0 satır
-    //   döner ve 403 alır.
-    //
-    //   AdminAuth cookie'ye hiç dokunulmaz. SysAdmin Sekme 1'deki admin
-    //   panelini kaybetmez.
     [AllowAnonymous]
     [HttpGet]
     public async Task<IActionResult> Impersonate(string token)
@@ -193,19 +188,9 @@ public class AuthController : AppBaseController
             return Forbid();
         }
 
-        // ── Atomik token tüketimi ─────────────────────────────────────────
-        // UPDATE ... WHERE used_at IS NULL AND expires_at > NOW() RETURNING *
-        // Onaylanan karar: race condition koruması için tek sorgu.
-        //
-        // EF Core FromSqlRaw ile atomik PostgreSQL sorgusu:
         var clientIp = GetClientIp();
         var now = DateTime.UtcNow;
 
-        // EF Core tracked update — optimistic locking ile eşdeğer:
-        // 1. Token'ı bul (WHERE used_at IS NULL AND expires_at > NOW())
-        // 2. Aynı işlemde used_at set et
-        // 3. SaveChanges xmin token sayesinde başka biri aynı anda
-        //    değiştirdiyse DbUpdateConcurrencyException fırlar → 403
         var record = await _db.ImpersonationTokens
             .FirstOrDefaultAsync(t =>
                 t.TokenId == tokenGuid &&
@@ -215,12 +200,11 @@ public class AuthController : AppBaseController
         if (record == null)
         {
             _logger.LogWarning(
-                "[IMPERSONATION] Token geçersiz, süresi dolmuş veya daha önce kullanılmış. TokenId: {TokenId} | IP: {Ip}",
+                "[IMPERSONATION] Token geçersiz veya kullanılmış. TokenId: {TokenId} | IP: {Ip}",
                 tokenGuid, clientIp);
             return Forbid();
         }
 
-        // Token'ı anında işaretle — kullanıldı
         record.UsedAt = now;
         record.UsedFromIp = clientIp;
 
@@ -230,67 +214,53 @@ public class AuthController : AppBaseController
         }
         catch (DbUpdateConcurrencyException)
         {
-            // Başka bir istek milisaniye farkla aynı token'ı tüketti
-            _logger.LogWarning(
-                "[IMPERSONATION] Race condition tespit edildi! TokenId: {TokenId} | IP: {Ip}",
-                tokenGuid, clientIp);
+            _logger.LogWarning("[IMPERSONATION] Race condition. TokenId: {TokenId}", tokenGuid);
             return Forbid();
         }
 
-        // ── Hedef tenant'ın Admin kullanıcısını bul ───────────────────────
         var adminUsers = await _userManager.GetUsersInRoleAsync("Admin");
         var targetAdmin = adminUsers.FirstOrDefault(u => u.TenantId == record.TargetTenantId);
 
         if (targetAdmin == null)
         {
-            _logger.LogError(
-                "[IMPERSONATION] Hedef tenanta ait Admin kullanıcı bulunamadı. TenantId: {TenantId}",
+            _logger.LogError("[IMPERSONATION] Admin kullanıcı bulunamadı. TenantId: {TenantId}",
                 record.TargetTenantId);
             return NotFound("Bu restorana ait yönetici hesabı bulunamadı.");
         }
 
-        // ── AppAuth cookie set et — IsImpersonation claim ile ─────────────
-        // AdminAuth cookie'ye HİÇ DOKUNMA. Bu claim'ler yeni bir AppAuth
-        // oturumu oluşturur; mevcut AdminAuth oturumu canlı kalmaya devam eder.
-        var claims = new List<Claim>
+        var impClaims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, targetAdmin.Id),
             new(ClaimTypes.Name,           targetAdmin.UserName ?? ""),
-            new("FullName",                targetAdmin.FullName ?? ""),
+            new("FullName",                targetAdmin.FullName  ?? ""),
             new("TenantId",                record.TargetTenantId),
             new(ClaimTypes.Role,           record.TargetRole),
-            // ── Impersonation işaretleri ──
-            new("IsImpersonation", "true"),                     // Banner için
-            new("ImpersonatedBy",  record.SysAdminId),          // Audit log için
+            new("IsImpersonation",         "true"),
+            new("ImpersonatedBy",          record.SysAdminId),
         };
 
-        var identity = new ClaimsIdentity(claims, "AppAuth");
-        var principal = new ClaimsPrincipal(identity);
+        var impIdentity = new ClaimsIdentity(impClaims, "AppAuth");
+        var impPrincipal = new ClaimsPrincipal(impIdentity);
 
-        await HttpContext.SignInAsync("AppAuth", principal, new AuthenticationProperties
+        await HttpContext.SignInAsync("AppAuth", impPrincipal, new AuthenticationProperties
         {
             IsPersistent = false,
-            ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(30)  // Onaylanan karar: 30 dk
+            ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(30)
         });
 
         _logger.LogWarning(
-            "[IMPERSONATION] Giriş başarılı. SysAdmin: {SysAdminId} → Tenant: {TenantId} | IP: {Ip} | TokenId: {TokenId}",
-            record.SysAdminId, record.TargetTenantId, clientIp, tokenGuid);
+            "[IMPERSONATION] Giriş başarılı. SysAdmin: {SysAdminId} → Tenant: {TenantId} | IP: {Ip}",
+            record.SysAdminId, record.TargetTenantId, clientIp);
 
         return RedirectToAction("Index", "Tables", new { area = "App" });
     }
 
     // ── POST /App/Auth/EndImpersonation ───────────────────────────────────
-    // [IMP-4] "Admin paneline dön" butonu — AppAuth sil, Admin paneline git.
-    //
-    // AdminAuth cookie'ye HİÇ DOKUNMAZ.
-    // SysAdmin Sekme 1'deki admin panelini kaybetmez.
     [HttpPost]
     [AllowAnonymous]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> EndImpersonation()
     {
-        // Sadece impersonation oturumunda çalışsın
         var isImpersonation = User.FindFirstValue("IsImpersonation") == "true";
         var sysAdminId = User.FindFirstValue("ImpersonatedBy") ?? "?";
         var tenantId = User.FindFirstValue("TenantId") ?? "?";
@@ -298,18 +268,230 @@ public class AuthController : AppBaseController
         if (!isImpersonation)
             return RedirectToAction("Index", "Tables", new { area = "App" });
 
-        // AppAuth cookie'yi sil
         await HttpContext.SignOutAsync("AppAuth");
 
         _logger.LogWarning(
-            "[IMPERSONATION] Oturum sonlandırıldı. SysAdmin: {SysAdminId} ← Tenant: {TenantId} | IP: {Ip}",
-            sysAdminId, tenantId, GetClientIp());
+            "[IMPERSONATION] Oturum sonlandırıldı. SysAdmin: {SysAdminId} ← Tenant: {TenantId}",
+            sysAdminId, tenantId);
 
-        // Admin paneline yönlendir — AdminAuth hâlâ canlı
         return Redirect("/Admin/Home/Index");
     }
 
-    // ── Yardımcı ─────────────────────────────────────────────────────────
+    // ══════════════════════════════════════════════════════════════════════
+    //  ŞİFRE SIFIRLAMA  [OTP-5]
+    // ══════════════════════════════════════════════════════════════════════
+
+    // ── GET /App/Auth/ForgotPassword ──────────────────────────────────────
+    [AllowAnonymous]
+    [HttpGet]
+    public IActionResult ForgotPassword()
+    {
+        ViewData["Title"] = "Şifre Sıfırlama";
+        return View();
+    }
+
+    // ── POST /App/Auth/ForgotPassword ─────────────────────────────────────
+    // [FP-1] Yalnızca firmaKodu alır — admin e-postasını sistem bulur.
+    // [FP-2] Enumeration koruması: tenant var/yok — aynı mesaj + Task.Delay.
+    // [FP-3] Tenant cooldown: IOtpService.IsCooldownActive() ile spam engeli.
+    [AllowAnonymous]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting("ForgotPasswordPolicy")]
+    public async Task<IActionResult> ForgotPassword(string firmaKodu)
+    {
+        ViewData["Title"] = "Şifre Sıfırlama";
+
+        // Her durumda aynı mesaj — tenant var/yok bilgisi sızdırılmaz
+        const string safeMessage = "Firma kodunuz sistemde kayıtlıysa yönetici e-postasına kod gönderildi.";
+
+        if (string.IsNullOrWhiteSpace(firmaKodu))
+        {
+            ViewBag.Info = safeMessage;
+            return View();
+        }
+
+        // [FP-2] Timing attack koruması — her iki dalda da ~200ms bekleme
+        var delay = Task.Delay(Random.Shared.Next(150, 250));
+
+        // Tenant'ın Admin kullanıcısını bul (email kullanıcıdan alınmıyor)
+        var adminUsers = await _userManager.GetUsersInRoleAsync("Admin");
+        var adminUser = adminUsers.FirstOrDefault(u => u.TenantId == firmaKodu);
+
+        if (adminUser?.Email != null)
+        {
+            var email = adminUser.Email;
+
+            // [FP-3] Tenant cooldown — aynı firmaya 60s içinde tekrar OTP atma
+            if (!_otpService.IsCooldownActive(email, OtpPurpose.ResetPassword))
+            {
+                var code = _otpService.Generate(email, OtpPurpose.ResetPassword);
+                _emailSender.EnqueueEmail(
+                    to: email,
+                    subject: "RestaurantOS — Şifre Sıfırlama Kodu",
+                    htmlBody: EmailTemplates.OtpEmail("resetpassword", code));
+
+                _logger.LogInformation("[RESET] OTP gönderildi. TenantId: {TenantId}", firmaKodu);
+            }
+            else
+            {
+                _logger.LogWarning("[RESET] Cooldown aktif, OTP atlanıyor. TenantId: {TenantId}", firmaKodu);
+            }
+
+            // Maskeleme: sadece domain kısmını göster (örn: "***@restoran.com")
+            var atIdx = email.IndexOf('@');
+            var maskedEmail = atIdx > 0 ? "***" + email[atIdx..] : "***";
+            ViewBag.MaskedEmail = maskedEmail;
+        }
+
+        await delay; // Timing saldırısını önlemek için sabit bekleme tamamlanır
+
+        ViewBag.Info = safeMessage;
+        ViewBag.FirmaKodu = firmaKodu;
+        return View("VerifyResetOtp");
+    }
+
+    // ── POST /App/Auth/VerifyResetOtp ─────────────────────────────────────
+    // [FP-4] Email kullanıcıdan alınmaz — firmaKodu üzerinden Admin emaili bulunur.
+    // [FP-5] Başarıda: Guid reset_grant token → IMemoryCache (5dk) + TempData.
+    [AllowAnonymous]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting("OtpVerifyPolicy")]
+    public async Task<IActionResult> VerifyResetOtp(string firmaKodu, string code)
+    {
+        ViewData["Title"] = "Kod Doğrulama";
+
+        // Admin emailini yeniden bul (form'da email taşınmıyor)
+        var adminUsers = await _userManager.GetUsersInRoleAsync("Admin");
+        var adminUser = adminUsers.FirstOrDefault(u => u.TenantId == firmaKodu);
+        var email = adminUser?.Email ?? "";
+
+        if (string.IsNullOrEmpty(email))
+        {
+            ViewBag.FirmaKodu = firmaKodu;
+            ViewBag.Error = "Doğrulama başarısız.";
+            return View("VerifyResetOtp");
+        }
+
+        var result = _otpService.Verify(email, OtpPurpose.ResetPassword, code?.Trim() ?? "");
+
+        if (result == OtpVerifyResult.Success)
+        {
+            _otpService.Consume(email, OtpPurpose.ResetPassword);
+
+            // [FP-5] Tek kullanımlık reset grant — IMemoryCache, 5 dakika TTL
+            var resetGuid = Guid.NewGuid().ToString("N");
+            _cache.Set(
+                $"reset_grant:{resetGuid}",
+                firmaKodu,
+                new Microsoft.Extensions.Caching.Memory.MemoryCacheEntryOptions
+                {
+                    AbsoluteExpiration = DateTimeOffset.UtcNow.AddMinutes(5)
+                });
+
+            TempData["ResetToken"] = resetGuid;
+            TempData["ResetFirmaKodu"] = firmaKodu;
+
+            _logger.LogInformation("[RESET] Grant token üretildi. TenantId: {TenantId}", firmaKodu);
+            return RedirectToAction(nameof(ResetPassword));
+        }
+
+        ViewBag.FirmaKodu = firmaKodu;
+        ViewBag.CooldownSec = _otpService.GetCooldownSeconds(email, OtpPurpose.ResetPassword);
+        ViewBag.Error = result switch
+        {
+            OtpVerifyResult.InvalidCode => "Hatalı kod. Lütfen tekrar deneyin.",
+            OtpVerifyResult.Locked => "Çok fazla hatalı deneme. 15 dakika bekleyin.",
+            OtpVerifyResult.Expired => "Kodun süresi dolmuş. Yeni kod isteyin.",
+            _ => "Doğrulama başarısız."
+        };
+        return View("VerifyResetOtp");
+    }
+
+    // ── GET /App/Auth/ResetPassword ───────────────────────────────────────
+    // [FP-6] TempData token varlığını kontrol et. Cache'e bakmaz (GET'te token korunur).
+    [AllowAnonymous]
+    [HttpGet]
+    public IActionResult ResetPassword()
+    {
+        if (TempData["ResetToken"] is not string token || string.IsNullOrEmpty(token))
+            return RedirectToAction(nameof(ForgotPassword));
+
+        TempData.Keep(); // POST'a kadar TempData korunsun
+        ViewBag.ResetToken = token;
+        ViewBag.ResetFirmaKodu = TempData["ResetFirmaKodu"] as string ?? "";
+        TempData.Keep();
+        ViewData["Title"] = "Yeni Şifre Belirleyin";
+        return View();
+    }
+
+    // ── POST /App/Auth/ResetPassword ─────────────────────────────────────
+    // [FP-7] resetToken cache'te doğrulanır (TempData yetmez — ikili kontrol).
+    // [FP-8] Başarıda cache token silinir — tek kullanımlık garantisi.
+    [AllowAnonymous]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ResetPassword(
+        string resetToken, string firmaKodu, string newPassword, string confirmPassword)
+    {
+        ViewData["Title"] = "Yeni Şifre Belirleyin";
+
+        // [FP-7] Cache doğrulaması — token var mı ve bu tenant'a mı ait?
+        var cacheKey = $"reset_grant:{resetToken}";
+        var cachedTenantId = _cache.Get<string>(cacheKey);
+
+        if (string.IsNullOrEmpty(cachedTenantId) || cachedTenantId != firmaKodu)
+        {
+            _logger.LogWarning("[RESET] Geçersiz veya süresi dolmuş token. TenantId: {TenantId}", firmaKodu);
+            TempData["ResetError"] = "Şifre sıfırlama oturumunuzun süresi dolmuş. Lütfen tekrar başlayın.";
+            return RedirectToAction(nameof(ForgotPassword));
+        }
+
+        if (newPassword != confirmPassword)
+        {
+            ViewBag.Error = "Şifreler eşleşmiyor.";
+            ViewBag.ResetToken = resetToken;
+            ViewBag.ResetFirmaKodu = firmaKodu;
+            return View();
+        }
+
+        // Admin kullanıcısını firmaKodu ile bul
+        var adminUsers = await _userManager.GetUsersInRoleAsync("Admin");
+        var user = adminUsers.FirstOrDefault(u => u.TenantId == firmaKodu);
+
+        if (user == null)
+        {
+            ViewBag.Error = "Kullanıcı bulunamadı.";
+            ViewBag.ResetToken = resetToken;
+            ViewBag.ResetFirmaKodu = firmaKodu;
+            return View();
+        }
+
+        var identityToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+        var result = await _userManager.ResetPasswordAsync(user, identityToken, newPassword);
+
+        if (!result.Succeeded)
+        {
+            ViewBag.Error = string.Join(" ", result.Errors.Select(e => e.Description));
+            ViewBag.ResetToken = resetToken;
+            ViewBag.ResetFirmaKodu = firmaKodu;
+            return View();
+        }
+
+        // [FP-8] Token tek kullanımlık — başarıda sil
+        _cache.Remove(cacheKey);
+
+        await _userManager.UpdateSecurityStampAsync(user);
+        _logger.LogInformation("[RESET] Şifre başarıyla sıfırlandı. TenantId: {TenantId}", firmaKodu);
+        TempData["ResetSuccess"] = "Şifreniz başarıyla güncellendi. Giriş yapabilirsiniz.";
+        return RedirectToAction(nameof(Login));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  YARDIMCILAR
+    // ══════════════════════════════════════════════════════════════════════
+
     [AllowAnonymous]
     public IActionResult AccessDenied() => View();
 
